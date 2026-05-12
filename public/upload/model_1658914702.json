@@ -1,1 +1,0 @@
-{"denumire":"Ordineprioritati","explicatie":"Ordineprioritati","table_name":"ordine_prioritati","fields":[{"name":"tip","display_name":"Tip","type":"string","size":"50"},{"name":"descriere","display_name":"Descriere","type":"text","size":"0"}]}

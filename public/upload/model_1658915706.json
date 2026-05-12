@@ -1,1 +1,0 @@
-{"denumire":"Versiuni","explicatie":"Versiuni","table_name":"versiuni","fields":[{"name":"versiunea","display_name":"Versiunea","type":"string","size":"10"},{"name":"agentia","display_name":"Agentia","type":"string","size":"100"},{"name":"data","display_name":"data","type":"date","size":"8"}]}

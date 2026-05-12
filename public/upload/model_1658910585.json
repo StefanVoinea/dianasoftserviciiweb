@@ -1,1 +1,0 @@
-{"denumire":"Alertetransmise","explicatie":"Alerte transmise","table_name":"alerte_transmise","fields":[{"name":"alerta","display_name":"Alerta","type":"string","size":"250"},{"name":"data","display_name":"Data","type":"date","size":"8"},{"name":"ora","display_name":"Ora","type":"string","size":"10"}]}

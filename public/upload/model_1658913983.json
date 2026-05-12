@@ -1,1 +1,0 @@
-{"denumire":"Nomdtio","explicatie":"Nomdtio","table_name":"nom_dtio","fields":[{"name":"cod","display_name":"cod","type":"string","size":"5"},{"name":"denumire","display_name":"denumire","type":"string","size":"50"},{"name":"limita_min","display_name":"limita_min","type":"double","size":"8"},{"name":"limita_max","display_name":"limita_max","type":"double","size":"8"}]}

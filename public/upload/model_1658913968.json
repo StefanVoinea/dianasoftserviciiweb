@@ -1,1 +1,0 @@
-{"denumire":"Nomdestinatieclimatica","explicatie":"Nomdestinatieclimatica","table_name":"nom_destinatie_climatica","fields":[{"name":"cod","display_name":"cod","type":"string","size":"5"},{"name":"denumire","display_name":"denumire","type":"string","size":"250"}]}

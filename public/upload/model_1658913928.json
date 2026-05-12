@@ -1,1 +1,0 @@
-{"denumire":"Nomcodificarerestructurare","explicatie":"Nomcodificarerestructurare","table_name":"nom_codificare_restructurare","fields":[{"name":"cod","display_name":"cod","type":"string","size":"5"},{"name":"denumire","display_name":"denumire","type":"text","size":"0"}]}

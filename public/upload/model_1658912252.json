@@ -1,1 +1,0 @@
-{"denumire":"Casavalidata","explicatie":"Casavalidata","table_name":"casavalidata","fields":[{"name":"data","display_name":"Data","type":"date","size":"8"},{"name":"punct_de_lucru","display_name":"Punct_de_lucru","type":"string","size":"50"}]}

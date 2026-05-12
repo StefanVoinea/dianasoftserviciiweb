@@ -1,1 +1,0 @@
-{"denumire":"Cursreev","explicatie":"Cursreev","table_name":"cursbnr","fields":[{"name":"simbol","display_name":"Simbol","type":"string","size":"3"},{"name":"curs","display_name":"Curs","type":"double","size":"8"},{"name":"data","display_name":"Data","type":"date","size":"8"},{"name":"data_comunicarii","display_name":"Data_comunicarii","type":"date","size":"8"}]}

@@ -1,1 +1,0 @@
-{"denumire":"Datavalidarevanzari","explicatie":"Datavalidarevanzari","table_name":"datavalidarevanzari","fields":[{"name":"id_gestiune","display_name":"Id_gestiune","type":"integer","size":"4"},{"name":"gestiune","display_name":"Gestiune","type":"string","size":"50"},{"name":"data","display_name":"Data","type":"date","size":"8"}]}

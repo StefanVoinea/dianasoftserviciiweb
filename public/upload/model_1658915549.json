@@ -1,1 +1,0 @@
-{"denumire":"Tipplata","explicatie":"Tipplata","table_name":"tip_plata","fields":[{"name":"tip_plata","display_name":"Tip_plata","type":"integer","size":"4"},{"name":"explicatie","display_name":"Explicatie","type":"string","size":"25"}]}

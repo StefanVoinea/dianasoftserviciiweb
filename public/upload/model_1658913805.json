@@ -1,1 +1,0 @@
-{"denumire":"Lastupdatetable","explicatie":"Last update table","table_name":"last_update_table","fields":[{"name":"tabel","display_name":"tabel","type":"string","size":"50"},{"name":"data","display_name":"data","type":"date","size":"8"}]}

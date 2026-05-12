@@ -1,1 +1,0 @@
-{"denumire":"Tipoperatiune","explicatie":"Tipoperatiune","table_name":"tip_operatiune","fields":[{"name":"tip_operatiune","display_name":"Tip_operatiune","type":"string","size":"50"},{"name":"um","display_name":"Um","type":"string","size":"50"}]}

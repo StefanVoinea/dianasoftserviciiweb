@@ -1,1 +1,0 @@
-{"denumire":"Coduricaen","explicatie":"Coduri caen","table_name":"coduri_caen","fields":[{"name":"cod_caen","display_name":"Cod_CAEN","type":"string","size":"50"},{"name":"descriere","display_name":"Descriere","type":"string","size":"250"},{"name":"procent","display_name":"Procent","type":"double","size":"8"}]}

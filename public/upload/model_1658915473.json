@@ -1,1 +1,0 @@
-{"denumire":"Tipintrare","explicatie":"Tipintrare","table_name":"tip_intrare","fields":[{"name":"tip","display_name":"Tip","type":"string","size":"100"},{"name":"d390","display_name":"D390","type":"string","size":"2"},{"name":"jurnal","display_name":"Jurnal","type":"string","size":"2"}]}

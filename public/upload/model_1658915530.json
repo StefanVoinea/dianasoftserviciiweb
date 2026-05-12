@@ -1,1 +1,0 @@
-{"denumire":"Tippartener","explicatie":"Tippartener","table_name":"tip_partener","fields":[{"name":"tip_client","display_name":"Tip_client","type":"string","size":"50"}]}
