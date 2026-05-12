@@ -1,0 +1,1 @@
+{"denumire":"Adreseemailalerte","explicatie":"Adrese email alerte","table_name":"adrese_email_alerte","fields":[{"name":"alerta","display_name":"Alerta","type":"string","size":"250"},{"name":"adresa_email","display_name":"Adresa_email","type":"string","size":"250"}]}

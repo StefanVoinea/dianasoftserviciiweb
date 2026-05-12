@@ -1,0 +1,1 @@
+{"denumire":"Societati","explicatie":"Societati","table_name":"societati","fields":[{"name":"denumire","display_name":"Denumire","type":"string","size":"50"},{"name":"cod_firma","display_name":"Cod_firma","type":"integer","size":"4"}]}

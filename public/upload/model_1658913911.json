@@ -1,0 +1,1 @@
+{"denumire":"Nomcodcreditcers","explicatie":"Nomcodcreditcers","table_name":"nom_cod_credit_cers","fields":[{"name":"cod","display_name":"cod","type":"string","size":"5"},{"name":"denumire","display_name":"denumire","type":"string","size":"250"}]}

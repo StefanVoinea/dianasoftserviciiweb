@@ -1,0 +1,1 @@
+{"denumire":"Tipcont","explicatie":"Tipcont","table_name":"tip_cont","fields":[{"name":"simbol_tip","display_name":"Simbol_tip","type":"string","size":"50"},{"name":"tip","display_name":"Tip","type":"string","size":"50"},{"name":"tip_1","display_name":"Tip_1","type":"string","size":"50"}]}

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem \"c:\\\\dianasoft_baseapp\\\\resources\" -Recurse -Directory | Select-Object -First 100 | ForEach-Object { $_.FullName })",
+      "Bash(Measure-Object -Line)",
+      "Bash(grep \"\\\\.vue$\")",
+      "Bash(grep -v \"aev\\\\.vue$\")",
+      "Bash(grep \"aev\\\\.vue$\")",
+      "Bash(grep -E \"\\\\.php$\")",
+      "PowerShell(New-Item -ItemType Directory -Path \"c:\\\\dianasoft_baseapp\\\\app\\\\Http\\\\Middleware\" -Force)",
+      "PowerShell(Copy-Item -Path \"c:\\\\easyifn_dianasoft\\\\web\\\\app\\\\Http\\\\Middleware\\\\CheckRoutePermission.php\" -Destination \"c:\\\\dianasoft_baseapp\\\\app\\\\Http\\\\Middleware\\\\CheckRoutePermission.php\" -Force)",
+      "PowerShell(Copy-Item -Path \"c:\\\\easyifn_dianasoft\\\\web\\\\app\\\\Http\\\\Middleware\\\\IpMiddleware.php\" -Destination \"c:\\\\dianasoft_baseapp\\\\app\\\\Http\\\\Middleware\\\\IpMiddleware.php\" -Force)"
+    ]
+  }
+}

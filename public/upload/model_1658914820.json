@@ -1,0 +1,1 @@
+{"denumire":"Portcomsms","explicatie":"Portcomsms","table_name":"port_com_sms","fields":[{"name":"portcom","display_name":"portcom","type":"string","size":"10"}]}

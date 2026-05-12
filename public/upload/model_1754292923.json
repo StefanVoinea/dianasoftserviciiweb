@@ -1,0 +1,1 @@
+{"denumire":"Nomevenimente","explicatie":"Nomenclator evenimente","table_name":"nomevenimente","fields":[{"name":"tip_eveniment","display_name":"tip_eveniment","type":"string","size":"20"},{"name":"denumire","display_name":"denumire","type":"text","size":"0"},{"name":"email","display_name":"email","type":"string","size":"250"}]}

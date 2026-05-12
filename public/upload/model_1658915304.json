@@ -1,0 +1,1 @@
+{"denumire":"Targetzilnic","explicatie":"Targetzilnic","table_name":"target_zilnic","fields":[{"name":"agentia","display_name":"Agentia","type":"string","size":"50"},{"name":"data","display_name":"Data","type":"date","size":"8"},{"name":"target","display_name":"target","type":"double","size":"8"},{"name":"cod_firma","display_name":"cod_firma","type":"integer","size":"4"}]}

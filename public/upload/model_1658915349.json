@@ -1,0 +1,1 @@
+{"denumire":"Tipachitare","explicatie":"Tipachitare","table_name":"tip_achitare","fields":[{"name":"id_tip_document","display_name":"Id_tip_document","type":"integer","size":"4"},{"name":"tip_document","display_name":"Tip_document","type":"string","size":"50"}]}

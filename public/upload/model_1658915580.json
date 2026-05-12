@@ -1,0 +1,1 @@
+{"denumire":"Translatari","explicatie":"Translatari","table_name":"translatari","fields":[{"name":"cont","display_name":"cont","type":"string","size":"50"},{"name":"cont_nou","display_name":"cont_nou","type":"string","size":"50"},{"name":"data","display_name":"data","type":"date","size":"8"}]}

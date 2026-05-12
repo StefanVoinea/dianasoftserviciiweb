@@ -1,0 +1,1 @@
+{"denumire":"Adresamf","explicatie":"Adresamf","table_name":"adresamf","fields":[{"name":"adresa","display_name":"adresa","type":"string","size":"250"},{"name":"adresabnr","display_name":"adresaBNR","type":"string","size":"250"},{"name":"datacursbnr","display_name":"DatacursBNR","type":"date","size":"8"}]}

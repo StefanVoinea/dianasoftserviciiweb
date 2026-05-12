@@ -1,0 +1,1 @@
+{"denumire":"Bancavalidata","explicatie":"Banca validata","table_name":"bancavalidata","fields":[{"name":"cont","display_name":"Cont","type":"string","size":"50"},{"name":"data","display_name":"Data","type":"date","size":"8"}]}

@@ -1,0 +1,1 @@
+{"denumire":"Modcontactare","explicatie":"Mod contactare","table_name":"mod_contactare","fields":[{"name":"tip","display_name":"Tip","type":"string","size":"250"}]}

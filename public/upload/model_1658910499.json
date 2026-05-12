@@ -1,0 +1,1 @@
+{"denumire":"Agenti","explicatie":"Agenti","table_name":"agenti","fields":[{"name":"nume","display_name":"Nume","type":"string","size":"50"},{"name":"procent","display_name":"Procent","type":"double","size":"8"}]}

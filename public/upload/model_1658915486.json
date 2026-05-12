@@ -1,0 +1,1 @@
+{"denumire":"Tipmodificareactaditional","explicatie":"Tipmodificareactaditional","table_name":"tip_modificare_actaditional","fields":[{"name":"tip_modificare","display_name":"tip_modificare","type":"string","size":"250"},{"name":"restructurat","display_name":"restructurat","type":"string","size":"2"}]}

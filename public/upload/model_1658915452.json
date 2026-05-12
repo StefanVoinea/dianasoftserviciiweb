@@ -1,0 +1,1 @@
+{"denumire":"Tipfactura","explicatie":"Tipfactura","table_name":"tip_factura","fields":[{"name":"tip_factura","display_name":"Tip_factura","type":"string","size":"50"}]}

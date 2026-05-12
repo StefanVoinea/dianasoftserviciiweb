@@ -1,0 +1,1 @@
+{"denumire":"Nomtari","explicatie":"Nomtari","table_name":"nomtari","fields":[{"name":"cod","display_name":"cod","type":"string","size":"10"},{"name":"denumire","display_name":"denumire","type":"string","size":"100"}]}

@@ -1,0 +1,1 @@
+{"denumire":"Tva","explicatie":"Tva","table_name":"tva","fields":[{"name":"id_tva","display_name":"Id_tva","type":"integer","size":"4"},{"name":"procent_tva","display_name":"Procent_tva","type":"double","size":"8"}]}

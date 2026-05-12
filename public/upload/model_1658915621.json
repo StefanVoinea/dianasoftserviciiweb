@@ -1,0 +1,1 @@
+{"denumire":"Ultimaverificare","explicatie":"Ultimaverificare","table_name":"ultima_verificare","fields":[{"name":"utilizator","display_name":"utilizator","type":"string","size":"150"},{"name":"operatiune","display_name":"operatiune","type":"string","size":"250"},{"name":"data","display_name":"data","type":"date","size":"8"}]}

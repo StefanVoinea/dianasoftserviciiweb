@@ -1,0 +1,1 @@
+{"denumire":"Tipexpunere","explicatie":"Tip expunere","table_name":"tipexpunere","fields":[{"name":"cod","display_name":"cod","type":"integer","size":"4"},{"name":"denumire","display_name":"denumire","type":"string","size":"10"}]}
