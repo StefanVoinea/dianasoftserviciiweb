@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Efacturaparams;
-use App\Efacturatokens;
+use App\Models\Efacturaparams;
+use App\Models\Efacturatokens;
 use App\Exports\EfacturatokensExport;
 use App\Http\Controllers\Controller;
 use App\Imports\EfacturatokensImport;

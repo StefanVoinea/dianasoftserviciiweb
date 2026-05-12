@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Efacturaparams;
+use App\Models\Efacturaparams;
 // use App\Events/EfacturaparamsUpdated;
 use App\Exports\EfacturaparamsExport;
 use App\Imports\EfacturaparamsImport;
