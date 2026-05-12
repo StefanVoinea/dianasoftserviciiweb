@@ -16,7 +16,7 @@ class BroadcastServiceProvider extends ServiceProvider
     {
         Broadcast::routes();
 Broadcast::routes(["prefix" => "api", "middleware" => "auth:api"]);
-        Broadcast::channel('easyifn_dianasoft', function (){
+        Broadcast::channel('dianasoft_serviciiweb', function (){
                 return true ;
                 // return ! is_null($user->teams->find($teamId));
         });
