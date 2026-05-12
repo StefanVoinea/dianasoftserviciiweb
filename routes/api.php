@@ -17,6 +17,7 @@ foreach (File::allFiles(__DIR__ . '/api_routes') as $route_file) {
   require $route_file->getPathname();
 }
 
+
 Route::post('/login','Api\AuthController@login')->name('login')->middleware(['throttle:60,1','ipcheck']);
 Route::post('/registerAPI','Api\AuthController@register');
 Route::get("/efacturaparams", "Api\EfacturaparamsController@index"); 
