@@ -20,22 +20,32 @@ class AuthController extends Controller
     public function login(Request $request)
     {
        
-    	$http = new \GuzzleHttp\Client;
+    	//$http = new \GuzzleHttp\Client;
        
         try {
-            $response = $http->post(config('services.passport.login_endpoint'), [
-                'form_params' => [
-                    'grant_type' => 'password',
-                    'client_id' => config('services.passport.client_id'),
-                    'client_secret' => config('services.passport.client_secret'),
-                    'username' => $request->username,
-                    'password' => $request->password,
-                    ]
-                    ]);
+            // $response = $http->post(config('services.passport.login_endpoint'), [
+            //     'form_params' => [
+            //         'grant_type' => 'password',
+            //         'client_id' => config('services.passport.client_id'),
+            //         'client_secret' => config('services.passport.client_secret'),
+            //         'username' => $request->username,
+            //         'password' => $request->password,
+            //         ]
+            //         ]);
+            $request = Request::create('/oauth/token', 'POST', [
+                'grant_type'    => 'password',
+                'client_id'     => config('passport.password_client.id'),
+                'client_secret' => config('passport.password_client.secret'),
+                'username'      => $request->email,
+                'password'      => $request->password,
+                'scope'         => '',
+            ]);
+            $response = app()->handle($request);        
             
-    		return $response->getBody();
+    		//return $response->getBody();
     	
-    	} catch (\GuzzleHttp\Exception\BadResponseException $e) {
+    	} catch (\Exception $e) // catch (\GuzzleHttp\Exception\BadResponseException $e) 
+        {
     		if($e->getCode()==400) {
     			return response()->json('Invalid Request, Please enter a username or a password.',$e->getCode());
     		} else if ($e->getCode()==401) {
