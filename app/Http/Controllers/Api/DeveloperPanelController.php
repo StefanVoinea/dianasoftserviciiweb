@@ -1280,7 +1280,7 @@ class '.$modelName.'Controller extends Controller
 
           
             $'.strtolower($modelName).'= '.$modelName.'::where("company_id",session("company_id"))
-                                                     ->paginate($request->pageLength,['page'=>$request->page]);
+                                                     ->paginate($request->pageLength,["page"=>$request->page]);
          
             return json_encode($'.strtolower($modelName).');
              
