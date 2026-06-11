@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use GuzzleHttp\Client;
 
 
 class AuthController extends Controller
@@ -20,22 +21,43 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         try {
-            $email = $request->email;
+            // Accept both 'email' and 'username' parameters
+            $email = $request->email ?? $request->username;
             $password = $request->password;
             
-            $oauthRequest = Request::create('/oauth/token', 'POST', [
-                'grant_type'    => 'password',
-                'client_id'     => config('services.passport.client_id'),
-                'client_secret' => config('services.passport.client_secret'),
-                'username'      => $email,
-                'password'      => $password,
-                'scope'         => '',
-            ]);
-            $response = app()->handle($oauthRequest);        
+            if (!$email || !$password) {
+                return response()->json([
+                    'error' => 'invalid_request',
+                    'message' => 'Missing email/username or password'
+                ], 400);
+            }
             
-    		return $response;
+            $http = new Client();
+            $response = $http->post(config('services.passport.login_endpoint'), [
+                'form_params' => [
+                    'grant_type'    => 'password',
+                    'client_id'     => config('services.passport.client_id'),
+                    'client_secret' => config('services.passport.client_secret'),
+                    'username'      => $email,
+                    'password'      => $password,
+                    'scope'         => '',
+                ]
+            ]);
+            
+    		return response($response->getBody(), $response->getStatusCode());
     	
-    	} catch (\Exception $e) // catch (\GuzzleHttp\Exception\BadResponseException $e) 
+    	} catch (\GuzzleHttp\Exception\BadResponseException $e) {
+    		if($e->getCode()==400) {
+    			return response()->json('Invalid Request, Please enter a username or a password.',$e->getCode());
+    		} else if ($e->getCode()==401) {
+    			return response()->json('Your credentials are incorrect. Please try again',$e->getCode());
+    		}
+           
+    		return response()->json('Something went wrong on the server.', $e->getCode() );
+        }
+    	catch (\Exception $e) {
+    		return response()->json('Something went wrong on the server.', 500 );
+    	} // catch (\GuzzleHttp\Exception\BadResponseException $e) 
         {
     		if($e->getCode()==400) {
     			return response()->json('Invalid Request, Please enter a username or a password.',$e->getCode());
