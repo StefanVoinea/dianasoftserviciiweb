@@ -19,29 +19,19 @@ class AuthController extends Controller
     }
     public function login(Request $request)
     {
-       
-    	//$http = new \GuzzleHttp\Client;
-       
-        
         try {
-            // $response = $http->post(config('services.passport.login_endpoint'), [
-            //     'form_params' => [
-            //         'grant_type' => 'password',
-            //         'client_id' => config('services.passport.client_id'),
-            //         'client_secret' => config('services.passport.client_secret'),
-            //         'username' => $request->username,
-            //         'password' => $request->password,
-            //         ]
-            //         ]);
-            $request = Request::create('/oauth/token', 'POST', [
+            $email = $request->email;
+            $password = $request->password;
+            
+            $oauthRequest = Request::create('/oauth/token', 'POST', [
                 'grant_type'    => 'password',
-                'client_id'     => config('passport.password_client.id'),
-                'client_secret' => config('passport.password_client.secret'),
-                'username'      => $request->email,
-                'password'      => $request->password,
+                'client_id'     => config('services.passport.client_id'),
+                'client_secret' => config('services.passport.client_secret'),
+                'username'      => $email,
+                'password'      => $password,
                 'scope'         => '',
             ]);
-            $response = app()->handle($request);        
+            $response = app()->handle($oauthRequest);        
             
     		return $response;
     	
