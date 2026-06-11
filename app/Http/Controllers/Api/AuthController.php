@@ -43,7 +43,7 @@ class AuthController extends Controller
             ]);
             $response = app()->handle($request);        
             
-    		//return $response->getBody();
+    		return $response;
     	
     	} catch (\Exception $e) // catch (\GuzzleHttp\Exception\BadResponseException $e) 
         {
