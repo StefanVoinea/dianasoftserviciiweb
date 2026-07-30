@@ -1,0 +1,139 @@
+================================================================
+  ACCES TOKEN ANAF — kit de instalare
+  Generat de {{APLICATIE}} la {{DATA}}
+================================================================
+
+CE FACE
+-------
+Acest program mic rulează pe calculatorul unde este conectat tokenul USB și
+permite aplicației să folosească certificatul digital de pe el pentru:
+  - citirea mesajelor din SPV și descărcarea documentelor,
+  - solicitarea de documente (vector fiscal, fișă rol etc.),
+  - semnarea declarațiilor,
+  - depunerea lor la ANAF.
+
+Cheia privată de pe token nu poate fi copiată, de aceea aceste operații trebuie
+făcute chiar pe calculatorul unde este conectat tokenul. Programul face legătura
+între aplicație și token, fără să scoată nimic de pe el.
+
+
+CERINȚE
+-------
+1. PHP 7.3 sau mai nou (doar linia de comandă).
+   Descărcare: https://windows.php.net/download/  (varianta „Thread Safe”, x64)
+   Dezarhivați, de exemplu, în C:\php
+2. Driverul tokenului instalat, iar tokenul conectat.
+3. Certificatul vizibil în „Gestionare certificate utilizator” -> Personal.
+
+
+INSTALARE
+---------
+1. Copiați acest folder pe calculatorul cu tokenul, de exemplu în:
+      C:\AccesTokenANAF
+2. Deschideți PowerShell în acel folder (clic dreapta -> „Deschidere fereastră
+   PowerShell aici”).
+3. Rulați:
+
+      .\instaleaza.ps1
+
+   Dacă PHP nu este în PATH:
+
+      .\instaleaza.ps1 -PhpPath "C:\php\php.exe"
+
+   Dacă aplicația rulează pe ALT calculator din rețea, programul trebuie să
+   asculte pe toate interfețele (necesită drepturi de administrator pentru
+   regula de firewall):
+
+      .\instaleaza.ps1 -Adresa 0.0.0.0
+
+Scriptul creează o sarcină programată numită „Acces token ANAF”, care pornește
+programul automat la fiecare autentificare a acestui utilizator, fără fereastră,
+și îl repornește dacă se oprește.
+
+DE CE SARCINĂ PROGRAMATĂ ȘI NU SERVICIU WINDOWS
+------------------------------------------------
+Un serviciu Windows rulează sub contul LocalSystem, care NU are acces la
+certificatele din magazinul utilizatorului („Personal” al contului dumneavoastră)
+— adică exact acolo unde se află certificatul de pe token. Un astfel de serviciu
+ar porni, dar orice semnare ar eșua. Sarcina programată rulează sub contul
+dumneavoastră, deci vede certificatul, și se comportă la fel: pornire automată,
+fără fereastră, repornire automată.
+
+
+CONFIGURARE ÎN APLICAȚIE
+------------------------
+Acest calculator are propriul cod de acces, generat la descărcarea kitului:
+
+      {{TOKEN}}
+
+În aplicație, mergeți la SPV -> Certificate digitale și:
+  1. Completați adresa calculatorului (ex. http://{{IP_EXEMPLU}}:{{PORT}}) și codul
+     de acces de mai sus, apoi apăsați „Citește token-urile conectate”.
+     Certificatele de pe acest calculator apar în listă.
+  2. Pentru fiecare certificat, „Configurează” -> verificați adresa și codul.
+  3. Atașați utilizatorii care folosesc acest token (butonul „Gestionează”),
+     ca operațiile lor să fie trimise automat aici.
+
+Pe același calculator se pot folosi mai multe token-uri, pe rând: schimbați tokenul
+și apăsați din nou „Citește token-urile conectate”. Programul alege automat
+certificatul cerut de aplicație și anunță clar dacă tokenul nu este conectat.
+
+
+TIPĂRIRE
+--------
+Declarațiile și recipisele bifate pentru imprimare se tipăresc pe acest
+calculator, pe imprimanta aleasă pentru fiecare utilizator în aplicație
+(SPV -> Utilizatori). Nu se mai descarcă niciun fișier.
+
+Dacă în dosarul de instalare se află PDFtoPrinter.exe (sau SumatraPDF.exe),
+programul îl folosește singur — nu aveți nimic de configurat. Altfel tipărește
+prin programul asociat PDF-urilor pe acest calculator (Acrobat Reader, Foxit),
+care trebuie să fie instalat.
+
+VERIFICARE
+----------
+  - Stare:    Get-ScheduledTask "Acces token ANAF"
+  - Test:     curl -H "Authorization: Bearer {{TOKEN}}" http://127.0.0.1:{{PORT}}/certificate
+              (întoarce lista certificatelor conectate acum)
+  - Manual:   dublu-clic pe porneste-manual.bat (pornire cu fereastră vizibilă)
+
+DEZINSTALARE
+------------
+      .\dezinstaleaza.ps1
+
+
+FIȘIERE
+-------
+  server.php          programul propriu-zis
+  configurare.env     codul de acces și adresele ANAF
+  php\                PHP-ul cu care rulează (dacă este în kit — vezi mai jos)
+  cert-info.ps1       citirea certificatelor din magazinul Windows
+  sign-pdf.ps1        semnarea documentelor cu certificatul de pe token
+  merge-pdf.ps1       unirea documentelor pentru tipărire
+  imprimante.ps1      citirea imprimantelor de pe acest calculator
+  print-pdf.ps1       trimiterea la imprimantă
+  itextsharp.dll      bibliotecă folosită la semnare
+  instaleaza.ps1      instalarea pornirii automate
+  dezinstaleaza.ps1   eliminarea ei
+  porneste-manual.bat pornire cu fereastră, pentru verificări
+
+
+PHP
+---
+Dacă în kit există dosarul php\, programul îl folosește pe acela — nu trebuie
+instalat nimic pe acest calculator. Este un PHP mic, doar cât îi trebuie
+programului, și nu schimbă cu nimic ce este deja instalat aici.
+
+Dacă dosarul lipsește, este nevoie de PHP 7.3 sau mai nou, instalat separat:
+https://windows.php.net/download/
+
+În ambele cazuri, Windows are nevoie de bibliotecile Visual C++ (x64). Sunt deja
+prezente pe aproape orice calculator; dacă instalarea se plânge că PHP nu
+pornește, se iau de la: https://aka.ms/vs/17/release/vc_redist.x64.exe
+
+
+SECURITATE
+----------
+Accesul este protejat de codul din configurare.env — păstrați fișierul doar pe
+acest calculator. Dacă programul este vizibil în rețea, limitați accesul la
+portul {{PORT}} prin firewall, la adresele serverului aplicației.

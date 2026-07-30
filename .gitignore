@@ -12,6 +12,14 @@
 
 .env
 laravel-echo-server.json
+/spv-bridge/cookies*.txt
+/spv-bridge/decl-cookies*.txt
+/spv-bridge/decl_cookies.txt
+# Codul de acces al bridge-ului — se generează pentru fiecare calculator
+/spv-bridge/configurare.env
+/spv-bridge/bridge.env
+# Documentele fiscale scrise de bridge când rulează de aici (date reale)
+/spv-bridge/arhiva/
 .env.backup
 .phpunit.result.cache
 docker-compose.override.yml
