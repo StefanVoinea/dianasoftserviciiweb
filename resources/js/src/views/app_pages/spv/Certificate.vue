@@ -401,6 +401,34 @@
         <code>bridge.env</code> pe acel calculator.
       </small>
 
+      <!-- Cum ajunge serverul la calculatorul cu tokenul. Prin tunel nu trebuie
+           deschis niciun port pe routerul clientului: programul de acolo
+           întreabă singur serverul ce are de făcut. -->
+      <b-form-group label="Legătura cu acest calculator">
+        <b-form-radio
+          v-model="bridgeFormular.mod_legatura"
+          value="direct"
+          class="mb-50"
+        >
+          Directă — serverul îl caută la adresa de mai sus
+          <small class="d-block text-muted">
+            Merge când aplicația și calculatorul sunt în aceeași rețea, sau când
+            acesta are adresă publică.
+          </small>
+        </b-form-radio>
+        <b-form-radio
+          v-model="bridgeFormular.mod_legatura"
+          value="tunel"
+        >
+          Prin tunel — programul întreabă singur serverul
+          <small class="d-block text-muted">
+            Pentru calculatoare din spatele unui router. Nu se deschide niciun
+            port: legătura pleacă dinspre client, pe 443. Cere agentul din kitul
+            nou, instalat pe acel calculator.
+          </small>
+        </b-form-radio>
+      </b-form-group>
+
       <hr>
       <b-form-checkbox
         v-model="bridgeFormular.monitorizare_activa"
@@ -767,6 +795,7 @@ export default {
         monitorizare_cale: certificat.monitorizare_cale || '',
         monitorizare_activa: Boolean(certificat.monitorizare_activa),
         monitorizare_la: certificat.monitorizare_la,
+        mod_legatura: certificat.mod_legatura || 'direct',
         implicit: certificat.implicit,
       }
       this.bridgeVizibil = true
@@ -819,6 +848,7 @@ export default {
         arhiva_cale: this.bridgeFormular.arhiva_cale || null,
         monitorizare_cale: this.bridgeFormular.monitorizare_cale || null,
         monitorizare_activa: this.bridgeFormular.monitorizare_activa,
+        mod_legatura: this.bridgeFormular.mod_legatura,
         implicit: this.bridgeFormular.implicit,
       })
         .then(() => {

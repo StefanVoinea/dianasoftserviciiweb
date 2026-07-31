@@ -45,6 +45,7 @@ class CertificateController extends Controller
                     'monitorizare_activa' => (bool) $certificat->monitorizare_activa,
                     'monitorizare_la' => Format::dataOra($certificat->monitorizare_la),
                     'licenta_pana_la' => Format::dataOra($certificat->licenta_pana_la),
+                    'mod_legatura' => $certificat->mod_legatura ?: 'direct',
                     'implicit' => $certificat->implicit,
                     'valabil_de_la' => Format::dataOra($certificat->valabil_de_la),
                     'valabil_pana_la' => Format::dataOra($certificat->valabil_pana_la),
@@ -269,6 +270,12 @@ class CertificateController extends Controller
             // Dosarul urmarit: aceleasi reguli ca la arhiva
             'monitorizare_cale' => ['nullable', 'string', 'max:300', 'regex:/^([A-Za-z]:[\\\/]|\\\\[^\\]+[\\\/])/', 'not_regex:/\.\./'],
             'monitorizare_activa' => 'nullable|boolean',
+            /*
+             * direct — serverul cheamă calculatorul clientului la adresa lui
+             * tunel  — programul de acolo întreabă singur serverul ce are de
+             *          făcut, pe 443, fără niciun port deschis pe routerul lui
+             */
+            'mod_legatura' => 'nullable|in:direct,tunel',
         ], [
             'arhiva_cale.regex' => 'Calea arhivei trebuie scrisă întreagă, de exemplu D:\\Documente fiscale sau \\\\server\\arhiva.',
             'arhiva_cale.not_regex' => 'Calea arhivei nu poate conține „..".',
@@ -278,7 +285,7 @@ class CertificateController extends Controller
 
         $certificat->fill(array_intersect_key(
             $date,
-            array_flip(['bridge_url', 'bridge_token', 'arhiva_cale', 'monitorizare_cale', 'monitorizare_activa', 'activ'])
+            array_flip(['bridge_url', 'bridge_token', 'arhiva_cale', 'monitorizare_cale', 'monitorizare_activa', 'activ', 'mod_legatura'])
         ));
 
         if (!empty($date['implicit'])) {

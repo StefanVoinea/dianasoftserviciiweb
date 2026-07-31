@@ -5,6 +5,7 @@ namespace App\Services\Anaf\Spv;
 use App\Models\AnafCertificat;
 use App\Models\CertificatUtilizator;
 use App\Services\Anaf\Bridge\Licente;
+use App\Services\Anaf\Bridge\Punte;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
 
@@ -79,9 +80,12 @@ class CertificatService
             : ($this->config['bridge']['token'] ?? null);
 
         return [
-            'url' => $certificat && $certificat->bridge_url
-                ? $certificat->bridge_url
-                : $this->config['bridge']['url'],
+            /*
+             * Certificatele legate prin tunel nu au adresa in reteaua clientului:
+             * comenzile lor trec prin puntea de pe serverul nostru, iar programul
+             * local si le ia singur de acolo.
+             */
+            'url' => $this->adresa($certificat),
             /*
              * Comenzile merg cu un jeton semnat, valabil cateva minute: nici cel
              * care stie codul de instalare nu poate porni programul local din
@@ -104,6 +108,24 @@ class CertificatService
             // scrie in bridge.env pe statia respectiva.
             'arhiva' => $certificat ? $certificat->arhiva_cale : null,
         ];
+    }
+
+    /**
+     * Unde se trimit comenzile pentru acest certificat.
+     *
+     * La legatura directa, adresa calculatorului din reteaua clientului. La
+     * tunel, puntea de pe serverul nostru: acolo asteapta comanda pana o ia
+     * programul local, care intreaba singur, pe 443.
+     */
+    protected function adresa(?AnafCertificat $certificat): string
+    {
+        if (app(Punte::class)->esteTunel($certificat)) {
+            return app(Punte::class)->adresa($certificat);
+        }
+
+        return $certificat && $certificat->bridge_url
+            ? $certificat->bridge_url
+            : $this->config['bridge']['url'];
     }
 
     /**

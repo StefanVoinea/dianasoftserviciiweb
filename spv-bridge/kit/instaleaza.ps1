@@ -94,6 +94,34 @@ Register-ScheduledTask -TaskName $NumeSarcina -Action $actiune -Trigger $declans
 
 Scrie "Sarcina '$NumeSarcina' a fost creată (pornire la logon)." 'Green'
 
+# 4b. Agentul care aduce lucrul de la server
+#
+# Cu el, aplicatia nu mai trebuie sa poata suna la calculatorul acesta: agentul
+# intreaba singur serverul ce are de facut, pe 443, ca orice pagina de internet.
+# Asa nu se deschide niciun port pe router. Merge doar daca in configurare.env
+# este scris PUNTE_SERVER; altfel nu se instaleaza nimic si legatura ramane
+# directa, ca pana acum.
+$continutEnv = Get-Content $caleEnv -Raw
+
+if ($continutEnv -match '(?m)^\s*PUNTE_SERVER\s*=\s*\S+') {
+    $numeAgent = "$NumeSarcina - agent"
+
+    $agentExistent = Get-ScheduledTask -TaskName $numeAgent -ErrorAction SilentlyContinue
+    if ($agentExistent) {
+        Unregister-ScheduledTask -TaskName $numeAgent -Confirm:$false
+    }
+
+    $actiuneAgent = New-ScheduledTaskAction -Execute $PhpPath -Argument "$argumentePhp`agent.php" -WorkingDirectory $folder
+
+    Register-ScheduledTask -TaskName $numeAgent -Action $actiuneAgent -Trigger $declansator `
+        -Principal $principal -Settings $setari `
+        -Description 'Aduce de la aplicatie lucrul pentru tokenul de pe acest calculator, fara sa fie nevoie de porturi deschise.' | Out-Null
+
+    Scrie "Sarcina '$numeAgent' a fost creată (legătură prin tunel)." 'Green'
+} else {
+    Scrie "Fără PUNTE_SERVER în configurare.env: legătura rămâne directă." 'Yellow'
+}
+
 # 5. Regulă de firewall, dacă programul e expus în rețea
 if ($Adresa -ne '127.0.0.1' -and $Adresa -ne 'localhost') {
     $numeRegula = "Acces token $Port"

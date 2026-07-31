@@ -16,9 +16,19 @@ if ($sarcina) {
     Write-Host "Nu există nicio sarcină cu numele '$NumeSarcina'." -ForegroundColor Yellow
 }
 
-# Procesele PHP rămase pe portul programului
+# Agentul care aducea lucrul de la server, daca a fost instalat
+$numeAgent = "$NumeSarcina - agent"
+$sarcinaAgent = Get-ScheduledTask -TaskName $numeAgent -ErrorAction SilentlyContinue
+
+if ($sarcinaAgent) {
+    Stop-ScheduledTask -TaskName $numeAgent -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName $numeAgent -Confirm:$false
+    Write-Host "Sarcina '$numeAgent' a fost eliminată." -ForegroundColor Green
+}
+
+# Procesele PHP rămase — programul de pe port și agentul
 Get-CimInstance Win32_Process -Filter "Name = 'php.exe'" | Where-Object {
-    $_.CommandLine -like "*-S*:$Port*"
+    $_.CommandLine -like "*-S*:$Port*" -or $_.CommandLine -like '*agent.php*'
 } | ForEach-Object {
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
     Write-Host "Proces oprit: $($_.ProcessId)" -ForegroundColor Green

@@ -14,7 +14,8 @@ class KitBridge
 {
     /** Fisierele bridge-ului, luate din instalarea curenta. */
     protected const FISIERE_BRIDGE = [
-        'server.php', 'cert-info.ps1', 'sign-pdf.ps1', 'merge-pdf.ps1',
+        'server.php', 'agent.php', 'agent-functii.php',
+        'cert-info.ps1', 'sign-pdf.ps1', 'merge-pdf.ps1',
         'imprimante.ps1', 'print-pdf.ps1', 'itextsharp.dll',
     ];
 
@@ -205,6 +206,12 @@ class KitBridge
             '# care a fost instalat acest fișier. Kitul îl aduce acolo, deci de',
             '# obicei nu aveți nimic de completat aici.',
             'IMPRIMARE_EXE=',
+            '',
+            '# Adresa aplicației. Cu ea, programul întreabă singur serverul ce are de',
+            '# făcut — pe 443, ca orice pagină de internet — deci nu trebuie deschis',
+            '# niciun port pe routerul dumneavoastră. Ca să meargă așa, certificatul',
+            '# trebuie pus în aplicație pe legătura „prin tunel".',
+            'PUNTE_SERVER=' . rtrim(config('app.url'), '/'),
             '',
             '# Adresele serviciilor ANAF (se modifică doar dacă ANAF le schimbă).',
             'SPV_BASE_URL=' . config('anaf.spv.base_url'),

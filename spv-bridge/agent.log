@@ -1,0 +1,13 @@
+2026-07-31 15:39:52 Pornit. Întreb http://127.0.0.1:8000 pentru certificatul 1.
+2026-07-31 15:40:17 Serverul nu răspunde; reîncerc peste 5s.
+2026-07-31 15:41:28 Comanda 20: GET /imprimante
+2026-07-31 15:41:54 Serverul nu răspunde; reîncerc peste 5s.
+2026-07-31 15:42:25 Serverul nu răspunde; reîncerc peste 10s.
+2026-07-31 15:42:55 Comanda 1: GET /imprimante
+2026-07-31 15:43:21 Serverul nu răspunde; reîncerc peste 5s.
+2026-07-31 15:43:27 Comanda 1: GET /imprimante
+2026-07-31 15:43:53 Serverul nu răspunde; reîncerc peste 5s.
+2026-07-31 15:44:11 Comanda 1: GET /imprimante
+2026-07-31 15:44:41 Serverul nu răspunde; reîncerc peste 5s.
+2026-07-31 15:45:12 Serverul nu răspunde; reîncerc peste 10s.
+2026-07-31 15:45:48 Serverul nu răspunde; reîncerc peste 20s.

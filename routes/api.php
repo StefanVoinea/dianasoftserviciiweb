@@ -32,6 +32,21 @@ Route::get("/callback", "Api\EfacturatokensController@callback");
 Route::get('/anaf-oauth/callback', 'Api\AnafOauthController@callback');
 
 /*
+ * Puntea către programele locale aflate în spatele unui router.
+ *
+ * Nu cer „auth:api": cererile nu vin de la un om cu sesiune, ci de la serverul
+ * însuși (cu jeton semnat) și de la agentul clientului (cu codul lui de
+ * instalare). Fiecare rută își verifică singură cine bate la ușă.
+ */
+Route::post('/punte/agent/asteapta', 'Api\PunteController@asteapta');
+Route::get('/punte/agent/corp/{comanda}', 'Api\PunteController@corp');
+Route::post('/punte/agent/rezultat/{comanda}', 'Api\PunteController@rezultat');
+
+// Fața dinspre aplicație: se poartă întocmai ca programul local.
+Route::any('/punte/{certificat}/{cale?}', 'Api\PunteController@proxy')
+    ->where('cale', '.*');
+
+/*
  * Modulul ANAF/SPV — toate rutele cer autentificare și lucrează în contextul
  * clientului selectat: middleware-ul „companie.anaf” verifică apartenența
  * utilizatorului la client și limitează datele la acesta.

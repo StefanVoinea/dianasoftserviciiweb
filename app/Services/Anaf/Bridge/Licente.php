@@ -171,6 +171,41 @@ class Licente
         return $bruta ? $semnatura : base64_encode($semnatura);
     }
 
+    /**
+     * Jetonul acesta e făcut de noi și mai e bun?
+     *
+     * Îl folosește puntea: ruta ei e publică, iar jetonul semnat e singurul
+     * lucru care deosebește o cerere a aplicației de una venită din afară.
+     */
+    public function jetonValid(string $jeton): bool
+    {
+        $bucati = explode('.', $jeton);
+
+        if (count($bucati) !== 3 || $bucati[0] !== 'v1') {
+            return false;
+        }
+
+        $continut = $this->base64UrlDecode($bucati[1]);
+        $semnatura = $this->base64UrlDecode($bucati[2]);
+
+        if ($continut === false || $semnatura === false || !$this->verifica($continut, base64_encode($semnatura))) {
+            return false;
+        }
+
+        $date = json_decode($continut, true);
+
+        // Un minut de toleranță: ceasurile nu bat la fix.
+        return is_array($date)
+            && isset($date['expira'], $date['emis'])
+            && $date['expira'] >= time() - 60
+            && $date['emis'] <= time() + 60;
+    }
+
+    protected function base64UrlDecode(string $valoare)
+    {
+        return base64_decode(strtr($valoare, '-_', '+/') . str_repeat('=', (4 - strlen($valoare) % 4) % 4));
+    }
+
     /** Verificarea se face în programul local; aici e doar pentru teste. */
     public function verifica(string $continut, string $semnatura): bool
     {
