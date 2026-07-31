@@ -38,8 +38,16 @@ class PunteController extends Controller
      */
     public function proxy(Request $request, AnafCertificat $certificat, string $cale = '')
     {
+        /*
+         * 503, nu 401: aici nu e vorba de drepturile cuiva la ANAF, ci de
+         * legătura noastră, neconfigurată. Un 401 ar fi citit mai departe ca
+         * refuz al SPV-ului și ar trimite omul să-și verifice certificatul.
+         */
         if (!$this->punte->cerereDeLaServer($request)) {
-            return response()->json(['eroare' => 'Cerere nesemnată de server.'], 401);
+            return response()->json([
+                'eroare' => 'Puntea către programul local nu este configurată.',
+                'detalii' => 'Cererea nu poartă jeton semnat de server. Rulați „php artisan anaf:chei-bridge".',
+            ], 503);
         }
 
         $comanda = $this->punte->pune($certificat, $request, '/' . ltrim($cale, '/'));

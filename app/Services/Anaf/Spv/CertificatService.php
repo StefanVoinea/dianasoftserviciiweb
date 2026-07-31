@@ -96,9 +96,7 @@ class CertificatService
              * invalid" la tot. Asa, instalarile existente merg mai departe pana
              * sunt licentiate.
              */
-            'token' => $certificat && $certificat->licenta_pana_la
-                ? ($this->jetonul() ?: $codInstalare)
-                : $codInstalare,
+            'token' => $this->legitimarea($certificat, $codInstalare),
             // Codul din configurare.env, bun doar la instalare si la licentiere
             'cod_instalare' => $codInstalare,
             // Bridge-ul poate deservi mai multe certificate de pe acelasi
@@ -108,6 +106,28 @@ class CertificatService
             // scrie in bridge.env pe statia respectiva.
             'arhiva' => $certificat ? $certificat->arhiva_cale : null,
         ];
+    }
+
+    /**
+     * Cu ce se legitimeaza comanda de acum.
+     *
+     * Prin tunel, cererea se opreste intai la puntea de pe serverul nostru, iar
+     * ea cere jeton semnat — numai serverul il poate face. Mai departe, catre
+     * programul local, puntea pune singura ce trebuie: jetonul, daca programul
+     * e licentiat, sau codul lui de instalare, daca nu e inca.
+     *
+     * La legatura directa nu e nimeni la mijloc: programul primeste jetonul doar
+     * daca stie sa-l verifice, altfel codul, ca pana acum.
+     */
+    protected function legitimarea(?AnafCertificat $certificat, ?string $codInstalare): ?string
+    {
+        if (app(Punte::class)->esteTunel($certificat)) {
+            return $this->jetonul() ?: $codInstalare;
+        }
+
+        return $certificat && $certificat->licenta_pana_la
+            ? ($this->jetonul() ?: $codInstalare)
+            : $codInstalare;
     }
 
     /**

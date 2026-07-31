@@ -104,12 +104,24 @@ class Punte
             Storage::put($fisier, $corp);
         }
 
+        $antete = $this->anteteleDeDus($request);
+
+        /*
+         * Legitimarea se schimbă aici, pentru că cele două uși cer lucruri
+         * diferite: puntea cere jeton semnat de server — el a și deschis-o —
+         * iar programul local cere ce știe el. Un program licențiat recunoaște
+         * jetonul; unul care abia s-a instalat, doar codul lui de instalare.
+         */
+        $antete['authorization'] = 'Bearer ' . ($certificat->licenta_pana_la
+            ? $this->licente->jeton()
+            : $certificat->bridge_token);
+
         return BridgeComanda::create([
             'company_id' => $certificat->company_id,
             'certificat_id' => $certificat->id,
             'metoda' => $request->method(),
             'cale' => $cale . ($intrebare ? '?' . $intrebare : ''),
-            'antete' => $this->anteteleDeDus($request),
+            'antete' => $antete,
             'corp_fisier' => $fisier,
             'stare' => 'asteapta',
         ]);

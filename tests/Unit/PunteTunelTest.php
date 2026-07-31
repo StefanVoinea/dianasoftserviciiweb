@@ -93,9 +93,37 @@ class PunteTunelTest extends TestCase
         $this->assertSame('GET', $comanda->metoda);
         $this->assertSame('/spv/listaMesaje?zile=5', $comanda->cale);
         $this->assertSame('ABC123', $comanda->antete['x-thumbprint']);
-        // Programul local cere jetonul; prin tunel trebuie să-l primească la fel.
-        $this->assertSame('Bearer jeton-semnat', $comanda->antete['authorization']);
         $this->assertArrayNotHasKey('host', $comanda->antete, 'antetele legăturii noastre rămân aici');
+    }
+
+    /**
+     * Legitimarea se schimbă la punte, pentru că cele două uși cer lucruri
+     * diferite: puntea cere jeton semnat, programul local încă nelicențiat nu
+     * știe decât codul lui de instalare.
+     */
+    public function test_programul_nelicentiat_primeste_codul_lui_nu_jetonul(): void
+    {
+        $cerere = Request::create('/api/punte/1/certificate', 'GET');
+        $cerere->headers->set('Authorization', 'Bearer v1.jeton.semnat');
+
+        $comanda = $this->punte()->pune($this->certificat, $cerere, '/certificate');
+
+        $this->assertSame('Bearer cod-de-instalare', $comanda->antete['authorization']);
+    }
+
+    /** Unul licențiat recunoaște jetonul, deci îl primește pe el. */
+    public function test_programul_licentiat_primeste_jeton_semnat(): void
+    {
+        $this->app->make(Licente::class)->pregatesteCheile();
+        $this->certificat->update(['licenta_pana_la' => now()->addDays(20)]);
+
+        $cerere = Request::create('/api/punte/1/certificate', 'GET');
+        $cerere->headers->set('Authorization', 'Bearer v1.altceva');
+
+        $comanda = $this->punte()->pune($this->certificat->fresh(), $cerere, '/certificate');
+
+        $this->assertStringStartsWith('Bearer v1.', $comanda->antete['authorization']);
+        $this->assertNotSame('Bearer v1.altceva', $comanda->antete['authorization'], 'se semnează unul proaspăt');
         $this->assertSame('asteapta', $comanda->stare);
     }
 
