@@ -1,5 +1,4 @@
-
-  <?php
+<?php
 
     Route::middleware("auth:api")->group(function () {
 	    Route::post("/nomtari", "Api\NomtariController@indexPaginat")

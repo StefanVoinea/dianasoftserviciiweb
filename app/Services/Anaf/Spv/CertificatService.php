@@ -1,0 +1,352 @@
+<?php
+
+namespace App\Services\Anaf\Spv;
+
+use App\Models\AnafCertificat;
+use App\Models\CertificatUtilizator;
+use App\Services\Anaf\Bridge\Licente;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
+
+/**
+ * Evidenta certificatelor digitale si rutarea catre bridge-ul corect.
+ *
+ * Un client poate avea mai multe certificate, fiecare pe alt calculator din
+ * retea, cu propriul bridge. Certificatul folosit pentru o operatie se alege in
+ * ordinea: cel cerut explicit, cel atribuit utilizatorului conectat, cel marcat
+ * implicit, iar in lipsa lor configuratia din .env.
+ */
+class CertificatService
+{
+    protected $config;
+
+    /** Certificatul rezolvat pentru cererea curenta. */
+    protected $activ;
+
+    /** Fortat programatic (ex. dintr-o comanda sau la semnare). */
+    protected $fortat;
+
+    /** Jetonul semnat al cererii curente. */
+    protected $jeton;
+
+    public function __construct(array $config)
+    {
+        $this->config = $config;
+    }
+
+    /** Fixeaza certificatul folosit pentru operatiile urmatoare. */
+    public function foloseste(?AnafCertificat $certificat): void
+    {
+        $this->fortat = $certificat;
+        $this->activ = $certificat;
+    }
+
+    /**
+     * Certificatul care trebuie folosit acum. Poate fi null doar daca nu exista
+     * niciun certificat inregistrat si nici configuratie in .env.
+     */
+    public function activ(): ?AnafCertificat
+    {
+        if ($this->activ !== null) {
+            return $this->activ;
+        }
+
+        return $this->activ = $this->rezolva();
+    }
+
+    public function idCurent(): ?int
+    {
+        return optional($this->activ())->id;
+    }
+
+    /** Alias pastrat pentru compatibilitate cu apelurile existente. */
+    public function curent(): ?AnafCertificat
+    {
+        return $this->activ();
+    }
+
+    /**
+     * Coordonatele bridge-ului pe care trebuie trimisa cererea.
+     *
+     * @return array{url: string, token: ?string, cod_instalare: ?string, thumbprint: ?string, arhiva: ?string}
+     */
+    public function bridge(): array
+    {
+        $certificat = $this->activ();
+
+        $codInstalare = $certificat && $certificat->bridge_token
+            ? $certificat->bridge_token
+            : ($this->config['bridge']['token'] ?? null);
+
+        return [
+            'url' => $certificat && $certificat->bridge_url
+                ? $certificat->bridge_url
+                : $this->config['bridge']['url'],
+            /*
+             * Comenzile merg cu un jeton semnat, valabil cateva minute: nici cel
+             * care stie codul de instalare nu poate porni programul local din
+             * alta aplicatie, pentru ca n-are cheia cu care se semneaza.
+             *
+             * Jetonul pleaca doar catre programele care au primit deja licenta —
+             * unul vechi nu l-ar recunoaste si ar raspunde „cod de acces
+             * invalid" la tot. Asa, instalarile existente merg mai departe pana
+             * sunt licentiate.
+             */
+            'token' => $certificat && $certificat->licenta_pana_la
+                ? ($this->jetonul() ?: $codInstalare)
+                : $codInstalare,
+            // Codul din configurare.env, bun doar la instalare si la licentiere
+            'cod_instalare' => $codInstalare,
+            // Bridge-ul poate deservi mai multe certificate de pe acelasi
+            // calculator; amprenta ii spune cu care sa lucreze.
+            'thumbprint' => $certificat ? $certificat->thumbprint : ($this->config['thumbprint'] ?? null),
+            // Unde tine acel calculator arhiva de documente. Gol inseamna ce
+            // scrie in bridge.env pe statia respectiva.
+            'arhiva' => $certificat ? $certificat->arhiva_cale : null,
+        ];
+    }
+
+    /**
+     * Jetonul semnat pentru comanda de acum.
+     *
+     * Se face unul singur pe cerere: operatiile trimit mai multe apeluri catre
+     * acelasi program local, iar semnarea e ieftina, dar nu degeaba.
+     */
+    protected function jetonul(): ?string
+    {
+        if ($this->jeton !== null) {
+            return $this->jeton;
+        }
+
+        $licente = app(Licente::class);
+
+        if (!$licente->areChei()) {
+            return null;
+        }
+
+        return $this->jeton = $licente->jeton();
+    }
+
+    protected function rezolva(): ?AnafCertificat
+    {
+        return $this->cerutExplicit()
+            ?? $this->alUtilizatorului()
+            ?? AnafCertificat::where('activ', true)->where('implicit', true)->first()
+            ?? $this->dinConfiguratie();
+    }
+
+    /** Selectia din interfata, trimisa ca antet sau parametru. */
+    protected function cerutExplicit(): ?AnafCertificat
+    {
+        if (!app()->bound('request')) {
+            return null;
+        }
+
+        $id = request()->header('X-Certificat-Id') ?: request()->input('certificat_id');
+
+        return $id ? AnafCertificat::where('activ', true)->find($id) : null;
+    }
+
+    /**
+     * Certificatul atribuit utilizatorului conectat. Cand are mai multe, se ia
+     * cel marcat implicit, altfel primul atribuit.
+     */
+    protected function alUtilizatorului(): ?AnafCertificat
+    {
+        $user = Auth::guard('api')->user() ?: Auth::user();
+
+        if (!$user) {
+            return null;
+        }
+
+        $certificate = AnafCertificat::where('activ', true)
+            ->whereIn('id', CertificatUtilizator::where('activ', true)
+                ->where(function ($query) use ($user) {
+                    $query->where('user_id', $user->id);
+
+                    if (!empty($user->email)) {
+                        $query->orWhere('email', $user->email);
+                    }
+                })
+                ->pluck('certificat_id'))
+            ->orderByDesc('implicit')
+            ->get();
+
+        return $certificate->first();
+    }
+
+    /** Certificatul din .env, inregistrat la prima folosire. */
+    protected function dinConfiguratie(): ?AnafCertificat
+    {
+        $thumbprint = $this->config['thumbprint'] ?? null;
+
+        if ($thumbprint) {
+            $cunoscut = AnafCertificat::where('thumbprint', $thumbprint)->first();
+
+            if ($cunoscut) {
+                return $cunoscut;
+            }
+        }
+
+        try {
+            return $this->sincronizeaza();
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Inregistreaza toate tokenele conectate acum la un bridge.
+     * Certificatele deja cunoscute isi actualizeaza ruta si valabilitatea.
+     *
+     * @return AnafCertificat[]
+     */
+    public function descoperaPeBridge(string $bridgeUrl, ?string $bridgeToken = null): array
+    {
+        $raspuns = Http::withToken($bridgeToken)
+            ->timeout($this->config['timeout'])
+            ->get(rtrim($bridgeUrl, '/') . '/certificate');
+
+        if ($raspuns->failed()) {
+            $payload = json_decode($raspuns->body(), true);
+
+            throw new SpvException(
+                'Calculatorul ' . $bridgeUrl . ' nu a răspuns: '
+                . ($payload['detalii'] ?? $payload['eroare'] ?? 'HTTP ' . $raspuns->status())
+            );
+        }
+
+        $lista = $raspuns->json();
+
+        // Un singur certificat vine ca obiect, mai multe ca listă.
+        if (isset($lista['thumbprint'])) {
+            $lista = [$lista];
+        }
+
+        if (!is_array($lista) || $lista === []) {
+            throw new SpvException('Niciun token conectat la calculatorul ' . $bridgeUrl . '.');
+        }
+
+        $rezultat = [];
+
+        foreach ($lista as $date) {
+            if (empty($date['thumbprint']) || !$this->esteCalificat($date)) {
+                continue;
+            }
+
+            $rezultat[] = $this->inregistreaza($date, $bridgeUrl, $bridgeToken);
+        }
+
+        if ($rezultat === []) {
+            throw new SpvException(
+                'La ' . $bridgeUrl . ' nu s-a găsit niciun certificat calificat. '
+                . 'Verificați că tokenul este conectat.'
+            );
+        }
+
+        return $rezultat;
+    }
+
+    /**
+     * Magazinul Windows contine si certificate auto-semnate ale unor aplicatii.
+     * Cele calificate sunt emise de o autoritate, deci au emitent diferit de subiect.
+     */
+    protected function esteCalificat(array $date): bool
+    {
+        $subiect = trim($date['subiect'] ?? '');
+        $emitent = trim($date['emitent'] ?? '');
+
+        return $subiect !== '' && $emitent !== '' && strcasecmp($subiect, $emitent) !== 0;
+    }
+
+    protected function inregistreaza(array $date, ?string $bridgeUrl, ?string $bridgeToken): AnafCertificat
+    {
+        $certificat = AnafCertificat::firstOrNew(['thumbprint' => $date['thumbprint']]);
+
+        $certificat->fill([
+            'serie' => $date['serie'] ?? null,
+            'cn' => $date['cn'] ?? null,
+            'subiect' => $date['subiect'] ?? null,
+            'emitent' => $date['emitent'] ?? null,
+            'email' => $date['email'] ?? null,
+            'valabil_de_la' => $date['valabil_de_la'] ?? null,
+            'valabil_pana_la' => $date['valabil_pana_la'] ?? null,
+            'activ' => true,
+        ]);
+
+        if ($bridgeUrl) {
+            $certificat->bridge_url = $bridgeUrl;
+            $certificat->bridge_token = $bridgeToken;
+        }
+
+        if (!AnafCertificat::where('implicit', true)->exists()) {
+            $certificat->implicit = true;
+        }
+
+        $certificat->save();
+
+        return $certificat;
+    }
+
+    /**
+     * Citeste certificatul de pe un bridge si il inregistreaza in evidenta.
+     * Fara parametri se foloseste bridge-ul din configuratie.
+     */
+    public function sincronizeaza(array $dateSpv = [], ?string $bridgeUrl = null, ?string $bridgeToken = null): AnafCertificat
+    {
+        $url = $bridgeUrl ?: $this->config['bridge']['url'];
+        $token = $bridgeToken ?: ($this->config['bridge']['token'] ?? null);
+
+        $raspuns = Http::withToken($token)
+            ->timeout($this->config['timeout'])
+            ->get(rtrim($url, '/') . '/certificat');
+
+        if ($raspuns->failed()) {
+            $payload = json_decode($raspuns->body(), true);
+
+            throw new SpvException(
+                'Certificatul nu a putut fi citit de la ' . $url . ': '
+                . ($payload['detalii'] ?? $payload['eroare'] ?? 'HTTP ' . $raspuns->status())
+            );
+        }
+
+        $date = $raspuns->json();
+
+        $certificat = AnafCertificat::firstOrNew(['thumbprint' => $date['thumbprint']]);
+
+        $certificat->fill([
+            'serie' => $date['serie'] ?? null,
+            'cn' => $date['cn'] ?? null,
+            'subiect' => $date['subiect'] ?? null,
+            'emitent' => $date['emitent'] ?? null,
+            'email' => $date['email'] ?? null,
+            'valabil_de_la' => $date['valabil_de_la'] ?? null,
+            'valabil_pana_la' => $date['valabil_pana_la'] ?? null,
+            'ultima_utilizare' => now(),
+            'activ' => true,
+        ]);
+
+        // Bridge-ul de pe care a fost citit devine ruta lui de acces.
+        if ($bridgeUrl) {
+            $certificat->bridge_url = $bridgeUrl;
+            $certificat->bridge_token = $bridgeToken;
+        }
+
+        if (isset($dateSpv['serial'])) {
+            $certificat->serie_anaf = $dateSpv['serial'];
+        }
+
+        if (isset($dateSpv['cnp'])) {
+            $certificat->cnp = $dateSpv['cnp'];
+        }
+
+        // Primul certificat inregistrat devine cel implicit.
+        if (!AnafCertificat::where('implicit', true)->exists()) {
+            $certificat->implicit = true;
+        }
+
+        $certificat->save();
+
+        return $this->activ = $certificat;
+    }
+}

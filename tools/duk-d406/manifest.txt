@@ -1,0 +1,2 @@
+Main-Class: DukD406
+Class-Path: DUKIntegrator.jar

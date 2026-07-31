@@ -4,3 +4,34 @@ NOTE:
 ------
 PLACE HERE YOUR OWN SCSS CODES AND IF NEEDED, OVERRIDE THE STYLES FROM THE OTHER STYLESHEETS.
 WE WILL RELEASE FUTURE UPDATES SO IN ORDER TO NOT OVERWRITE YOUR STYLES IT'S BETTER LIKE THIS.  */
+
+/*
+ * Antetul cu siglele modulelor.
+ *
+ * Tema îl face înalt de 4,45rem, pentru un rând de meniu care la noi e ascuns.
+ * Rămânea o bandă goală între sigle și taburile paginii, așa că bara se strânge
+ * la înălțimea siglelor, iar conținutul începe imediat sub ea.
+ */
+$antet-inaltime: 3rem;
+
+.horizontal-layout {
+  .header-navbar {
+    min-height: $antet-inaltime;
+
+    .navbar-container {
+      min-height: $antet-inaltime;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+  }
+}
+
+/*
+ * Meniul de navigare fiind ascuns, tema trece pe „o coloană" și pune sus un
+ * spațiu socotit pentru bara înaltă. Se rescrie doar marginea de sus; „important"
+ * e al temei, nu al nostru — regula pe care o înlocuim îl are deja.
+ */
+[data-col='1-column'].horizontal-layout .app-content,
+[data-col='1-column'].horizontal-layout.footer-fixed .app-content {
+  padding-top: calc(#{$antet-inaltime} + 0.25rem) !important;
+}

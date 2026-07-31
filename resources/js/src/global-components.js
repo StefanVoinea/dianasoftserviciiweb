@@ -17,6 +17,7 @@ import Selectonearray from './views/app_pages/dianasoft/Selectonearray.vue'
 import Taricomponent from './views/app_pages/dianasoft/Taricomponent.vue'
 import Judetcomponent from './views/app_pages/dianasoft/Judetcomponent.vue'
 import Localitatecomponent from './views/app_pages/dianasoft/Localitatecomponent.vue'
+import Paginare from './views/app_pages/dianasoft/Paginare.vue'
 import Gestiunepermisa from './views/app_pages/dianasoft/Gestiunepermisa.vue'
 import Gestiunepermisadenumire from './views/app_pages/dianasoft/Gestiunepermisadenumire.vue'
 import Lunaan from './views/app_pages/dianasoft/Lunaan.vue'
@@ -62,6 +63,7 @@ Vue.component(Selectonearray.name, Selectonearray)
 Vue.component(Judetcomponent.name, Judetcomponent)
 Vue.component(Localitatecomponent.name, Localitatecomponent)
 Vue.component(Taricomponent.name, Taricomponent)
+Vue.component(Paginare.name, Paginare)
 Vue.component(Gestiunepermisa.name, Gestiunepermisa)
 Vue.component(Gestiunepermisadenumire.name, Gestiunepermisadenumire)
 Vue.component(Lunaan.name, Lunaan)

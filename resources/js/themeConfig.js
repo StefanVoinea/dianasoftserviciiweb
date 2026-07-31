@@ -20,7 +20,7 @@ export const $themeConfig = {
     type: 'horizontal', // vertical, horizontal
     contentWidth: 'full', // full, boxed
     menu: {
-      hidden: false,
+      hidden: true, // bara de meniu de navigare este ascunsa
       isCollapsed: true
     },
     navbar: {

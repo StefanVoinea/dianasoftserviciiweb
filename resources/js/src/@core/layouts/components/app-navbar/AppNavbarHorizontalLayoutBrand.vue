@@ -7,15 +7,15 @@
           class="navbar-brand"
           to="/"
         >
+          <!-- Doar sigla: numele aplicației și versiunea au lăsat locul
+               modulelor, care sunt drumul spre lucru, nu o informație. -->
           <span class="brand-logo">
             <b-img
               :src="appLogoImage"
-              alt="logo"
+              :alt="appName"
+              :title="appName + ' ' + versiune"
             />
           </span>
-          <h2 class="brand-text mb-0">
-            {{ appName +' '+versiune}}
-          </h2>
         </b-link>
       </li>
     </ul>

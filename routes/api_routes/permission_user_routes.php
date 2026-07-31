@@ -1,5 +1,4 @@
-
-  <?php
+<?php
 
     Route::middleware("auth:api")->group(function () {
 	    Route::get("/permission_user", "Api\Permission_UserController@index")

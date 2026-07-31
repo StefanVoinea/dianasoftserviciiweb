@@ -1,5 +1,4 @@
- 
-  <?php
+<?php
 Route::middleware("auth:api")->group(function () {
 
       Route::post("/acord_gdpr_word", "Api\DocumentController@acordGDPR_WORD")

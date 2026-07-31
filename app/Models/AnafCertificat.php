@@ -1,0 +1,57 @@
+<?php
+
+namespace App\Models;
+
+use App\Models\Concerns\ApartineCompaniei;
+use Illuminate\Database\Eloquent\Model;
+
+class AnafCertificat extends Model
+{
+    use ApartineCompaniei;
+
+    protected $table = 'anaf_certificate';
+
+    protected $guarded = [];
+
+    protected $casts = [
+        'activ' => 'boolean',
+        'valabil_de_la' => 'datetime',
+        'valabil_pana_la' => 'datetime',
+        'ultima_utilizare' => 'datetime',
+        'avertizat_la' => 'datetime',
+    ];
+
+    public function abonati()
+    {
+        return $this->hasMany(CertificatAbonat::class, 'certificat_id');
+    }
+
+    public function societati()
+    {
+        return $this->hasMany(AnafSocietate::class, 'certificat_id');
+    }
+
+    public function utilizatori()
+    {
+        return $this->hasMany(CertificatUtilizator::class, 'certificat_id');
+    }
+
+    /** Zile ramase pana la expirare (negativ daca a expirat deja). */
+    public function getZileRamaseAttribute(): ?int
+    {
+        return $this->valabil_pana_la ? now()->startOfDay()->diffInDays($this->valabil_pana_la->startOfDay(), false) : null;
+    }
+
+    public function getExpiratAttribute(): bool
+    {
+        return $this->zile_ramase !== null && $this->zile_ramase < 0;
+    }
+
+    /** Certificatele care expira in intervalul de avertizare si nu au fost anuntate. */
+    public function scopeDeAvertizat($query, int $zile)
+    {
+        return $query->where('activ', true)
+            ->whereNotNull('valabil_pana_la')
+            ->whereBetween('valabil_pana_la', [now(), now()->addDays($zile)]);
+    }
+}

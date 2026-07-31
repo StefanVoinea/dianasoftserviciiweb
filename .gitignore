@@ -20,6 +20,10 @@ laravel-echo-server.json
 /spv-bridge/bridge.env
 # Documentele fiscale scrise de bridge când rulează de aici (date reale)
 /spv-bridge/arhiva/
+
+# Licenta si cheia publica ale unei instalari; kitul le pune singur
+/spv-bridge/licenta.json
+/spv-bridge/cheie-publica.pem
 .env.backup
 .phpunit.result.cache
 docker-compose.override.yml
@@ -59,3 +63,6 @@ yarn-error.log*
 
 # Docs
 /docs/.temp
+
+# Setari locale ale uneltelor de dezvoltare (pot contine coduri de acces)
+.claude/settings.json

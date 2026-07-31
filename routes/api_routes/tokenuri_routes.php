@@ -1,5 +1,4 @@
-
-  <?php
+<?php
 
     Route::middleware("auth:api")->group(function () {
 	    Route::post("/tokenuri", "Api\TokenuriController@indexPaginat")

@@ -13,14 +13,15 @@
         boxShadow: navbarType === 'static' && scrolledTo ? 'rgba(0, 0, 0, 0.05) 0px 4px 20px 0px' : null,
       }"
       :toggleable="false"
-      class="header-navbar navbar-shadow align-items-center navbar-brand-center navbar-fixed"
+      class="header-navbar navbar-shadow align-items-center navbar-fixed"
       :class="{'fixed-top': $store.getters['app/currentBreakPoint'] !== 'xl'}"
     >
       <slot
         name="navbar"
         :toggleVerticalMenuActive="toggleVerticalMenuActive"
       >
-        <app-navbar-horizontal-layout-brand />
+        <!-- Sigla din mijloc a fost scoasă: în antet stau siglele modulelor,
+             care duc undeva, nu una care spune doar unde ești. -->
         <app-navbar-horizontal-layout :toggle-vertical-menu-active="toggleVerticalMenuActive" />
       </slot>
     </b-navbar>
@@ -102,7 +103,6 @@
 <script>
 import AppBreadcrumb from '@core/layouts/components/AppBreadcrumb.vue'
 import AppNavbarHorizontalLayout from '@core/layouts/components/app-navbar/AppNavbarHorizontalLayout.vue'
-import AppNavbarHorizontalLayoutBrand from '@core/layouts/components/app-navbar/AppNavbarHorizontalLayoutBrand.vue'
 import AppFooter from '@core/layouts/components/AppFooter.vue'
 import useAppConfig from '@core/app-config/useAppConfig'
 import { BNavbar } from 'bootstrap-vue'
@@ -130,7 +130,6 @@ export default {
   components: {
     AppBreadcrumb,
     AppNavbarHorizontalLayout,
-    AppNavbarHorizontalLayoutBrand,
     AppFooter,
     HorizontalNavMenu,
 

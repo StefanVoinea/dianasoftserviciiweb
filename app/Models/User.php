@@ -24,7 +24,9 @@ class User extends Authenticatable
      */
     protected $fillable = [
         'name', 'email', 'password','telefon','blocat','user_type','functia','status','link_poza',
-        'program_de_lucru','data_expirare_parola','departament','sex','selectat','grup','data_expirare_parola'
+        'program_de_lucru','data_expirare_parola','departament','sex','selectat','grup','data_expirare_parola',
+        // Imprimanta pe care iese hartia si calculatorul pe care se afla ea
+        'imprimanta','imprimanta_certificat_id','ip_permise'
     ];
 
     /**
@@ -55,7 +57,8 @@ class User extends Authenticatable
     }
 
     public function companies() {
-             return $this->belongsToMany(Company::class)->withTimestamps();
+             // „administrator”: dreptul de a gestiona conturile firmei respective
+             return $this->belongsToMany(Company::class)->withPivot('administrator')->withTimestamps();
     }
     public function dianasoftmenuoptions() {
       

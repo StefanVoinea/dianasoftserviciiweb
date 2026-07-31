@@ -64,5 +64,15 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'permission'=>\App\Http\Middleware\CheckRoutePermission::class,
         'ipcheck' => \App\Http\Middleware\IpMiddleware::class,
+        // Izolarea pe client a modulului ANAF/SPV
+        'companie.anaf' => \App\Http\Middleware\CompanieAnaf::class,
+        // Acelasi filtru, sub un nume potrivit si pentru celelalte module
+        'companie' => \App\Http\Middleware\CompanieAnaf::class,
+        // Abonamentul clientului: proba, plata la zi si modulele acordate
+        'modul' => \App\Http\Middleware\ModulPermis::class,
+        // Administrarea clientilor, rezervata unui singur cont
+        'administrator.serviciu' => \App\Http\Middleware\AdministratorServiciu::class,
+        // Gestionarea conturilor din firma clientului
+        'administrator.client' => \App\Http\Middleware\AdministratorClient::class,
     ];
 }

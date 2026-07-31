@@ -24,6 +24,7 @@
         "mtownsend/xml-to-array": "^2.0",
         "phpoffice/phpword": "^0.18.2",
         "predis/predis": "^1.1",
+        "smalot/pdfparser": "^2.12",
         "spatie/flysystem-dropbox": "*",
         "sunra/php-simple-html-dom-parser": "^1.5",
         "symfony/process": "^5.4",

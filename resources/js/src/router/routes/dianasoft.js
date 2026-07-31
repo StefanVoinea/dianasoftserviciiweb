@@ -98,6 +98,50 @@ export default  [
                                        rule: 'editor',
                                         }
                 }, 
+                { //SPV
+                    path: '/spv',
+                    name: 'spv',
+                    component: () => import('@/views/app_pages/Spv.vue'),
+                    meta: {
+                                       rule: 'editor',
+                                        }
+                },
+                // Paginile de mai jos au fost unite in /spv (taburi); linkurile vechi raman valide
+                { path: '/anaf-societati', redirect: { name: 'spv', query: { tab: 'entitati' } } },
+                { path: '/declaratii', redirect: { name: 'spv', query: { tab: 'declaratii' } } },
+                { path: '/spv-solicitari', redirect: { name: 'spv', query: { tab: 'solicitari' } } },
+                { //E-transport
+                    path: '/etransport',
+                    name: 'etransport',
+                    component: () => import('@/views/app_pages/Etransport.vue'),
+                    meta: {
+                                       rule: 'editor',
+                                        }
+                },
+                { //Administrarea clientilor — doar contul din config('app.super_admin')
+                    path: '/administrare',
+                    name: 'administrare',
+                    component: () => import('@/views/app_pages/Administrare.vue'),
+                    meta: {
+                                       rule: 'editor',
+                                        }
+                },
+                { //Portal Just
+                    path: '/portal-just',
+                    name: 'portal-just',
+                    component: () => import('@/views/app_pages/PortalJust.vue'),
+                    meta: {
+                                       rule: 'editor',
+                                        }
+                },
+                { //Vector fiscal
+                    path: '/vector-fiscal',
+                    name: 'vector-fiscal',
+                    component: () => import('@/views/app_pages/VectorFiscal.vue'),
+                    meta: {
+                                       rule: 'editor',
+                                        }
+                },
                
                  { //Notificari
                     path: '/notificari',

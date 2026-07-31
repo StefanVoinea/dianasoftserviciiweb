@@ -25,7 +25,8 @@ return [
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => [],
+    // Tokenul bridge-ului generat la descărcarea kitului trebuie citit din browser
+    'exposed_headers' => ['X-Bridge-Token'],
 
     'max_age' => 0,
 

@@ -16,6 +16,13 @@ return [
     'name' => env('APP_NAME', 'Laravel'),
 
     /*
+     * Contul care administreaza clientii aplicatiei: creeaza firme si conturi,
+     * acorda module, stabileste tariful si perioada de proba. E un singur cont,
+     * scris aici — dreptul nu se poate acorda din interfata.
+     */
+    'super_admin' => env('SUPER_ADMIN_EMAIL', 'stefan.voinea@gmail.com'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------
@@ -178,6 +185,7 @@ return [
         App\Providers\BroadcastServiceProvider::class,
         App\Providers\EventServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
+        App\Providers\AnafServiceProvider::class,
         Barryvdh\Snappy\ServiceProvider::class,
         Madnest\Madzipper\MadzipperServiceProvider::class,
 

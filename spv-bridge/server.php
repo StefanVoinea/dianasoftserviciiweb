@@ -25,6 +25,8 @@
  *   POST /arhiva          — scrie un document în arhiva locală
  *   GET  /arhiva          — citește un document din arhiva locală
  *   POST /arhiva/redenumeste — schimbă numele unui document arhivat
+ *   GET  /monitorizare    — declarațiile puse în dosarul urmărit
+ *   POST /monitorizare/mutat — scoate din dosar fișierul prelucrat
  */
 
 error_reporting(E_ALL);
@@ -275,6 +277,159 @@ function trimite_fisier($status, $tip_continut, $fisier_corp)
 }
 
 /*
+ * Licența și jetoanele de comandă.
+ *
+ * Programul poate fi citit și copiat — asta nu se poate opri. Se poate însă face
+ * copia nefolositoare: licența îl leagă de un calculator anume și expiră, iar
+ * comenzile vin cu un jeton semnat de server, valabil câteva minute. Ambele se
+ * verifică aici, cu cheia publică din kit; cheia privată rămâne pe server.
+ */
+function cheie_publica_bridge($dosar)
+{
+    static $cheie = false;
+
+    if ($cheie === false) {
+        $fisier = $dosar . DIRECTORY_SEPARATOR . 'cheie-publica.pem';
+        $cheie = is_file($fisier) ? file_get_contents($fisier) : null;
+    }
+
+    return $cheie;
+}
+
+/** Reprezentarea peste care s-a semnat: aceleași chei, în aceeași ordine. */
+function canonic_licenta($date)
+{
+    ksort($date);
+
+    return json_encode($date, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+}
+
+function semnatura_buna($continut, $semnatura, $dosar)
+{
+    $cheie = cheie_publica_bridge($dosar);
+
+    if ($cheie === null || !function_exists('openssl_verify')) {
+        return false;
+    }
+
+    $publica = openssl_pkey_get_public($cheie);
+
+    return $publica !== false && openssl_verify($continut, $semnatura, $publica, OPENSSL_ALGO_SHA256) === 1;
+}
+
+/**
+ * Amprenta calculatorului: numele lui și seria volumului de sistem.
+ *
+ * Nu e un secret și nici nu trebuie să fie — rostul ei e ca o licență copiată
+ * pe alt calculator să nu se mai potrivească.
+ */
+function amprenta_masina()
+{
+    $serie = '';
+    $iesire = array();
+
+    @exec('cmd /c vol %SystemDrive% 2>nul', $iesire);
+
+    foreach ($iesire as $linie) {
+        if (preg_match('/([0-9A-F]{4}-[0-9A-F]{4})/i', $linie, $potrivire)) {
+            $serie = strtoupper($potrivire[1]);
+            break;
+        }
+    }
+
+    $nume = getenv('COMPUTERNAME') ? getenv('COMPUTERNAME') : php_uname('n');
+
+    return strtoupper(substr(hash('sha256', strtoupper($nume) . '|' . $serie), 0, 32));
+}
+
+function licenta_curenta($dosar)
+{
+    $fisier = $dosar . DIRECTORY_SEPARATOR . 'licenta.json';
+
+    if (!is_file($fisier)) {
+        return null;
+    }
+
+    $licenta = json_decode(file_get_contents($fisier), true);
+
+    return is_array($licenta) && isset($licenta['date']) ? $licenta : null;
+}
+
+/**
+ * Motivul pentru care licența nu e bună aici, sau "" dacă e în regulă.
+ *
+ * Fără cheie publică lângă program nu se cere licență: așa merg mai departe
+ * instalările făcute înainte de această versiune.
+ */
+function licenta_refuzata($licenta, $dosar)
+{
+    if (cheie_publica_bridge($dosar) === null) {
+        return '';
+    }
+
+    if (!function_exists('openssl_verify')) {
+        return 'Lipsește extensia openssl din PHP-ul programului.';
+    }
+
+    if ($licenta === null) {
+        return 'Programul nu a primit încă licență. Deschideți fila „Certificate digitale" în aplicație.';
+    }
+
+    $date = $licenta['date'];
+
+    if (!semnatura_buna(canonic_licenta($date), base64_decode($licenta['semnatura']), $dosar)) {
+        return 'Semnătura licenței nu se verifică.';
+    }
+
+    if (empty($date['expira']) || strtotime($date['expira']) < time()) {
+        return 'Licența a expirat la ' . (isset($date['expira']) ? $date['expira'] : '?') . '.';
+    }
+
+    if (empty($date['masina']) || $date['masina'] !== amprenta_masina()) {
+        return 'Licența este emisă pentru alt calculator.';
+    }
+
+    return '';
+}
+
+/** Jetonul de comandă: v1.<date>.<semnatura>, valabil câteva minute. */
+function jeton_valid($prezentat, $dosar)
+{
+    if (cheie_publica_bridge($dosar) === null || strpos($prezentat, 'v1.') !== 0) {
+        return false;
+    }
+
+    $bucati = explode('.', $prezentat);
+
+    if (count($bucati) !== 3) {
+        return false;
+    }
+
+    $continut = base64_url_decode($bucati[1]);
+    $semnatura = base64_url_decode($bucati[2]);
+
+    if ($continut === false || $semnatura === false || !semnatura_buna($continut, $semnatura, $dosar)) {
+        return false;
+    }
+
+    $date = json_decode($continut, true);
+
+    if (!is_array($date) || empty($date['expira'])) {
+        return false;
+    }
+
+    // Un minut de toleranță: ceasurile celor două calculatoare nu bat la fix.
+    return $date['expira'] >= time() - 60 && $date['emis'] <= time() + 60;
+}
+
+function base64_url_decode($valoare)
+{
+    $valoare = strtr($valoare, '-_', '+/');
+
+    return base64_decode($valoare . str_repeat('=', (4 - strlen($valoare) % 4) % 4));
+}
+
+/*
  * Bridge-ul poate rula independent, pe alt calculator din retea: isi citeste
  * configurarea din bridge.env de langa el, iar in instalarea de dezvoltare
  * cade pe .env-ul aplicatiei.
@@ -332,13 +487,87 @@ if ($config['thumbprint'] !== '') {
 }
 
 $autorizare = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : '';
-
-if (!hash_equals('Bearer ' . $config['token'], $autorizare)) {
-    raspunde_json(401, array('eroare' => 'Cod de acces invalid.'));
-}
+$prezentat = strpos($autorizare, 'Bearer ') === 0 ? substr($autorizare, 7) : '';
 
 $calea = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $metoda = $_SERVER['REQUEST_METHOD'];
+
+/*
+ * Cine are voie să dea comenzi.
+ *
+ * Codul din configurare.env deschide doar ușa instalării: cu el se citește
+ * amprenta calculatorului și se pune licența. Pentru lucrul propriu-zis e nevoie
+ * de un jeton semnat de server, valabil câteva minute — pe care nici clientul,
+ * care își știe codul, nu-l poate face singur.
+ *
+ * Instalările fără licență (cele dinaintea acestei versiuni) merg mai departe
+ * cu codul static: altfel s-ar opri singure la actualizare.
+ */
+$licenta = licenta_curenta(__DIR__);
+$rute_de_instalare = array('/identitate', '/licenta');
+
+if (!hash_equals('Bearer ' . $config['token'], $autorizare)
+    && !jeton_valid($prezentat, __DIR__)) {
+    raspunde_json(401, array('eroare' => 'Cod de acces invalid.'));
+}
+
+if (!in_array($calea, $rute_de_instalare, true)) {
+    $motiv = licenta_refuzata($licenta, __DIR__);
+
+    if ($motiv !== '') {
+        raspunde_json(403, array(
+            'eroare' => 'Programul nu are licență validă pe acest calculator.',
+            'detalii' => $motiv,
+        ));
+    }
+
+    // Cu licența pusă, codul static nu mai e de ajuns pentru comenzi.
+    if ($licenta !== null && !empty($licenta['date']['jeton_semnat']) && !jeton_valid($prezentat, __DIR__)) {
+        raspunde_json(401, array(
+            'eroare' => 'Comanda nu este semnată de server.',
+            'detalii' => 'Codul de acces deschide doar instalarea și licențierea.',
+        ));
+    }
+}
+
+/*
+ * GET /identitate — amprenta calculatorului și starea licenței. Cu ea, serverul
+ * emite o licență legată de mașina aceasta.
+ */
+if ($metoda === 'GET' && $calea === '/identitate') {
+    raspunde_json(200, array(
+        'masina' => amprenta_masina(),
+        'licentiat' => $licenta !== null && licenta_refuzata($licenta, __DIR__) === '',
+        'licenta' => $licenta === null ? null : array(
+            'client' => isset($licenta['date']['client']) ? $licenta['date']['client'] : null,
+            'expira' => isset($licenta['date']['expira']) ? $licenta['date']['expira'] : null,
+        ),
+    ));
+}
+
+/*
+ * POST /licenta — licența semnată de server, legată de acest calculator.
+ * Se verifică înainte de a fi scrisă: un fișier stricat n-are ce căuta pe disc.
+ */
+if ($metoda === 'POST' && $calea === '/licenta') {
+    $primita = json_decode(file_get_contents('php://input'), true);
+
+    if (!is_array($primita) || !isset($primita['date']) || !isset($primita['semnatura'])) {
+        raspunde_json(400, array('eroare' => 'Licența trimisă nu are forma așteptată.'));
+    }
+
+    $motiv = licenta_refuzata($primita, __DIR__);
+
+    if ($motiv !== '') {
+        raspunde_json(422, array('eroare' => 'Licența nu este valabilă aici.', 'detalii' => $motiv));
+    }
+
+    if (@file_put_contents(__DIR__ . '/licenta.json', json_encode($primita)) === false) {
+        raspunde_json(500, array('eroare' => 'Licența nu a putut fi scrisă lângă program.'));
+    }
+
+    raspunde_json(200, array('primita' => true, 'expira' => $primita['date']['expira']));
+}
 
 /*
  * Rutele care folosesc certificatul verifica din start ca tokenul cerut este
@@ -795,6 +1024,112 @@ if ($metoda === 'POST' && $calea === '/concateneaza') {
  *
  * Serverul ține minte doar calea relativă și cere fișierul înapoi când e nevoie.
  */
+/*
+ * Dosarul urmărit: declarațiile puse acolo se iau singure de aplicație, se
+ * validează și se semnează. Rădăcina vine cu fiecare cerere, ca la arhivă.
+ *
+ *   GET  /monitorizare          — ce fișiere așteaptă
+ *   GET  /monitorizare/fisier   — conținutul unuia
+ *   POST /monitorizare/mutat    — îl duce în „prelucrate" sau „erori"
+ */
+if (strpos($calea, '/monitorizare') === 0) {
+    $radacina = '';
+
+    if (!empty($_SERVER['HTTP_X_MONITORIZARE_CALE'])) {
+        $radacina = arhiva_radacina_ceruta($_SERVER['HTTP_X_MONITORIZARE_CALE']);
+    }
+
+    if ($radacina === '') {
+        raspunde_json(400, array(
+            'eroare' => 'Nu s-a indicat dosarul de urmărit.',
+            'detalii' => 'Se așteaptă o cale completă, de forma D:\\Declarații de semnat.',
+        ));
+    }
+
+    if (!is_dir($radacina) && !@mkdir($radacina, 0777, true)) {
+        raspunde_json(500, array('eroare' => 'Dosarul urmărit nu poate fi creat.', 'detalii' => $radacina));
+    }
+
+    // GET /monitorizare — fisierele care asteapta, fara subdosare
+    if ($metoda === 'GET' && $calea === '/monitorizare') {
+        $asteapta = array();
+
+        // XML sau PDF: declarațiile ANAF poartă XML-ul și în interiorul PDF-ului.
+        foreach (glob($radacina . DIRECTORY_SEPARATOR . '*.{xml,XML,pdf,PDF}', GLOB_BRACE) as $cale_fisier) {
+            if (!is_file($cale_fisier)) {
+                continue;
+            }
+
+            /*
+             * Un fișier abia copiat poate fi încă în curs de scriere. Se lasă
+             * deoparte până se liniștește: altfel s-ar trimite spre validare o
+             * declarație pe jumătate scrisă.
+             */
+            $varsta = time() - filemtime($cale_fisier);
+
+            $asteapta[] = array(
+                'nume' => basename($cale_fisier),
+                'marime' => filesize($cale_fisier),
+                'modificat' => date('Y-m-d H:i:s', filemtime($cale_fisier)),
+                'gata' => $varsta >= 5,
+            );
+        }
+
+        raspunde_json(200, array('dosar' => $radacina, 'fisiere' => $asteapta));
+    }
+
+    // GET /monitorizare/fisier?nume=... — continutul unui fisier care asteapta
+    if ($metoda === 'GET' && $calea === '/monitorizare/fisier') {
+        $nume = arhiva_bucata(isset($_GET['nume']) ? $_GET['nume'] : '');
+        $cale_fisier = $radacina . DIRECTORY_SEPARATOR . $nume;
+
+        if ($nume === '' || !is_file($cale_fisier)) {
+            raspunde_json(404, array('eroare' => 'Fișierul nu se află în dosarul urmărit.'));
+        }
+
+        header('Content-Type: application/octet-stream');
+        header('Content-Length: ' . filesize($cale_fisier));
+        readfile($cale_fisier);
+        exit;
+    }
+
+    /*
+     * POST /monitorizare/mutat — fișierul prelucrat pleacă din dosar, ca să nu
+     * fie luat a doua oară. Rămâne pe disc, într-un subdosar, ca omul să poată
+     * vedea ce s-a întâmplat cu el.
+     */
+    if ($metoda === 'POST' && $calea === '/monitorizare/mutat') {
+        $nume = arhiva_bucata(isset($_POST['nume']) ? $_POST['nume'] : '');
+        $unde = isset($_POST['unde']) && $_POST['unde'] === 'erori' ? 'erori' : 'prelucrate';
+
+        $sursa = $radacina . DIRECTORY_SEPARATOR . $nume;
+
+        if ($nume === '' || !is_file($sursa)) {
+            raspunde_json(404, array('eroare' => 'Fișierul nu se află în dosarul urmărit.'));
+        }
+
+        $dosar = $radacina . DIRECTORY_SEPARATOR . $unde;
+
+        if (!is_dir($dosar) && !@mkdir($dosar, 0777, true)) {
+            raspunde_json(500, array('eroare' => 'Subdosarul nu poate fi creat.', 'detalii' => $dosar));
+        }
+
+        // Numele poarta data prelucrarii: acelasi fisier poate veni de mai multe ori.
+        $extensie = pathinfo($nume, PATHINFO_EXTENSION);
+        $trunchi = $extensie !== '' ? substr($nume, 0, -(strlen($extensie) + 1)) : $nume;
+        $destinatie = arhiva_destinatie($dosar, $trunchi . '_' . date('Ymd_His')
+            . ($extensie !== '' ? '.' . $extensie : ''));
+
+        if (!@rename($sursa, $destinatie)) {
+            raspunde_json(500, array('eroare' => 'Fișierul nu a putut fi mutat.'));
+        }
+
+        raspunde_json(200, array('mutat' => arhiva_relativa($radacina, $destinatie)));
+    }
+
+    raspunde_json(404, array('eroare' => 'Operație necunoscută pe dosarul urmărit.'));
+}
+
 /*
  * GET /imprimante — imprimantele vazute de acest calculator, ca omul sa-si
  * aleaga din aplicatie pe care tipareste.

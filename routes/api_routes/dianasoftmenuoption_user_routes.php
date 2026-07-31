@@ -1,5 +1,4 @@
-
-  <?php
+<?php
 
     Route::middleware("auth:api")->group(function () {
 	    Route::get("/dianasoftmenuoption_user", "Api\DianaSoftMenuOption_UserController@index")

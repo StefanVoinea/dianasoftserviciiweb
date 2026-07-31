@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Grefier alert">
+<title>Grefier alert</title>
+<g fill="none" stroke="#7F77DD" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.6">
+  <path d="M 16.00 4.50 L 16.00 26.35"/>
+  <path d="M 7.95 26.35 L 24.05 26.35"/>
+  <path d="M 1.05 7.95 L 30.95 7.95"/>
+  <path d="M 1.05 7.95 L 1.05 12.55"/>
+  <path d="M 30.95 7.95 L 30.95 12.55"/>
+  <path d="M -4.70 12.55 Q 1.05 22.90 6.80 12.55"/>
+  <path d="M 25.20 12.55 Q 30.95 22.90 36.70 12.55"/>
+</g>
+</svg>

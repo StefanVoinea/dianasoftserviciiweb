@@ -1,5 +1,4 @@
-
-  <?php
+<?php
 
     Route::middleware("auth:api")->group(function () {
 	    Route::get("/gestiune_user", "Api\Gestiune_UserController@index")

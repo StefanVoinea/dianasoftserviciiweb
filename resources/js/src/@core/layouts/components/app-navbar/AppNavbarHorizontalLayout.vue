@@ -6,7 +6,8 @@
       <li class="nav-item">
         <b-link
           class="nav-link"
-          @click="toggleVerticalMenuActive">
+          @click="toggleVerticalMenuActive"
+        >
           <feather-icon
             icon="MenuIcon"
             size="21"
@@ -18,19 +19,15 @@
     <!-- Left Col -->
     <div class="bookmark-wrapper align-items-center flex-grow-1 d-none d-lg-flex">
       <!-- <bookmarks /> -->
-      <company />
+      <module />
     </div>
 
     <!-- Right Col -->
+    <!-- Lângă utilizator au rămas doar notificările: sarcinile, calendarul și
+         schimbarea temei erau lucruri care nu se folosesc aici. -->
     <b-navbar-nav class="nav align-items-center ml-auto">
-      <!-- <locale /> -->
-      <dark-Toggler class="d-none d-lg-block" />
-      <!-- <search-bar /> -->
-      <!-- <cart-dropdown /> -->
-      <bookmarks />
-       <notification-dropdown /> 
+      <notification-dropdown />
       <user-dropdown />
-
     </b-navbar-nav>
   </div>
 </template>
@@ -39,16 +36,9 @@
 import {
   BLink, BNavbarNav,
 } from 'bootstrap-vue'
-import Bookmarks from './components/Bookmarks.vue'
-import Locale from './components/Locale.vue'
-import DarkToggler from './components/DarkToggler.vue'
-import SearchBar from './components/SearchBar.vue'
-import CartDropdown from './components/CartDropdown.vue'
 import NotificationDropdown from './components/NotificationDropdown.vue'
 import UserDropdown from './components/UserDropdown.vue'
-import Datepicker from 'vuejs-datepicker'
-import * as lang from 'vuejs-datepicker/src/locale';
-import Company from './components/Company.vue'
+import Module from './components/Module.vue'
 
 export default {
   components: {
@@ -56,16 +46,9 @@ export default {
 
     // Navbar Components
     BNavbarNav,
-    Bookmarks,
-    Locale,
-    DarkToggler,
-    SearchBar,
-    CartDropdown,
     NotificationDropdown,
     UserDropdown,
-    Datepicker,
-    Company
-    
+    Module,
   },
   props: {
     toggleVerticalMenuActive: {
@@ -73,7 +56,6 @@ export default {
       default: () => {},
     },
   },
- 
- 
+
 }
 </script>

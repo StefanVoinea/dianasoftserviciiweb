@@ -1082,6 +1082,7 @@ function notificare(String $tip_notificare, Object $object, $from_id, $email, $t
             }
         }
     }
+}
 
 
     function getAllRelations(\Illuminate\Database\Eloquent\Model $model = null, $heritage = 'all')
@@ -2683,7 +2684,6 @@ break;
                 }
             }
         }
-    }
 
     return $rezultat;
 }
