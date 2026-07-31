@@ -290,6 +290,47 @@ class CertificatService
     }
 
     /**
+     * Inregistreaza certificatele pe care le anunta singur agentul unui client.
+     *
+     * Prin tunel nu avem cum sa sunam noi la calculatorul lui — de aceea vine el
+     * cu lista, la pornire. Certificatele intra pe „tunel", legate de codul de
+     * instalare cu care s-a legitimat agentul: dupa asta, comenzile lor stiu
+     * singure pe unde sa plece.
+     *
+     * @param array<int, array> $lista certificatele citite de pe tokenul de acolo
+     *
+     * @return AnafCertificat[]
+     */
+    public function inroleazaDinAgent(array $lista, string $codInstalare): array
+    {
+        // Un singur certificat poate veni ca obiect, mai multe ca lista.
+        if (isset($lista['thumbprint'])) {
+            $lista = [$lista];
+        }
+
+        $rezultat = [];
+
+        foreach ($lista as $date) {
+            if (empty($date['thumbprint']) || !$this->esteCalificat($date)) {
+                continue;
+            }
+
+            $certificat = $this->inregistreaza($date, null, null);
+
+            $certificat->forceFill([
+                'mod_legatura' => 'tunel',
+                'bridge_token' => $codInstalare,
+                // Adresa din retea nu mai inseamna nimic: comenzile trec prin punte.
+                'bridge_url' => null,
+            ])->save();
+
+            $rezultat[] = $certificat;
+        }
+
+        return $rezultat;
+    }
+
+    /**
      * Magazinul Windows contine si certificate auto-semnate ale unor aplicatii.
      * Cele calificate sunt emise de o autoritate, deci au emitent diferit de subiect.
      */

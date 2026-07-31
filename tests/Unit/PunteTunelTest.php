@@ -250,4 +250,50 @@ class PunteTunelTest extends TestCase
         $this->assertLessThan(3, microtime(true) - $inceput);
         $this->assertNull(BridgeComanda::find($comanda->id), 'comanda nu rămâne agățată în coadă');
     }
+
+    /**
+     * Un calculator nou se prezintă singur: prin tunel serverul n-are cum să-l
+     * caute, deci agentul îi trimite certificatele de pe tokenul de acolo.
+     */
+    public function test_agentul_isi_inroleaza_singur_certificatele(): void
+    {
+        $lista = [[
+            'thumbprint' => strtoupper(bin2hex(random_bytes(20))),
+            'cn' => 'IONESCU MARIA',
+            'subiect' => 'CN=IONESCU MARIA',
+            'emitent' => 'CN=certSIGN Qualified CA',
+            'valabil_pana_la' => now()->addYear()->toDateTimeString(),
+        ]];
+
+        $inrolate = $this->app->make(CertificatService::class)->inroleazaDinAgent($lista, 'cod-nou');
+
+        $this->assertCount(1, $inrolate);
+        $this->assertSame('tunel', $inrolate[0]->mod_legatura);
+        $this->assertSame('cod-nou', $inrolate[0]->bridge_token);
+        $this->assertNull($inrolate[0]->bridge_url, 'adresa din rețea nu mai înseamnă nimic prin tunel');
+    }
+
+    /** Certificatele auto-semnate din magazinul Windows nu intră în evidență. */
+    public function test_certificatele_nesemnate_de_o_autoritate_raman_afara(): void
+    {
+        $lista = [[
+            'thumbprint' => strtoupper(bin2hex(random_bytes(20))),
+            'cn' => 'PROGRAM OARECARE',
+            'subiect' => 'CN=PROGRAM OARECARE',
+            'emitent' => 'CN=PROGRAM OARECARE',
+        ]];
+
+        $this->assertSame([], $this->app->make(CertificatService::class)->inroleazaDinAgent($lista, 'cod-nou'));
+    }
+
+    /** Jetonul de înrolare spune al cui client e kitul și nu poate fi ticluit. */
+    public function test_jetonul_de_inrolare_spune_clientul(): void
+    {
+        $licente = $this->app->make(Licente::class);
+        $licente->pregatesteCheile();
+
+        $this->assertSame(self::COMPANIE, $licente->clientulDinJeton($licente->jetonInrolare(self::COMPANIE)));
+        $this->assertNull($licente->clientulDinJeton('i1.ticluit.semnatura'));
+        $this->assertNull($licente->clientulDinJeton(''));
+    }
 }

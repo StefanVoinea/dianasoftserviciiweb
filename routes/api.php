@@ -38,6 +38,7 @@ Route::get('/anaf-oauth/callback', 'Api\AnafOauthController@callback');
  * însuși (cu jeton semnat) și de la agentul clientului (cu codul lui de
  * instalare). Fiecare rută își verifică singură cine bate la ușă.
  */
+Route::post('/punte/agent/inrolare', 'Api\PunteController@inrolare');
 Route::post('/punte/agent/asteapta', 'Api\PunteController@asteapta');
 Route::get('/punte/agent/corp/{comanda}', 'Api\PunteController@corp');
 Route::post('/punte/agent/rezultat/{comanda}', 'Api\PunteController@rezultat');

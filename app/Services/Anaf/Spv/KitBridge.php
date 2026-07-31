@@ -183,6 +183,14 @@ class KitBridge
         return strncmp($continut, $bom, 3) === 0 ? $continut : $bom . $continut;
     }
 
+    /** Jetonul de inrolare al clientului pentru care se face kitul. */
+    protected function jetonInrolare(): string
+    {
+        $client = \App\Support\ContextCompanie::curenta();
+
+        return $client ? app(Licente::class)->jetonInrolare($client) : '';
+    }
+
     protected function configurare(string $token): string
     {
         $linii = [
@@ -215,6 +223,12 @@ class KitBridge
             '# niciun port pe routerul dumneavoastră. Ca să meargă așa, certificatul',
             '# trebuie pus în aplicație pe legătura „prin tunel".',
             'PUNTE_SERVER=' . rtrim(config('app.url'), '/'),
+            '',
+            '# Cu jetonul de mai jos, programul spune serverului al cui client este,',
+            '# la prima pornire, și își anunță singur certificatele de pe token — nu',
+            '# aveți nimic de tastat în aplicație. E semnat de server și nu folosește',
+            '# nimănui altcuiva.',
+            'PUNTE_INROLARE=' . $this->jetonInrolare(),
             '',
             '# Adresele serviciilor ANAF (se modifică doar dacă ANAF le schimbă).',
             'SPV_BASE_URL=' . config('anaf.spv.base_url'),

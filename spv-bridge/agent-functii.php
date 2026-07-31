@@ -29,6 +29,7 @@ function agent_configurare($dosar)
     return array(
         'server' => isset($env['PUNTE_SERVER']) ? rtrim($env['PUNTE_SERVER'], '/') : '',
         'token' => isset($env['SPV_BRIDGE_TOKEN']) ? $env['SPV_BRIDGE_TOKEN'] : '',
+        'inrolare' => isset($env['PUNTE_INROLARE']) ? $env['PUNTE_INROLARE'] : '',
         'local' => isset($env['PUNTE_LOCAL']) ? rtrim($env['PUNTE_LOCAL'], '/') : 'http://127.0.0.1:8099',
         'curl' => getenv('SystemRoot') . '\\System32\\curl.exe',
         'jurnal' => $dosar . '/agent.log',
@@ -97,6 +98,53 @@ function agent_intreaba($config)
     }
 
     return $date['comanda'] ? $date['comanda'] : null;
+}
+
+/**
+ * Se prezintă serverului: „aici sunt eu, cu certificatele astea".
+ *
+ * Prin tunel, serverul n-are cum să ne caute, deci intrarea în evidență pornește
+ * de aici: se citesc certificatele de pe tokenul de lângă noi și se trimit, cu
+ * jetonul de înrolare din kit. Omul nu tastează nimic în aplicație — instalează
+ * kitul, iar certificatele apar acolo singure.
+ *
+ * Se încearcă la fiecare pornire: dacă se schimbă tokenul din USB, noul
+ * certificat intră în evidență la următoarea repornire a programului.
+ */
+function agent_inroleaza($config)
+{
+    if ($config['inrolare'] === '') {
+        return;
+    }
+
+    $local = agent_curl($config, array(
+        '-H ' . escapeshellarg('Authorization: Bearer ' . $config['token']),
+        escapeshellarg($config['local'] . '/certificate'),
+    ));
+
+    if ($local['cod'] !== 0 || $local['status'] !== 200) {
+        agent_scrie($config, 'Nu am putut citi certificatele de pe token (' . $local['status'] . ').');
+
+        return;
+    }
+
+    $fisier = $config['dosar'] . '/agent_inrolare.tmp';
+    @file_put_contents($fisier, '{"certificate":' . $local['corp'] . '}');
+
+    $raspuns = agent_curl($config, array(
+        '-X POST',
+        '-H ' . escapeshellarg('Authorization: Bearer ' . $config['token']),
+        '-H ' . escapeshellarg('X-Inrolare: ' . $config['inrolare']),
+        '-H ' . escapeshellarg('Content-Type: application/json'),
+        '--data-binary ' . escapeshellarg('@' . $fisier),
+        escapeshellarg($config['server'] . '/api/punte/agent/inrolare'),
+    ));
+
+    @unlink($fisier);
+
+    agent_scrie($config, $raspuns['status'] === 200
+        ? 'Certificatele de pe acest calculator au fost anunțate aplicației.'
+        : 'Înrolarea nu a reușit (' . $raspuns['status'] . '): ' . mb_substr($raspuns['corp'], 0, 200));
 }
 
 /** Duce comanda la programul local de lângă agent și adună răspunsul lui. */

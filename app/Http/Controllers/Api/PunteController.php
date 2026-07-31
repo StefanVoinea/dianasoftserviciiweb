@@ -5,7 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AnafCertificat;
 use App\Models\BridgeComanda;
+use App\Services\Anaf\Bridge\Licente;
 use App\Services\Anaf\Bridge\Punte;
+use App\Services\Anaf\Jurnal;
+use App\Services\Anaf\Spv\CertificatService;
+use App\Support\ContextCompanie;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -105,6 +109,50 @@ class PunteController extends Controller
             'antete' => $comanda->antete,
             'are_corp' => $comanda->corp_fisier !== null,
         ]]);
+    }
+
+    /**
+     * Înrolarea unui calculator nou, pornită de la el.
+     *
+     * Prin tunel, serverul n-are cum să sune primul — de aceea vine agentul cu
+     * lista certificatelor de pe tokenul de lângă el. Spune al cui client este
+     * prin jetonul de înrolare din kit, semnat de noi, deci nu poate pretinde
+     * altceva. Contabilul nu are nimic de tastat: instalează kitul, iar
+     * certificatele apar în listă.
+     */
+    public function inrolare(Request $request, Licente $licente, CertificatService $certificate)
+    {
+        $client = $licente->clientulDinJeton((string) $request->header('X-Inrolare'));
+        $cod = (string) $request->bearerToken();
+
+        if (!$client || $cod === '') {
+            return response()->json([
+                'eroare' => 'Înrolare respinsă.',
+                'detalii' => 'Jetonul de înrolare lipsește sau nu mai e valabil. Descărcați un kit nou.',
+            ], 401);
+        }
+
+        $lista = $request->input('certificate', []);
+
+        if (!is_array($lista) || $lista === []) {
+            return response()->json(['eroare' => 'Nu s-a trimis niciun certificat.'], 422);
+        }
+
+        $inrolate = ContextCompanie::pentru($client, function () use ($certificate, $lista, $cod) {
+            return $certificate->inroleazaDinAgent($lista, $cod);
+        });
+
+        Jurnal::scrie(
+            'certificat_inrolare',
+            'Un calculator s-a înrolat singur, prin tunel, cu ' . count($inrolate) . ' certificat(e)',
+            ['certificate' => collect($inrolate)->pluck('cn')->all()]
+        );
+
+        return response()->json([
+            'inrolate' => collect($inrolate)->map(function ($certificat) {
+                return ['id' => $certificat->id, 'cn' => $certificat->cn];
+            }),
+        ]);
     }
 
     /** Corpul comenzii, luat separat: poate fi un XML de zeci de megaocteți. */

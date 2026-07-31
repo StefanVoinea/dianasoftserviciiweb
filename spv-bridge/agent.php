@@ -32,6 +32,13 @@ if ($config['server'] === '' || $config['token'] === '') {
 
 agent_scrie($config, 'Pornit. Întreb ' . $config['server'] . ' dacă are ceva de lucru.');
 
+/*
+ * Întâi ne prezentăm: certificatele de pe tokenul de aici ajung în aplicație
+ * fără ca omul să tasteze nimic. Dacă tokenul nu e conectat acum, nu-i nimic —
+ * se încearcă din nou la următoarea pornire.
+ */
+agent_inroleaza($config);
+
 $pauzaLaEroare = 5;
 
 while (true) {

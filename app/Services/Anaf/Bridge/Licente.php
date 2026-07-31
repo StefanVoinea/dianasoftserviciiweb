@@ -145,6 +145,45 @@ class Licente
         return 'v1.' . $this->base64Url($continut) . '.' . $this->base64Url($this->semneaza($continut, true));
     }
 
+    /**
+     * Jetonul de înrolare, pus în kit.
+     *
+     * Cu el, agentul unui calculator nou spune serverului al cui client este —
+     * fără să poată pretinde altceva, pentru că e semnat de noi. E singurul fel
+     * în care un kit proaspăt instalat poate intra în evidență prin tunel: acolo
+     * serverul nu are cum să sune primul.
+     */
+    public function jetonInrolare($companyId, int $zile = 400): string
+    {
+        $date = ['client' => (int) $companyId, 'emis' => time(), 'expira' => time() + $zile * 86400];
+        $continut = $this->canonic($date);
+
+        return 'i1.' . $this->base64Url($continut) . '.' . $this->base64Url($this->semneaza($continut, true));
+    }
+
+    /** Clientul pentru care a fost făcut jetonul, sau null dacă nu e bun. */
+    public function clientulDinJeton(string $jeton): ?int
+    {
+        $bucati = explode('.', $jeton);
+
+        if (count($bucati) !== 3 || $bucati[0] !== 'i1') {
+            return null;
+        }
+
+        $continut = $this->base64UrlDecode($bucati[1]);
+        $semnatura = $this->base64UrlDecode($bucati[2]);
+
+        if ($continut === false || $semnatura === false || !$this->verifica($continut, base64_encode($semnatura))) {
+            return null;
+        }
+
+        $date = json_decode($continut, true);
+
+        return is_array($date) && !empty($date['client']) && ($date['expira'] ?? 0) >= time()
+            ? (int) $date['client']
+            : null;
+    }
+
     /** Reprezentare stabilă a datelor: semnătura trebuie să acopere exact ce se trimite. */
     public function canonic(array $date): string
     {
