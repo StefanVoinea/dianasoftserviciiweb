@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72" role="img" aria-label="Dispecer e-Transport">
+<title>Dispecer e-Transport</title>
+<g fill="none" stroke="#D85A30" stroke-linecap="round" stroke-linejoin="round">
+ <g stroke-width="2.50">
+  <path d="M 11.60 27.10 A 26.00 26.00 0 0 1 60.40 27.10"/>
+  <path d="M 54.59 22.83 L 60.40 27.10 L 62.11 20.09"/>
+  <path d="M 60.40 44.90 A 26.00 26.00 0 0 1 11.60 44.90"/>
+  <path d="M 17.41 49.17 L 11.60 44.90 L 9.89 51.91"/>
+ </g>
+ <g stroke-width="2.00">
+  <path d="M 25.00 47.00 L 32.00 25.00"/>
+  <path d="M 47.00 47.00 L 40.00 25.00"/>
+  <path d="M 36.00 44.00 L 36.00 39.00"/>
+  <path d="M 36.00 35.00 L 36.00 30.00"/>
+ </g>
+</g>
+</svg>

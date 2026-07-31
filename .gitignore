@@ -1,11 +1,12 @@
 /node_modules
 /public/hot
 /public/storage
-/public/js
-/public/css
 /public/fonts
-/public/images
-/public/mix-manifest.json
+
+# Fișierele construite intră în depozit: lanțul de build (Vue 2, webpack 4) nu
+# se mai poate reface pe server — package-lock.json e făcut cu npm 6, iar sumele
+# lui de control nu mai corespund cu ce servește registrul npm. Se construiesc
+# local cu „npm run prod" și se comit: public/js, public/css, public/images.
 /storage/*.key
 /storage/logs/
 /vendor
