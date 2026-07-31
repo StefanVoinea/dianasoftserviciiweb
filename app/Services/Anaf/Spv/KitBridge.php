@@ -20,7 +20,10 @@ class KitBridge
     ];
 
     /** Scripturile si documentatia, din sablonul kitului. */
-    protected const FISIERE_KIT = ['instaleaza.ps1', 'dezinstaleaza.ps1', 'porneste-manual.bat'];
+    protected const FISIERE_KIT = [
+        // .bat-ul e cel pe care il apasa omul: Windows nu ruleaza .ps1 la dublu clic
+        'instaleaza.bat', 'instaleaza.ps1', 'dezinstaleaza.ps1', 'porneste-manual.bat',
+    ];
 
     /**
      * Programe de tiparit PDF-uri, luate in kit daca sunt puse langa bridge.

@@ -30,9 +30,14 @@ INSTALARE
 ---------
 1. Copiați acest folder pe calculatorul cu tokenul, de exemplu în:
       C:\AccesTokenANAF
-2. Deschideți PowerShell în acel folder (clic dreapta -> „Deschidere fereastră
-   PowerShell aici”).
-3. Rulați:
+2. Dublu clic pe „instaleaza.bat”. Atât.
+
+   Windows nu rulează fișierele .ps1 la dublu clic, iar pe cele venite dintr-o
+   arhivă descărcată le oprește de la execuție. Fișierul .bat se ocupă de
+   amândouă și pornește instalarea.
+
+   Dacă preferați PowerShell, deschideți-l în acest folder (clic dreapta ->
+   „Deschidere fereastră PowerShell aici”) și rulați:
 
       .\instaleaza.ps1
 
