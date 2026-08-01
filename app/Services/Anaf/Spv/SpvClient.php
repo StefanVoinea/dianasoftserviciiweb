@@ -107,13 +107,12 @@ class SpvClient
 
         $response = $this->transport->get($path, $query);
 
-        if ($response->status() === 401 || $response->status() === 403) {
+        if ($response->failed()) {
             /*
-             * Un 401 sau 403 poate veni de la ANAF — certificat expirat, fără
-             * drepturi — dar și de la programul local sau de la punte, care au
-             * cu totul alte pricini. Când răspunsul spune el ce s-a întâmplat,
-             * se dă mai departe vorba lui: altfel omul își caută zadarnic
-             * vinovăția în certificat.
+             * Pe drumul până la ANAF sunt acum mai multe verigi: puntea,
+             * agentul, programul local. Fiecare știe să spună ce a pățit, iar
+             * vorba lui e mai de folos decât un cod de stare — altfel omul își
+             * caută zadarnic vinovăția în certificat.
              */
             $payload = json_decode($response->body(), true);
 
@@ -121,10 +120,10 @@ class SpvClient
                 throw new SpvException(trim($payload['eroare'] . ' ' . ($payload['detalii'] ?? '')));
             }
 
-            throw new SpvException('Autentificare SPV respinsă (certificat expirat sau fără drepturi).');
-        }
+            if ($response->status() === 401 || $response->status() === 403) {
+                throw new SpvException('Autentificare SPV respinsă (certificat expirat sau fără drepturi).');
+            }
 
-        if ($response->failed()) {
             throw new SpvException('SPV HTTP ' . $response->status() . ' pe ' . $path);
         }
 

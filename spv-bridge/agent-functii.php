@@ -201,7 +201,17 @@ function agent_executa($config, $comanda)
     if ($rezultat['cod'] !== 0) {
         @unlink($iesire);
 
-        return array('eroare' => 'Programul local nu a răspuns: curl ' . $rezultat['cod']);
+        /*
+         * Se scrie și în jurnalul de lângă program: aplicația primește doar o
+         * frază, iar când ceva nu merge, omul care se uită aici trebuie să vadă
+         * ce anume a pățit curl-ul.
+         */
+        $motiv = 'Programul local nu a răspuns (curl ' . $rezultat['cod'] . '): '
+            . mb_substr(trim($rezultat['corp']), 0, 200);
+
+        agent_scrie($config, $motiv);
+
+        return array('eroare' => $motiv);
     }
 
     return array(
