@@ -6,7 +6,7 @@ rem  arhiva descarcata le opreste de la executie. De aceea exista acest fisier.
 rem
 rem  Se sterg cele doua sarcini programate (programul local si agentul) si se
 rem  opresc procesele ramase. Dosarul, cu configurarea si arhiva de documente,
-rem  ramane neatins — il stergeti dumneavoastra, daca doriti.
+rem  ramane neatins - il stergeti dumneavoastra, daca doriti.
 
 setlocal
 cd /d "%~dp0"

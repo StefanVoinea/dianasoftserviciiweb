@@ -19,6 +19,16 @@ function Scrie($mesaj, $culoare = 'White') { Write-Host $mesaj -ForegroundColor 
 
 Scrie "=== Instalare acces token ANAF ===" 'Cyan'
 
+<#
+    Fisierele venite dintr-o arhiva descarcata poarta marca internetului.
+    Windows opreste scripturile din executie, iar .NET refuza sa incarce
+    bibliotecile - de acolo vine eroarea 0x80131515 la semnare, cu itextsharp.
+    Se deblocheaza tot dosarul, nu doar scripturile: si biblioteca de semnare,
+    si programul de tiparit, si PHP-ul din kit au aceeasi patanie.
+#>
+Get-ChildItem -Path $folder -Recurse -File -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue
+Scrie "Fisierele au fost deblocate (marca internetului)." 'Green'
+
 # 1. PHP — cel din kit are întâietate, ca să nu fie nevoie de instalări
 $phpDinKit = Join-Path $folder 'php\php.exe'
 $iniDinKit = Join-Path $folder 'php\php.ini'
