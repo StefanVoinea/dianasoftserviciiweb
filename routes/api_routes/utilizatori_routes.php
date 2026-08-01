@@ -9,8 +9,15 @@
             ->middleware("permission:viewArticol");
      Route::get("/utilizatori/show/{user}", "Api\UtilizatoriController@show")
             ->middleware("permission:viewUtilizatori");
+     /*
+      * Nomenclatoarele de pornire (județe, țări, opțiuni) le cere aplicația
+      * imediat după autentificare, pentru oricine intră. Poarta de aici cerea
+      * dreptul „viewArticol", care e al altui modul: utilizatorii unui client
+      * SPV nu-l au, iar autentificarea lor se oprea cu „Not authorized" chiar
+      * după parolă. Se cere doar societatea aleasă, ca peste tot.
+      */
      Route::post("/utilizatori/cookiesLocal", "Api\UtilizatoriController@cookiesLocal")
-             ->middleware("permission:viewArticol");
+             ->middleware("companie.anaf");
      Route::post("/utilizatori", "Api\UtilizatoriController@indexPaginat")
             ->middleware("permission:viewUtilizatori");
      Route::post("/utilizatori/updatedrepturi", "Api\UtilizatoriController@updatedrepturi")
