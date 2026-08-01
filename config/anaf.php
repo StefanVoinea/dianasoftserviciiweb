@@ -219,16 +219,19 @@ return [
          * Caseta vizibila a semnaturii pe PDF-ul declaratiei.
          *
          * Coordonatele sunt in puncte, cu originea in coltul din stanga-jos al
-         * paginii (A4 = 595 x 842). Implicit, caseta sta pe ultima pagina, sub
-         * rubrica tiparita "semnatura si stampila", unde formularele ANAF nu au
-         * continut. Daca pe o anumita declaratie caseta se suprapune peste text,
-         * se muta de aici, fara sa fie nevoie de modificari in cod.
+         * paginii (A4 = 595 x 842). Caseta sta pe ultima pagina, jos in dreapta:
+         * acolo e locul semnaturii pe orice act, si acolo formularele ANAF au
+         * spatiu liber, oricat de lunga ar fi declaratia. Cu y = 45 si inaltime
+         * 78, ea tine intre 45 si 123 de puncte de la marginea de jos.
+         *
+         * Daca pe o anumita declaratie caseta se suprapune peste text, se muta
+         * de aici, fara sa fie nevoie de modificari in cod.
          */
         'semnatura' => [
             // Numarul paginii sau "ultima"
             'pagina' => env('ANAF_SEMNATURA_PAGINA', 'ultima'),
             'x' => (float) env('ANAF_SEMNATURA_X', 330),
-            'y' => (float) env('ANAF_SEMNATURA_Y', 545),
+            'y' => (float) env('ANAF_SEMNATURA_Y', 45),
             'latime' => (float) env('ANAF_SEMNATURA_LATIME', 235),
             'inaltime' => (float) env('ANAF_SEMNATURA_INALTIME', 78),
             'motiv' => env('ANAF_SEMNATURA_MOTIV', 'Semnatura declaratie'),

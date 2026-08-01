@@ -45,22 +45,58 @@ function agent_scrie($config, $mesaj)
     @file_put_contents($config['jurnal'], $linie, FILE_APPEND);
 }
 
-/** Rulează curl și întoarce array(cod, iesire, status). */
-function agent_curl($config, $argumente, $fisierIesire = null)
+/**
+ * Rulează curl și întoarce array(cod, status, corp).
+ *
+ * Adresa, antetele și corpul se dau printr-un fișier de configurare al lui
+ * curl, nu prin linia de comandă. Sunt două pricini, amândouă însemnate:
+ *
+ *   - pe Windows, escapeshellarg() înlocuiește fiecare „%" cu un spațiu, ca să
+ *     nu se expandeze variabilele. Adresele către SPV au parametri codificați
+ *     procentual (%3A, %2F), deci ajungeau la curl ciopârțite: „URL rejected:
+ *     Malformed input to a URL function".
+ *   - codul de acces nu mai apare în lista de procese a calculatorului.
+ *
+ * @param array $optiuni url, antete, metoda, corp_fisier, iesire
+ */
+function agent_curl($config, $optiuni)
 {
-    $comanda = escapeshellarg($config['curl']) . ' -sS --max-time 300 -w "\n%{http_code}"';
+    $linii = array(
+        'silent',
+        'show-error',
+        'max-time = 300',
+        'write-out = "\n%{http_code}"',
+        'url = "' . agent_pentru_config($optiuni['url']) . '"',
+    );
 
-    foreach ($argumente as $argument) {
-        $comanda .= ' ' . $argument;
+    if (!empty($optiuni['metoda'])) {
+        $linii[] = 'request = "' . $optiuni['metoda'] . '"';
     }
 
-    if ($fisierIesire !== null) {
-        $comanda .= ' -o ' . escapeshellarg($fisierIesire);
+    foreach (isset($optiuni['antete']) ? $optiuni['antete'] : array() as $antet) {
+        $linii[] = 'header = "' . agent_pentru_config($antet) . '"';
     }
+
+    if (!empty($optiuni['corp_fisier'])) {
+        $linii[] = 'data-binary = "@' . agent_pentru_config($optiuni['corp_fisier']) . '"';
+    }
+
+    if (!empty($optiuni['antete_in'])) {
+        $linii[] = 'dump-header = "' . agent_pentru_config($optiuni['antete_in']) . '"';
+    }
+
+    if (!empty($optiuni['iesire'])) {
+        $linii[] = 'output = "' . agent_pentru_config($optiuni['iesire']) . '"';
+    }
+
+    $fisierConfig = $config['dosar'] . '/agent_curl_' . getmypid() . '.cfg';
+    @file_put_contents($fisierConfig, implode("\n", $linii) . "\n");
 
     $iesire = array();
     $cod = 0;
-    exec($comanda . ' 2>&1', $iesire, $cod);
+    exec(escapeshellarg($config['curl']) . ' --config ' . escapeshellarg($fisierConfig) . ' 2>&1', $iesire, $cod);
+
+    @unlink($fisierConfig);
 
     $tot = implode("\n", $iesire);
     $taiat = strrpos($tot, "\n");
@@ -74,6 +110,17 @@ function agent_curl($config, $argumente, $fisierIesire = null)
 }
 
 /**
+ * Pregătește o valoare pentru fișierul de configurare al lui curl.
+ *
+ * Între ghilimele, curl citește „\" ca început de secvență de evitare, așa că
+ * despărțitorul de dosare din Windows trebuie dublat, iar ghilimelele scăpate.
+ */
+function agent_pentru_config($valoare)
+{
+    return str_replace(array('\\', '"'), array('\\\\', '\\"'), $valoare);
+}
+
+/**
  * „Ai ceva pentru mine?"
  *
  * Întoarce comanda, null dacă pânda s-a împlinit fără nimic, sau false dacă
@@ -82,9 +129,9 @@ function agent_curl($config, $argumente, $fisierIesire = null)
 function agent_intreaba($config)
 {
     $rezultat = agent_curl($config, array(
-        '-X POST',
-        '-H ' . escapeshellarg('Authorization: Bearer ' . $config['token']),
-        escapeshellarg($config['server'] . '/api/punte/agent/asteapta'),
+        'metoda' => 'POST',
+        'url' => $config['server'] . '/api/punte/agent/asteapta',
+        'antete' => array('Authorization: Bearer ' . $config['token']),
     ));
 
     if ($rezultat['status'] === 401) {
@@ -128,8 +175,8 @@ function agent_inroleaza($config)
     }
 
     $local = agent_curl($config, array(
-        '-H ' . escapeshellarg('Authorization: Bearer ' . $config['token']),
-        escapeshellarg($config['local'] . '/certificate'),
+        'url' => $config['local'] . '/certificate',
+        'antete' => array('Authorization: Bearer ' . $config['token']),
     ));
 
     if ($local['cod'] !== 0 || $local['status'] !== 200) {
@@ -142,12 +189,14 @@ function agent_inroleaza($config)
     @file_put_contents($fisier, '{"certificate":' . $local['corp'] . '}');
 
     $raspuns = agent_curl($config, array(
-        '-X POST',
-        '-H ' . escapeshellarg('Authorization: Bearer ' . $config['token']),
-        '-H ' . escapeshellarg('X-Inrolare: ' . $config['inrolare']),
-        '-H ' . escapeshellarg('Content-Type: application/json'),
-        '--data-binary ' . escapeshellarg('@' . $fisier),
-        escapeshellarg($config['server'] . '/api/punte/agent/inrolare'),
+        'metoda' => 'POST',
+        'url' => $config['server'] . '/api/punte/agent/inrolare',
+        'antete' => array(
+            'Authorization: Bearer ' . $config['token'],
+            'X-Inrolare: ' . $config['inrolare'],
+            'Content-Type: application/json',
+        ),
+        'corp_fisier' => $fisier,
     ));
 
     @unlink($fisier);
@@ -166,9 +215,10 @@ function agent_executa($config, $comanda)
         $corp = $config['dosar'] . '/agent_corp_' . $comanda['id'] . '.tmp';
 
         $adus = agent_curl($config, array(
-            '-H ' . escapeshellarg('Authorization: Bearer ' . $config['token']),
-            escapeshellarg($config['server'] . '/api/punte/agent/corp/' . $comanda['id']),
-        ), $corp);
+            'url' => $config['server'] . '/api/punte/agent/corp/' . $comanda['id'],
+            'antete' => array('Authorization: Bearer ' . $config['token']),
+            'iesire' => $corp,
+        ));
 
         if ($adus['cod'] !== 0) {
             @unlink($corp);
@@ -177,22 +227,24 @@ function agent_executa($config, $comanda)
         }
     }
 
-    $argumente = array('-X ' . escapeshellarg($comanda['metoda']));
+    $antete = array();
 
     foreach ((array) $comanda['antete'] as $nume => $valoare) {
-        $argumente[] = '-H ' . escapeshellarg($nume . ': ' . $valoare);
+        $antete[] = $nume . ': ' . $valoare;
     }
-
-    if ($corp !== null) {
-        $argumente[] = '--data-binary ' . escapeshellarg('@' . $corp);
-    }
-
-    $argumente[] = '-D ' . escapeshellarg($config['dosar'] . '/agent_antete_' . $comanda['id'] . '.tmp');
-    $argumente[] = escapeshellarg($config['local'] . $comanda['cale']);
 
     $iesire = $config['dosar'] . '/agent_raspuns_' . $comanda['id'] . '.tmp';
 
-    $rezultat = agent_curl($config, $argumente, $iesire);
+    $rezultat = agent_curl($config, array(
+        'metoda' => $comanda['metoda'],
+        // Calea vine cu tot cu întrebare, codificată procentual: de aceea nu
+        // trece prin linia de comandă, ci prin fișierul de configurare.
+        'url' => $config['local'] . $comanda['cale'],
+        'antete' => $antete,
+        'corp_fisier' => $corp,
+        'antete_in' => $config['dosar'] . '/agent_antete_' . $comanda['id'] . '.tmp',
+        'iesire' => $iesire,
+    ));
 
     if ($corp !== null) {
         @unlink($corp);
@@ -243,27 +295,31 @@ function agent_trimite_rezultatul($config, $id, $raspuns)
 {
     $adresa = $config['server'] . '/api/punte/agent/rezultat/' . $id;
 
-    $argumente = array(
-        '-X POST',
-        '-H ' . escapeshellarg('Authorization: Bearer ' . $config['token']),
-    );
-
     if (isset($raspuns['eroare'])) {
-        $argumente[] = '-H ' . escapeshellarg('X-Eroare: ' . $raspuns['eroare']);
-        $argumente[] = escapeshellarg($adresa);
-
-        agent_curl($config, $argumente);
+        agent_curl($config, array(
+            'metoda' => 'POST',
+            'url' => $adresa,
+            'antete' => array(
+                'Authorization: Bearer ' . $config['token'],
+                // Antetul nu poate purta rânduri noi; motivul se pune pe o linie.
+                'X-Eroare: ' . str_replace(array("\r", "\n"), ' ', $raspuns['eroare']),
+            ),
+        ));
 
         return;
     }
 
-    $argumente[] = '-H ' . escapeshellarg('X-Status: ' . $raspuns['status']);
-    $argumente[] = '-H ' . escapeshellarg('X-Tip-Continut: ' . $raspuns['tip']);
-    $argumente[] = '-H ' . escapeshellarg('Content-Type: application/octet-stream');
-    $argumente[] = '--data-binary ' . escapeshellarg('@' . $raspuns['fisier']);
-    $argumente[] = escapeshellarg($adresa);
-
-    agent_curl($config, $argumente);
+    agent_curl($config, array(
+        'metoda' => 'POST',
+        'url' => $adresa,
+        'antete' => array(
+            'Authorization: Bearer ' . $config['token'],
+            'X-Status: ' . $raspuns['status'],
+            'X-Tip-Continut: ' . $raspuns['tip'],
+            'Content-Type: application/octet-stream',
+        ),
+        'corp_fisier' => $raspuns['fisier'],
+    ));
 
     @unlink($raspuns['fisier']);
 }

@@ -11,9 +11,11 @@ param(
     [string]$Thumbprint,
     # Pagina pe care se aseaza caseta: numar, sau 'ultima'
     [string]$Pagina = 'ultima',
-    # Coltul din stanga-jos al casetei si dimensiunile ei, in puncte
+    # Coltul din stanga-jos al casetei si dimensiunile ei, in puncte.
+    # Implicit: jos in dreapta pe ultima pagina, acolo unde e locul semnaturii
+    # pe orice act si unde formularele ANAF au spatiu liber.
     [double]$X = 330,
-    [double]$Y = 545,
+    [double]$Y = 45,
     [double]$Latime = 235,
     [double]$Inaltime = 78,
     # Motivul semnarii: ajunge in dictionarul semnaturii (il arata Adobe Reader
