@@ -32,10 +32,31 @@ class Punte
         $this->licente = $licente;
     }
 
+    /**
+     * Cât timp după ultima pândă mai socotim că agentul e treaz.
+     *
+     * El întreabă din 25 în 25 de secunde, iar când serverul nu răspunde așteaptă
+     * din ce în ce mai mult, până la un minut. Două minute și jumătate acoperă și
+     * cazul acela, fără să declarăm mort un agent care doar a răbdat puțin.
+     */
+    public const AGENT_TREAZ_SECUNDE = 150;
+
     /** Certificatele legate prin tunel primesc adresa punții, nu una din rețea. */
     public function esteTunel(?AnafCertificat $certificat): bool
     {
         return $certificat && $certificat->mod_legatura === 'tunel';
+    }
+
+    /**
+     * A mai întrebat agentul de curând?
+     *
+     * Dacă nu, nu are rost să punem comanda în coadă și să ținem omul un minut
+     * în așteptare: calculatorul e închis, sau agentul nu rulează.
+     */
+    public function agentulEsteTreaz(AnafCertificat $certificat): bool
+    {
+        return $certificat->agent_vazut_la
+            && $certificat->agent_vazut_la->gt(now()->subSeconds(self::AGENT_TREAZ_SECUNDE));
     }
 
     public function adresa(AnafCertificat $certificat): string
@@ -188,6 +209,11 @@ class Punte
         if ($iduri === []) {
             return null;
         }
+
+        // Se ține minte că agentul e treaz: altfel n-am ști cui are rost să-i trimitem.
+        AnafCertificat::query()->toateCompaniile()
+            ->whereIn('id', $iduri)
+            ->update(['agent_vazut_la' => now()]);
 
         $pana = microtime(true) + ($secunde ?: self::PANDA_SECUNDE);
 

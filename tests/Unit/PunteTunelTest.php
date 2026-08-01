@@ -251,6 +251,28 @@ class PunteTunelTest extends TestCase
         $this->assertNull(BridgeComanda::find($comanda->id), 'comanda nu rămâne agățată în coadă');
     }
 
+    /** Pânda agentului lasă urmă: altfel n-am ști cui are rost să-i trimitem. */
+    public function test_panda_agentului_se_tine_minte(): void
+    {
+        $this->assertNull($this->certificat->agent_vazut_la);
+        $this->assertFalse($this->punte()->agentulEsteTreaz($this->certificat));
+
+        $this->punte()->urmatoarea($this->certificat, 1);
+
+        $this->assertNotNull($this->certificat->fresh()->agent_vazut_la);
+        $this->assertTrue($this->punte()->agentulEsteTreaz($this->certificat->fresh()));
+    }
+
+    /** Un agent care n-a mai dat semne de mult nu mai e socotit treaz. */
+    public function test_agentul_tacut_de_mult_nu_mai_e_socotit_treaz(): void
+    {
+        $this->certificat->update([
+            'agent_vazut_la' => now()->subSeconds(Punte::AGENT_TREAZ_SECUNDE + 30),
+        ]);
+
+        $this->assertFalse($this->punte()->agentulEsteTreaz($this->certificat->fresh()));
+    }
+
     /**
      * Un calculator nou se prezintă singur: prin tunel serverul n-are cum să-l
      * caute, deci agentul îi trimite certificatele de pe tokenul de acolo.

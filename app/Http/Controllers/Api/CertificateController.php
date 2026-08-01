@@ -7,6 +7,7 @@ use App\Models\AnafCertificat;
 use App\Models\CertificatAbonat;
 use App\Models\CertificatUtilizator;
 use App\Services\Anaf\Bridge\LicentiereBridge;
+use App\Services\Anaf\Bridge\Punte;
 use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\CertificatService;
@@ -46,6 +47,8 @@ class CertificateController extends Controller
                     'monitorizare_la' => Format::dataOra($certificat->monitorizare_la),
                     'licenta_pana_la' => Format::dataOra($certificat->licenta_pana_la),
                     'mod_legatura' => $certificat->mod_legatura ?: 'direct',
+                    'agent_vazut_la' => Format::dataOra($certificat->agent_vazut_la),
+                    'agent_treaz' => app(Punte::class)->agentulEsteTreaz($certificat),
                     'implicit' => $certificat->implicit,
                     'valabil_de_la' => Format::dataOra($certificat->valabil_de_la),
                     'valabil_pana_la' => Format::dataOra($certificat->valabil_pana_la),

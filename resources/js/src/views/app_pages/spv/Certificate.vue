@@ -186,6 +186,23 @@
                   class="mr-25"
                 />{{ rand.item.monitorizare_cale }}
               </div>
+              <!-- Legătura prin tunel: se vede dacă programul de acolo e pornit,
+                   fără să fie nevoie să încerci o operație ca să afli. -->
+              <div
+                v-if="rand.item.mod_legatura === 'tunel'"
+                class="small"
+                :class="rand.item.agent_treaz ? 'text-success' : 'text-danger'"
+              >
+                <feather-icon
+                  :icon="rand.item.agent_treaz ? 'WifiIcon' : 'WifiOffIcon'"
+                  size="12"
+                  class="mr-25"
+                />{{ rand.item.agent_treaz
+                  ? 'prin tunel, program pornit'
+                  : (rand.item.agent_vazut_la
+                    ? 'prin tunel, oprit din ' + rand.item.agent_vazut_la
+                    : 'prin tunel, încă nepornit') }}
+              </div>
               <!-- Licența programului local: se reînnoiește singură, dar se
                    vede, ca să nu surprindă pe nimeni când se apropie de capăt. -->
               <div

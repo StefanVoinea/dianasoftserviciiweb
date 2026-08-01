@@ -19,6 +19,10 @@ class AnafCertificat extends Model
         'valabil_pana_la' => 'datetime',
         'ultima_utilizare' => 'datetime',
         'avertizat_la' => 'datetime',
+        'monitorizare_la' => 'datetime',
+        'licenta_pana_la' => 'datetime',
+        // Ultima dată când agentul de la client a întrebat dacă are ceva de lucru
+        'agent_vazut_la' => 'datetime',
     ];
 
     public function abonati()

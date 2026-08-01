@@ -54,6 +54,21 @@ class PunteController extends Controller
             ], 503);
         }
 
+        /*
+         * Dacă agentul n-a mai întrebat de mult, se spune din prima. Altfel
+         * comanda ar sta în coadă până se plictisește cel care a cerut-o, iar
+         * omul ar primi o eroare de rețea în loc de motivul adevărat.
+         */
+        if (!$this->punte->agentulEsteTreaz($certificat)) {
+            return response()->json([
+                'eroare' => 'Programul de pe calculatorul cu tokenul nu rulează.',
+                'detalii' => $certificat->agent_vazut_la
+                    ? 'Ultima dată a dat semne la ' . $certificat->agent_vazut_la->format('d.m.Y H:i')
+                        . '. Porniți calculatorul sau reinstalați kitul.'
+                    : 'Nu a pornit niciodată de la instalare. Verificați kitul pe acel calculator.',
+            ], 504);
+        }
+
         $comanda = $this->punte->pune($certificat, $request, '/' . ltrim($cale, '/'));
 
         $terminata = $this->punte->asteapta($comanda);
