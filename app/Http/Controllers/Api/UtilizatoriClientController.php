@@ -100,6 +100,11 @@ class UtilizatoriClientController extends Controller
         $client = $this->clientul();
         $this->verificaApartenenta($utilizator, $client);
 
+        // Gol inseamna „neschimbata", deci nici nu se cere sa aiba 8 caractere.
+        if (trim((string) $request->input('parola', '')) === '') {
+            $request->merge(['parola' => null]);
+        }
+
         $date = $request->validate([
             'nume' => 'nullable|string|max:191',
             'email' => ['nullable', 'email', 'max:191', Rule::unique('users', 'email')->ignore($utilizator->id)],
@@ -149,7 +154,13 @@ class UtilizatoriClientController extends Controller
             $utilizator->telefon = $date['telefon'];
         }
 
-        if (!empty($date['parola'])) {
+        /*
+         * Campul lasat gol inseamna „parola ramane cum era". Se verifica si
+         * spatiile, pentru ca parolele nu se mai curata la capete: o apasare
+         * din greseala pe bara de spatiu n-are voie sa devina parola noua a
+         * omului, care apoi n-ar mai putea intra.
+         */
+        if (trim((string) ($date['parola'] ?? '')) !== '') {
             $utilizator->password = Hash::make($date['parola']);
         }
 

@@ -221,9 +221,13 @@
       />
 
       <label>{{ formular.id ? 'Parolă nouă (gol = neschimbată)' : 'Parolă (minimum 8 caractere)' }}</label>
+      <!-- „new-password" ține browserul să nu completeze aici, din obișnuință,
+           parola cu care e logat administratorul: ea ar deveni, la salvare,
+           parola omului editat. -->
       <b-form-input
         v-model="formular.parola"
         type="text"
+        autocomplete="new-password"
         class="mb-2"
       />
 
@@ -507,9 +511,15 @@ export default {
     salveaza() {
       this.eroareFormular = ''
 
+      // Câmpul de parolă lăsat gol nu pleacă deloc: la modificare înseamnă
+      // „parola rămâne cum era", nu „pune asta în loc".
+      const trimise = { ...this.formular }
+
+      if (!trimise.parola || !trimise.parola.trim()) delete trimise.parola
+
       const cerere = this.formular.id
-        ? this.$http.put(`/client/utilizatori/${this.formular.id}`, this.formular)
-        : this.$http.post('/client/utilizatori', this.formular)
+        ? this.$http.put(`/client/utilizatori/${this.formular.id}`, trimise)
+        : this.$http.post('/client/utilizatori', trimise)
 
       cerere
         .then(() => {
