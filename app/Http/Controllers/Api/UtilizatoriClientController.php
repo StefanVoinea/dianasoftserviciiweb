@@ -55,6 +55,9 @@ class UtilizatoriClientController extends Controller
             'parola' => 'required|string|min:8|max:191',
             'telefon' => 'nullable|string|max:45',
             'administrator' => 'nullable|boolean',
+            // Semnatura e a omului cu tokenul, depunerea nu se mai poate lua inapoi
+            'poate_semna' => 'nullable|boolean',
+            'poate_depune' => 'nullable|boolean',
             'certificate' => 'nullable|array',
             'certificate.*' => 'integer|exists:anaf_certificate,id',
             'imprimanta' => 'nullable|string|max:191',
@@ -75,7 +78,11 @@ class UtilizatoriClientController extends Controller
             'status' => 'activ',
         ]);
 
-        $client->users()->attach($user->id, ['administrator' => !empty($date['administrator'])]);
+        $client->users()->attach($user->id, [
+            'administrator' => !empty($date['administrator']),
+            'poate_semna' => !empty($date['poate_semna']),
+            'poate_depune' => !empty($date['poate_depune']),
+        ]);
 
         $this->potrivesteCertificatele($user, $date['certificate'] ?? []);
 
@@ -100,6 +107,9 @@ class UtilizatoriClientController extends Controller
             'parola' => 'nullable|string|min:8|max:191',
             'blocat' => 'nullable|boolean',
             'administrator' => 'nullable|boolean',
+            // Semnatura e a omului cu tokenul, depunerea nu se mai poate lua inapoi
+            'poate_semna' => 'nullable|boolean',
+            'poate_depune' => 'nullable|boolean',
             'certificate' => 'nullable|array',
             'certificate.*' => 'integer|exists:anaf_certificate,id',
             'imprimanta' => 'nullable|string|max:191',
@@ -164,11 +174,19 @@ class UtilizatoriClientController extends Controller
             }
         }
 
-        if (array_key_exists('administrator', $date)) {
+        $drepturi = [];
+
+        foreach (['administrator', 'poate_semna', 'poate_depune'] as $drept) {
+            if (array_key_exists($drept, $date)) {
+                $drepturi[$drept] = (bool) $date[$drept];
+            }
+        }
+
+        if ($drepturi !== []) {
             DB::table('company_user')
                 ->where('user_id', $utilizator->id)
                 ->where('company_id', $client->id)
-                ->update(['administrator' => (bool) $date['administrator']]);
+                ->update($drepturi);
         }
 
         if (array_key_exists('certificate', $date)) {
@@ -261,10 +279,10 @@ class UtilizatoriClientController extends Controller
                 || strcasecmp((string) $legatura->email, (string) $user->email) === 0;
         });
 
-        $administrator = DB::table('company_user')
+        $legatura = DB::table('company_user')
             ->where('user_id', $user->id)
             ->where('company_id', $client->id)
-            ->value('administrator');
+            ->first();
 
         return [
             'id' => $user->id,
@@ -272,7 +290,9 @@ class UtilizatoriClientController extends Controller
             'email' => $user->email,
             'telefon' => $user->telefon,
             'blocat' => $user->blocat === 'Da',
-            'administrator' => (bool) $administrator,
+            'administrator' => (bool) optional($legatura)->administrator,
+            'poate_semna' => (bool) optional($legatura)->poate_semna,
+            'poate_depune' => (bool) optional($legatura)->poate_depune,
             'imprimanta' => $user->imprimanta,
             'imprimanta_certificat_id' => $user->imprimanta_certificat_id,
             'ip_permise' => $user->ip_permise,

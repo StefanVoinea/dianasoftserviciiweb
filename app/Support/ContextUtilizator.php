@@ -55,6 +55,55 @@ class ContextUtilizator
     }
 
     /**
+     * Are omul dreptul cerut în firma de acum?
+     *
+     * Administratorul firmei le are pe toate — el le și dă. Semnarea și
+     * depunerea se acordă anume, pentru că una angajează certificatul persoanei,
+     * iar cealaltă trimite ceva la ANAF de unde nu se mai poate lua înapoi.
+     *
+     * Fără utilizator autentificat nu se cere niciun drept, ca peste tot aici:
+     * acolo lucrează aplicatia — folderul urmărit, sarcinile programate — nu o
+     * persoană care ar trebui să aibă voie.
+     */
+    public static function areDreptul(string $drept): bool
+    {
+        $user = self::curent();
+
+        if (!$user) {
+            return true;
+        }
+
+        if (self::esteSuperAdministrator()) {
+            return true;
+        }
+
+        $companie = ContextCompanie::curenta();
+
+        if (!$companie) {
+            return false;
+        }
+
+        if (self::esteAdministratorClient()) {
+            return true;
+        }
+
+        return (bool) DB::table('company_user')
+            ->where('user_id', $user->id)
+            ->where('company_id', $companie)
+            ->value($drept);
+    }
+
+    public static function poateSemna(): bool
+    {
+        return self::areDreptul('poate_semna');
+    }
+
+    public static function poateDepune(): bool
+    {
+        return self::areDreptul('poate_depune');
+    }
+
+    /**
      * Id-ul utilizatorului ale carui date pot fi vazute, sau null cand nu se
      * limiteaza nimic.
      */

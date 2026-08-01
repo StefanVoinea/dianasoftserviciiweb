@@ -90,6 +90,22 @@
               class="text-primary mr-50"
               title="Administrator: vede tot ce s-a lucrat pentru firmă"
             />
+            <feather-icon
+              v-if="!rand.item.administrator && rand.item.poate_semna"
+              v-b-tooltip.hover
+              icon="EditIcon"
+              size="14"
+              class="text-success mr-50"
+              title="Poate semna declarațiile validate"
+            />
+            <feather-icon
+              v-if="!rand.item.administrator && rand.item.poate_depune"
+              v-b-tooltip.hover
+              icon="SendIcon"
+              size="14"
+              class="text-warning mr-50"
+              title="Poate depune declarațiile semnate"
+            />
             <div>
               <div>{{ rand.item.nume }}</div>
               <div class="small text-muted">
@@ -304,6 +320,27 @@
       </b-form-checkbox>
 
       <b-form-checkbox
+        v-model="formular.poate_semna"
+        :disabled="formular.administrator"
+        class="mb-1"
+      >
+        Poate semna declarațiile validate
+      </b-form-checkbox>
+
+      <b-form-checkbox
+        v-model="formular.poate_depune"
+        :disabled="formular.administrator"
+        class="mb-1"
+      >
+        Poate depune declarațiile semnate la ANAF
+      </b-form-checkbox>
+
+      <small class="text-muted d-block mb-2">
+        Administratorul firmei are oricum ambele drepturi.
+        <strong>Depunerea nu se mai poate lua înapoi</strong>, așa că se dă anume.
+      </small>
+
+      <b-form-checkbox
         v-if="formular.id && !formular.eu"
         v-model="formular.blocat"
       >
@@ -426,6 +463,8 @@ export default {
           telefon: '',
           parola: '',
           administrator: false,
+          poate_semna: false,
+          poate_depune: false,
           blocat: false,
           certificate: [],
           imprimanta: null,

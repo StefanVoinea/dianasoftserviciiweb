@@ -37,6 +37,8 @@ class AuthController extends Controller
 
         ContextCompanie::pentru($companie, function () use ($user) {
             $user->administrator_client = ContextUtilizator::esteAdministratorClient();
+            $user->poate_semna = ContextUtilizator::poateSemna();
+            $user->poate_depune = ContextUtilizator::poateDepune();
             $user->abonament = $this->abonamentul(ContextCompanie::curenta());
         });
 
@@ -110,6 +112,8 @@ class AuthController extends Controller
             'data' => [
                 'super_admin' => ContextUtilizator::esteSuperAdministrator(),
                 'administrator_client' => ContextUtilizator::esteAdministratorClient(),
+                'poate_semna' => ContextUtilizator::poateSemna(),
+                'poate_depune' => ContextUtilizator::poateDepune(),
                 'abonament' => $this->abonamentul(ContextCompanie::curenta()),
                 /*
                  * Adresa pe care o vede serverul acum. E si unealta de verificare:

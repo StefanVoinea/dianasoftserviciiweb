@@ -34,27 +34,7 @@
         </b-col>
         <b-col md="auto">
           <div>
-            <!-- Reglajul stă deasupra butonului pe care îl privește. Eticheta e
-                 scurtă, iar explicația întreagă apare la trecerea cu mouse-ul. -->
-            <div
-              class="pentru-tiparire"
-              title="Trimite la imprimanta dumneavoastră toate declarațiile semnate în această sesiune"
-            >
-              <b-form-checkbox
-                v-model="tiparire"
-                size="sm"
-                class="comutator-primar"
-              >
-                <small
-                  class="text-nowrap"
-                  :class="tiparire ? 'text-primary' : 'text-muted'"
-                >
-                  Imprimare declarații semnate
-                </small>
-              </b-form-checkbox>
-            </div>
-
-            <!-- Cei trei pași ai prelucrării, unul sub altul, fiecare cu semnul
+            <!-- Cei doi pași ai prelucrării, unul sub altul, fiecare cu semnul
                  lui. Cât lucrează, pasul în desfășurare se învârte, iar cele
                  terminate rămân bifate: se vede unde s-a ajuns, nu doar că
                  butonul e ocupat. -->
@@ -103,25 +83,70 @@
                 />
                 Validează
               </div>
-              <div :class="pasulActiv === 'semneaza' ? 'font-weight-bolder' : ''">
-                <b-spinner
-                  v-if="pasulActiv === 'semneaza'"
-                  small
-                  class="mr-1"
-                />
-                <feather-icon
-                  v-else
-                  icon="Edit3Icon"
-                  size="15"
-                  class="mr-1"
-                />
-                Semnează
-              </div>
             </b-button>
 
-            <!-- Al patrulea pas, cel care nu se poate lua înapoi: de aceea stă
-                 sub buton, nebifat, și se aprinde doar când omul îl cere. -->
+            <!-- Semnarea nu mai e un pas al butonului, ci o alegere: cine are
+                 dreptul poate lăsa declarațiile valide să fie semnate pe loc,
+                 fără să mai apese butonul de alături. -->
             <div
+              v-if="poateSemna"
+              class="pentru-tiparire mt-50"
+              title="După validare, semnează pe loc declarațiile valide din acest lot"
+            >
+              <b-form-checkbox
+                v-model="semneazaDupaValidare"
+                size="sm"
+                class="comutator-primar"
+              >
+                <small
+                  class="text-nowrap"
+                  :class="semneazaDupaValidare ? 'text-primary' : 'text-muted'"
+                >
+                  Semnează declarațiile valide
+                </small>
+              </b-form-checkbox>
+            </div>
+          </div>
+        </b-col>
+
+        <!-- Semnarea celor rămase valide în tabel, cu reglajele ei dedesubt.
+             Toată coloana lipsește la cine n-are dreptul de semnare. -->
+        <b-col
+          v-if="poateSemna"
+          md="auto"
+        >
+          <div>
+            <b-button
+              variant="outline-primary"
+              class="text-left"
+              :disabled="!deSemnat.length || lucreaza"
+              @click="semneazaDinTabel"
+            >
+              <b-spinner
+                v-if="semnareInCurs"
+                small
+                class="mr-1"
+              />
+              <feather-icon
+                v-else
+                icon="Edit3Icon"
+                size="15"
+                class="mr-1"
+              />
+              Semnează declarațiile valide
+              <b-badge
+                v-if="deSemnat.length"
+                variant="warning"
+                class="ml-1"
+              >
+                {{ deSemnat.length }}
+              </b-badge>
+            </b-button>
+
+            <!-- Pasul care nu se poate lua înapoi: de aceea stă sub buton,
+                 nebifat, și se aprinde doar când omul îl cere. -->
+            <div
+              v-if="poateDepune"
               class="pentru-tiparire mt-50"
               title="După semnare, trimite la ANAF declarațiile semnate în această sesiune, fără să mai fie nevoie de butonul „Depune”"
             >
@@ -138,6 +163,24 @@
                 </small>
               </b-form-checkbox>
             </div>
+
+            <div
+              class="pentru-tiparire"
+              title="Trimite la imprimanta dumneavoastră toate declarațiile semnate în această sesiune"
+            >
+              <b-form-checkbox
+                v-model="tiparire"
+                size="sm"
+                class="comutator-primar"
+              >
+                <small
+                  class="text-nowrap"
+                  :class="tiparire ? 'text-primary' : 'text-muted'"
+                >
+                  Imprimă declarațiile semnate
+                </small>
+              </b-form-checkbox>
+            </div>
           </div>
         </b-col>
         <!-- Depunerea la mijlocul spațiului rămas, recipisele lipite de marginea
@@ -145,6 +188,7 @@
         <b-col class="d-flex align-items-stretch">
           <div class="d-flex align-items-center justify-content-center flex-grow-1">
             <b-button
+              v-if="poateDepune"
               variant="outline-info"
               :disabled="!deDepus.length || depunereInCurs"
               @click="depuneSemnate"
@@ -551,7 +595,7 @@
           <!-- Singura cale de ieșire dintr-o semnare eșuată: altfel declarația
                ar rămâne blocată, fără buton de depunere. -->
           <b-button
-            v-if="rand.item.pas === 'eroare_semnare'"
+            v-if="poateSemna && rand.item.pas === 'eroare_semnare'"
             size="sm"
             variant="outline-primary"
             class="mr-1 mb-1"
@@ -561,7 +605,7 @@
             Reîncearcă semnarea
           </b-button>
           <b-button
-            v-if="rand.item.semnat && !rand.item.index_recipisa"
+            v-if="poateDepune && rand.item.semnat && !rand.item.index_recipisa"
             size="sm"
             variant="outline-success"
             class="mr-1 mb-1"
@@ -794,6 +838,14 @@ export default {
       explicatieEroare: '',
       // Ce declarație se semnează chiar acum, după încărcare
       semnareInCurs: '',
+      /*
+       * Drepturile omului în firma aleasă, cerute de la server. Ascunderea din
+       * interfață e doar înlesnire; refuzul adevărat vine tot de la server.
+       */
+      poateSemna: false,
+      poateDepune: false,
+      // Semnarea de la sine a ce tocmai s-a validat
+      semneazaDupaValidare: false,
       // La sfârșitul prelucrării, un singur fișier cu tot ce s-a semnat
       tiparire: true,
       /*
@@ -881,6 +933,14 @@ export default {
     deDepus() {
       return this.declaratii.filter(d => d.semnat && !d.index_recipisa)
     },
+    /**
+     * Declarațiile trecute de validare care așteaptă semnătura.
+     *
+     * Ca și la depunere, se ia din lista afișată: se semnează ce se vede.
+     */
+    deSemnat() {
+      return this.declaratii.filter(d => d.pas === 'validat')
+    },
     /** Declarațiile depuse a căror recipisă n-a fost încă descărcată. */
     deDescarcat() {
       return this.declaratii.filter(d => d.index_recipisa && !d.cale_recipisa && !d.arhiva_recipisa)
@@ -950,6 +1010,7 @@ export default {
     },
   },
   created() {
+    this.incarcaDrepturile()
     this.incarcaSetarea()
     this.incarcaLista()
     this.reglaCronometrul()
@@ -1160,6 +1221,28 @@ export default {
 
       return `${declaratii.length} declarații din ${fisiere.length} fișiere`
     },
+    /**
+     * Ce are voie omul să facă aici.
+     *
+     * Se cere de la server, nu din localStorage: drepturile se pot schimba, iar
+     * bifele care le privesc n-au ce căuta pe ecranul cuiva care nu le are.
+     */
+    incarcaDrepturile() {
+      this.$http.get('/context')
+        .then(({ data }) => {
+          this.poateSemna = !!data.data.poate_semna
+          this.poateDepune = !!data.data.poate_depune
+        })
+        .catch(() => {
+          this.poateSemna = false
+          this.poateDepune = false
+        })
+        .then(() => {
+          // Bifele rămase fără drept nu trebuie să tragă după ele nicio acțiune.
+          if (!this.poateSemna) this.semneazaDupaValidare = false
+          if (!this.poateDepune) this.depuneDupaSemnare = false
+        })
+    },
     incarca() {
       this.eroare = ''
       this.incarcaInCurs = true
@@ -1188,11 +1271,15 @@ export default {
             this.eroare = erori.join(' | ')
           }
 
-          // Cele validate se semnează acum; cele care veneau deja semnate
-          // (PDF-uri semnate în altă parte) rămân cum sunt, dar intră și ele
-          // la depunere: și ele sunt declarații semnate din această sesiune.
+          // Cele validate se semnează acum doar dacă s-a cerut prin bifă; cele
+          // care veneau deja semnate (PDF-uri semnate în altă parte) rămân cum
+          // sunt, dar intră la depunere: sunt și ele semnate în această sesiune.
+          const deSemnatAcum = this.semneazaDupaValidare && this.poateSemna
+            ? incarcate.filter(d => d.pas === 'validat')
+            : []
+
           return this.semneazaValidate(
-            incarcate.filter(d => d.pas === 'validat'),
+            deSemnatAcum,
             incarcate.filter(d => d.pas === 'semnat'),
           )
         })
@@ -1219,6 +1306,24 @@ export default {
      * @param {Array} declaratii     cele validate, de semnat acum
      * @param {Array} venitesemnate  cele încărcate deja semnate, doar de depus
      */
+    /**
+     * Semnează declarațiile valide rămase în tabel.
+     *
+     * E aceeași lucrare ca după încărcare, doar că pornită de om, peste tot ce
+     * s-a strâns nesemnat — nu doar peste lotul din sesiunea de acum.
+     */
+    semneazaDinTabel() {
+      const declaratii = this.deSemnat
+
+      if (!declaratii.length) {
+        return Promise.resolve()
+      }
+
+      this.eroare = ''
+
+      return this.semneazaValidate(declaratii).then(() => this.incarcaLista())
+    },
+
     semneazaValidate(declaratii, venitesemnate = []) {
       if (!declaratii.length) {
         return this.depuneDinSesiune(venitesemnate)
@@ -1278,7 +1383,7 @@ export default {
      * celor semnate în tabel rămân pe butonul „Depune”.
      */
     depuneDinSesiune(declaratii) {
-      if (!this.depuneDupaSemnare || !declaratii.length) {
+      if (!this.depuneDupaSemnare || !this.poateDepune || !declaratii.length) {
         return Promise.resolve()
       }
 

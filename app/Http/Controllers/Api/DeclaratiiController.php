@@ -20,6 +20,7 @@ use App\Services\Anaf\Declaratii\SemnareService;
 use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\CertificatService;
+use App\Support\ContextUtilizator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -448,8 +449,21 @@ class DeclaratiiController extends Controller
         return response()->json(['success' => true, 'data' => $this->prezinta($declaratie)]);
     }
 
+    /** Raspunsul pentru omul caruia nu i s-a dat dreptul cerut. */
+    protected function faraDreptul(string $fapta)
+    {
+        return response()->json([
+            'success' => false,
+            'message' => 'Nu aveți dreptul să ' . $fapta . '. Cereți-l administratorului firmei.',
+        ], 403);
+    }
+
     public function semneaza(AnafDeclaratie $declaratie, SemnareService $semnare)
     {
+        if (!ContextUtilizator::poateSemna()) {
+            return $this->faraDreptul('semnați declarații');
+        }
+
         if (!$declaratie->cale_pdf) {
             return response()->json(['success' => false, 'message' => 'Declarația nu are PDF generat. Validați-o mai întâi.'], 422);
         }
@@ -502,6 +516,10 @@ class DeclaratiiController extends Controller
 
     public function depune(AnafDeclaratie $declaratie, DepunereService $depunere)
     {
+        if (!ContextUtilizator::poateDepune()) {
+            return $this->faraDreptul('depuneți declarații');
+        }
+
         // Documentul semnat poate sta pe server sau doar in arhiva clientului.
         if (!$declaratie->cale_pdf_semnat && !$declaratie->arhiva_semnat) {
             return response()->json(['success' => false, 'message' => 'Declarația nu este semnată.'], 422);
