@@ -229,6 +229,28 @@
               </b-badge>
             </div>
 
+            <!-- Licența se reînnoiește singură în fiecare dimineață; butonul e
+                 pentru cazurile care nu pot aștepta: un calculator nou, unul
+                 care a stat închis, un abonament tocmai plătit. -->
+            <b-button
+              v-b-tooltip.hover.top.window.v-light
+              size="sm"
+              variant="outline-secondary"
+              class="btn-icon ml-2"
+              :disabled="licentaInCurs === rand.item.id"
+              title="Reînnoiește acum licența programului local"
+              @click="reinnoiesteLicenta(rand.item)"
+            >
+              <b-spinner
+                v-if="licentaInCurs === rand.item.id"
+                small
+              />
+              <feather-icon
+                v-else
+                icon="KeyIcon"
+              />
+            </b-button>
+
             <b-button
               v-b-tooltip.hover.top.window.v-light
               size="sm"
@@ -669,6 +691,8 @@ export default {
       ],
       info: '',
       kitInCurs: false,
+      // Certificatul pentru care se trimite acum licența
+      licentaInCurs: null,
       bridgeNou: { bridge_url: '', bridge_token: '' },
       bridgeVizibil: false,
       bridgeFormular: {},
@@ -884,6 +908,24 @@ export default {
       this.$http.defaults.headers.common['X-Certificat-Id'] = certificat.id
       window.localStorage.setItem('anaf_certificat_activ', certificat.id)
       this.info = `Operațiile vor folosi certificatul „${certificat.cn}”.`
+    },
+    /** Trimite acum licența programului local, fără să aștepte reînnoirea de noapte. */
+    reinnoiesteLicenta(certificat) {
+      this.eroare = ''
+      this.info = ''
+      this.licentaInCurs = certificat.id
+
+      this.$http.post(`/anaf-certificate/${certificat.id}/licenta`)
+        .then(({ data }) => {
+          this.info = data.message
+          this.incarcaLista()
+        })
+        .catch(err => {
+          this.eroare = this.mesajEroare(err, 'Licența nu a putut fi trimisă')
+        })
+        .finally(() => {
+          this.licentaInCurs = null
+        })
     },
     deschideUtilizatori(certificat) {
       this.certificatCurent = certificat

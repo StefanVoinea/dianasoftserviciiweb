@@ -149,6 +149,8 @@ Route::middleware(['auth:api', 'companie.anaf', 'modul:spv'])->group(function ()
     Route::get('/anaf-certificate/kit', 'Api\CertificateController@kit');
     Route::get('/anaf-certificate/{certificat}/foldere', 'Api\CertificateController@foldere');
     Route::get('/anaf-certificate/{certificat}/imprimante', 'Api\CertificateController@imprimante');
+    // Reînnoirea licenței programului local, cerută de om, nu așteptând noaptea
+    Route::post('/anaf-certificate/{certificat}/licenta', 'Api\CertificateController@reinnoiesteLicenta');
     Route::put('/anaf-certificate/{certificat}', 'Api\CertificateController@update');
     Route::post('/anaf-certificate/abonare', 'Api\CertificateController@abonare');
     Route::delete('/anaf-certificate/abonare/{abonat}', 'Api\CertificateController@dezabonare');

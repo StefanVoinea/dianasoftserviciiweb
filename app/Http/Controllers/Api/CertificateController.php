@@ -156,6 +156,31 @@ class CertificateController extends Controller
     }
 
     /**
+     * Reînnoiește acum licența programului local al acestui certificat.
+     *
+     * De obicei se face singură, în fiecare dimineață, cu zece zile înainte de
+     * expirare. Butonul e pentru cazurile în care nu se poate aștepta: un
+     * calculator nou, unul care a stat închis, sau un abonament tocmai plătit.
+     */
+    public function reinnoiesteLicenta(AnafCertificat $certificat, LicentiereBridge $licentiere)
+    {
+        $rezultat = $licentiere->reinnoieste($certificat, true);
+
+        if (!$rezultat['emisa']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Licența nu a putut fi trimisă: ' . ($rezultat['motiv'] ?: 'motiv necunoscut'),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Licență trimisă, valabilă până la ' . Format::dataOra($rezultat['expira']) . '.',
+            'data' => $certificat->fresh(),
+        ]);
+    }
+
+    /**
      * Kitul de instalare a bridge-ului, cu token propriu pentru calculatorul
      * pe care va fi instalat.
      */
