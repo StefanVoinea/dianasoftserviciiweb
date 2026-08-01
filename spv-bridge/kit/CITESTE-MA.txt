@@ -100,11 +100,15 @@ VERIFICARE
   - Stare:    Get-ScheduledTask "Acces token ANAF"
   - Test:     curl -H "Authorization: Bearer {{TOKEN}}" http://127.0.0.1:{{PORT}}/certificate
               (întoarce lista certificatelor conectate acum)
-  - Manual:   dublu-clic pe porneste-manual.bat (pornire cu fereastră vizibilă)
+  - Manual:   dublu-clic pe porneste-manual.bat (programul, cu fereastră)
+              apoi pe porneste-agent.bat (agentul, în altă fereastră)
 
 DEZINSTALARE
 ------------
-      .\dezinstaleaza.ps1
+      dublu clic pe dezinstaleaza.bat
+
+   Se scot cele două sarcini programate și se opresc procesele rămase.
+   Dosarul, cu configurarea și documentele adunate, rămâne neatins.
 
 
 FIȘIERE
@@ -118,9 +122,15 @@ FIȘIERE
   imprimante.ps1      citirea imprimantelor de pe acest calculator
   print-pdf.ps1       trimiterea la imprimantă
   itextsharp.dll      bibliotecă folosită la semnare
-  instaleaza.ps1      instalarea pornirii automate
-  dezinstaleaza.ps1   eliminarea ei
-  porneste-manual.bat pornire cu fereastră, pentru verificări
+  agent.php           aduce de la aplicație lucrul pentru tokenul de aici
+  agent-functii.php   uneltele lui
+  cheie-publica.pem   cu ea se verifică licența și comenzile primite
+  instaleaza.bat      instalarea pornirii automate (dublu clic)
+  dezinstaleaza.bat   scoaterea ei (dublu clic)
+  porneste-manual.bat pornirea programului cu fereastră, pentru verificări
+  porneste-agent.bat  pornirea agentului cu fereastră, pentru verificări
+  instaleaza.ps1      scriptul chemat de instaleaza.bat
+  dezinstaleaza.ps1   scriptul chemat de dezinstaleaza.bat
 
 
 PHP

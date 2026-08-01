@@ -21,8 +21,10 @@ class KitBridge
 
     /** Scripturile si documentatia, din sablonul kitului. */
     protected const FISIERE_KIT = [
-        // .bat-ul e cel pe care il apasa omul: Windows nu ruleaza .ps1 la dublu clic
-        'instaleaza.bat', 'instaleaza.ps1', 'dezinstaleaza.ps1', 'porneste-manual.bat',
+        // .bat-urile sunt cele pe care le apasa omul: Windows nu ruleaza .ps1 la dublu clic
+        'instaleaza.bat', 'dezinstaleaza.bat',
+        'porneste-manual.bat', 'porneste-agent.bat',
+        'instaleaza.ps1', 'dezinstaleaza.ps1',
     ];
 
     /**
