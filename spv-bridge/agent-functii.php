@@ -87,6 +87,16 @@ function agent_intreaba($config)
         escapeshellarg($config['server'] . '/api/punte/agent/asteapta'),
     ));
 
+    if ($rezultat['status'] === 401) {
+        /*
+         * Serverul nu ne recunoaste codul de acces. De obicei inseamna ca
+         * inrolarea nu s-a facut inca: certificatele de pe tokenul de aici nu
+         * sunt legate de acest kit. Se spune limpede, ca sa nu para o pana de
+         * retea.
+         */
+        return -1;
+    }
+
     if ($rezultat['cod'] !== 0 || $rezultat['status'] !== 200) {
         return false;
     }

@@ -21,12 +21,17 @@ class LicentiereBridge
 
     protected $licente;
     protected $certificate;
+    protected $punte;
     protected $config;
 
-    public function __construct(Licente $licente, CertificatService $certificate, array $config)
+    /** Certificatul de acum merge prin tunel? Se află la fiecare reînnoire. */
+    protected $esteTunel = false;
+
+    public function __construct(Licente $licente, CertificatService $certificate, Punte $punte, array $config)
     {
         $this->licente = $licente;
         $this->certificate = $certificate;
+        $this->punte = $punte;
         $this->config = $config;
     }
 
@@ -36,6 +41,7 @@ class LicentiereBridge
     public function reinnoieste(AnafCertificat $certificat, bool $forteaza = false): array
     {
         $this->certificate->foloseste($certificat);
+        $this->esteTunel = $this->punte->esteTunel($certificat);
         $bridge = $this->certificate->bridge();
 
         if (empty($bridge['url'])) {
@@ -117,12 +123,20 @@ class LicentiereBridge
     }
 
     /**
-     * Licențierea merge pe codul de instalare, nu pe jeton: programul de-abia
-     * primește licența, iar fără ea n-ar primi comenzi semnate.
+     * Cu ce se legitimează cererea de licențiere.
+     *
+     * La legătură directă, cu codul de instalare: programul de-abia primește
+     * licența, iar fără ea n-ar recunoaște un jeton semnat.
+     *
+     * Prin tunel însă, primul care primește cererea e puntea noastră, iar ea
+     * cere jeton semnat. Codul de instalare îl pune puntea mai departe, când
+     * trimite comanda către programul de la client.
      */
     protected function cerere(array $bridge)
     {
-        return Http::withToken($bridge['cod_instalare'])
+        $legitimare = $this->esteTunel ? $bridge['token'] : $bridge['cod_instalare'];
+
+        return Http::withToken($legitimare)
             ->timeout($this->config['timeout'] ?? 30);
     }
 

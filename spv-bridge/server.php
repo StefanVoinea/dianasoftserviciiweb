@@ -504,7 +504,20 @@ $metoda = $_SERVER['REQUEST_METHOD'];
  * cu codul static: altfel s-ar opri singure la actualizare.
  */
 $licenta = licenta_curenta(__DIR__);
-$rute_de_instalare = array('/identitate', '/licenta');
+
+/*
+ * Rutele care merg si fara licenta.
+ *
+ * Pe langa identitate si licentiere, „/certificate": cu ea se face inrolarea —
+ * programul isi spune certificatele de pe token, ca aplicatia sa stie cui sa-i
+ * ceara licenta. Fara ea, un calculator nou n-ar avea cum sa intre in evidenta:
+ * ar astepta o licenta care nu se poate emite pentru un certificat necunoscut.
+ *
+ * Ce se afla astfel e numele si seria certificatului propriu, catre cineva care
+ * are deja codul de acces al acestui calculator. Semnarea, SPV-ul si depunerea
+ * raman inchise pana la licenta.
+ */
+$rute_de_instalare = array('/identitate', '/licenta', '/certificate');
 
 if (!hash_equals('Bearer ' . $config['token'], $autorizare)
     && !jeton_valid($prezentat, __DIR__)) {

@@ -44,6 +44,19 @@ $pauzaLaEroare = 5;
 while (true) {
     $comanda = agent_intreaba($config);
 
+    if ($comanda === -1) {
+        /*
+         * Serverul nu ne recunoaște codul: certificatele de pe tokenul de aici
+         * nu sunt încă legate de acest kit. Se încearcă înrolarea din nou —
+         * poate tokenul tocmai a fost conectat — și se așteaptă un minut.
+         */
+        agent_scrie($config, 'Serverul nu-mi recunoaște codul de acces; încerc din nou înrolarea.');
+        agent_inroleaza($config);
+        sleep(60);
+
+        continue;
+    }
+
     if ($comanda === false) {
         /*
          * Serverul nu răspunde — internet căzut, întreținere, orice. Se așteaptă

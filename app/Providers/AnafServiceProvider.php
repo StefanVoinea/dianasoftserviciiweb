@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Services\Anaf\Arhiva\ArhivaService;
 use App\Services\Anaf\Bridge\Licente;
 use App\Services\Anaf\Bridge\LicentiereBridge;
+use App\Services\Anaf\Bridge\Punte;
 use App\Services\Anaf\Declaratii\DepunereService;
 use App\Services\Anaf\Declaratii\ConcatenareService;
 use App\Services\Anaf\Declaratii\DeclaratieXml;
@@ -120,6 +121,7 @@ class AnafServiceProvider extends ServiceProvider
             return new LicentiereBridge(
                 $app->make(Licente::class),
                 $app->make(CertificatService::class),
+                $app->make(Punte::class),
                 config('anaf.spv')
             );
         });
