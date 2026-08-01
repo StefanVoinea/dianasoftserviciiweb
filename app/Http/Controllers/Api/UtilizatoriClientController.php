@@ -12,6 +12,7 @@ use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
 use App\Support\ContextCompanie;
 use App\Support\ContextUtilizator;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -76,6 +77,12 @@ class UtilizatoriClientController extends Controller
             'user_type' => 'user',
             'blocat' => 'Nu',
             'status' => 'activ',
+            /*
+             * Fara data asta, aplicatia socoteste parola expirata din prima zi
+             * si trimite omul la schimbarea ei inainte de a-l lasa sa lucreze.
+             * Se da acelasi rabat ca la schimbarea parolei: trei luni.
+             */
+            'data_expirare_parola' => dateFormatStocare(Carbon::today()->addMonths(3)),
         ]);
 
         $client->users()->attach($user->id, [
@@ -162,6 +169,8 @@ class UtilizatoriClientController extends Controller
          */
         if (trim((string) ($date['parola'] ?? '')) !== '') {
             $utilizator->password = Hash::make($date['parola']);
+            // Parola noua tine tot trei luni, ca oricare alta.
+            $utilizator->data_expirare_parola = dateFormatStocare(Carbon::today()->addMonths(3));
         }
 
         if (array_key_exists('blocat', $date)) {

@@ -34,8 +34,13 @@
             ->middleware("permission:viewUtilizatori");
         Route::post("/utilizatori/edit/{user}", "Api\UtilizatoriController@update")
             ->middleware("permission:editUtilizatori");
-       Route::post("/utilizatori/modificaparola", "Api\UtilizatoriController@modificaParola")
-            ->middleware("permission:viewArticol");     
+       /*
+        * Parola proprie si-o schimba oricine, fara alt drept: e a lui, iar
+        * cand a expirat, aplicatia il trimite aici inainte de orice altceva.
+        * Dreptul „viewArticol", cerut inainte, il lasa pe un utilizator de
+        * client blocat: nu putea nici salva parola, nici merge mai departe.
+        */
+       Route::post("/utilizatori/modificaparola", "Api\UtilizatoriController@modificaParola");
       Route::post("/utilizatori/copy", "Api\UtilizatoriController@copyDrepturi")
             ->middleware("permission:editUtilizatori");
          Route::post("/utilizatori/permisiunifiltrate", "Api\UtilizatoriController@permisiunifiltrate")

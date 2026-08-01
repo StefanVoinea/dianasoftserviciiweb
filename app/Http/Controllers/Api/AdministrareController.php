@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Services\AccesIp;
 use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -63,6 +64,8 @@ class AdministrareController extends Controller
                 'user_type' => 'user',
                 'blocat' => 'Nu',
                 'status' => 'activ',
+                // Fara ea, parola ar fi socotita expirata din prima zi.
+                'data_expirare_parola' => dateFormatStocare(Carbon::today()->addMonths(3)),
             ]);
 
             // Primul cont al unui client este administratorul lui.
@@ -111,6 +114,8 @@ class AdministrareController extends Controller
             'user_type' => 'user',
             'blocat' => 'Nu',
             'status' => 'activ',
+            // Fara ea, parola ar fi socotita expirata din prima zi.
+            'data_expirare_parola' => dateFormatStocare(Carbon::today()->addMonths(3)),
         ]);
 
         $client->users()->attach($user->id, ['administrator' => !empty($date['administrator'])]);
@@ -171,8 +176,9 @@ class AdministrareController extends Controller
             $utilizator->telefon = $date['telefon'];
         }
 
-        if (!empty($date['parola'])) {
+        if (trim((string) ($date['parola'] ?? '')) !== '') {
             $utilizator->password = Hash::make($date['parola']);
+            $utilizator->data_expirare_parola = dateFormatStocare(Carbon::today()->addMonths(3));
         }
 
         if (array_key_exists('blocat', $date)) {

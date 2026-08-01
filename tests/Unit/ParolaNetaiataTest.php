@@ -10,6 +10,7 @@ use App\Support\ContextCompanie;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 /**
@@ -90,6 +91,74 @@ class ParolaNetaiataTest extends TestCase
         $utilizator->forceDelete();
         $client->delete();
         ContextCompanie::elibereaza();
+    }
+
+    /**
+     * Contul nou primeste o data de expirare a parolei.
+     *
+     * Fara ea, aplicatia socoteste parola expirata din prima zi si trimite omul
+     * sa si-o schimbe inainte de a-l lasa sa lucreze.
+     */
+    public function test_contul_nou_are_data_de_expirare_a_parolei(): void
+    {
+        $client = Company::create(['denumire' => 'FIRMA EXPIRARE SRL', 'cui' => '99000666']);
+        ContextCompanie::fixeaza($client->id);
+
+        $creat = (new UtilizatoriClientController())->store(new Request([
+            'nume' => 'Vasile Nou',
+            'email' => 'vasile.expirare@example.com',
+            'parola' => 'ParolaDeProba1',
+        ]))->getData(true)['data'];
+
+        $utilizator = User::find($creat['id']);
+
+        $this->assertNotNull($utilizator->data_expirare_parola);
+        $this->assertGreaterThan(now(), \Carbon\Carbon::parse($utilizator->data_expirare_parola));
+
+        DB::table('company_user')->where('company_id', $client->id)->delete();
+        $utilizator->forceDelete();
+        $client->delete();
+        ContextCompanie::elibereaza();
+    }
+
+    /**
+     * Parola proprie si-o schimba oricine, fara alt drept.
+     *
+     * Cand aplicatia il trimite pe om la schimbarea parolei, salvarea nu are
+     * voie sa se opreasca in dreptul unui alt modul: n-ar mai avea pe unde iesi.
+     */
+    public function test_schimbarea_propriei_parole_nu_cere_alt_drept(): void
+    {
+        $ruta = collect(Route::getRoutes())->first(function ($ruta) {
+            return $ruta->uri() === 'api/utilizatori/modificaparola';
+        });
+
+        $this->assertNotNull($ruta, 'Ruta de schimbare a parolei nu mai există.');
+
+        foreach ($ruta->gatherMiddleware() as $middleware) {
+            $this->assertStringStartsNotWith('permission:', (string) $middleware);
+        }
+
+        $utilizator = User::create([
+            'name' => 'Om Cu Parola Expirata',
+            'email' => 'om.expirat@example.com',
+            'password' => Hash::make('ParolaVeche1'),
+            'user_type' => 'user',
+            'blocat' => 'Nu',
+            'status' => 'activ',
+        ]);
+
+        $raspuns = $this->actingAs($utilizator, 'api')
+            ->postJson('/api/utilizatori/modificaparola', ['password' => 'ParolaNoua1']);
+
+        $raspuns->assertStatus(200);
+
+        $proaspat = User::find($utilizator->id);
+
+        $this->assertTrue(Hash::check('ParolaNoua1', $proaspat->password));
+        $this->assertNotNull($proaspat->data_expirare_parola);
+
+        $utilizator->forceDelete();
     }
 
     /** Restul campurilor se curata mai departe: acolo spatiile sunt greseli. */
