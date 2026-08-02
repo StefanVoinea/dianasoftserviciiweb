@@ -130,6 +130,65 @@ class SocietatiTest extends TestCase
         $doi->delete();
     }
 
+    /**
+     * Lista de CIF-uri vine odata cu mesajele. Cand in ziua ceruta nu e niciun
+     * mesaj, ANAF raspunde uneori doar cu motivul, fara lista — atunci se
+     * intreaba din nou, pe fereastra intreaga.
+     */
+    public function test_lista_se_cere_din_nou_pe_fereastra_intreaga(): void
+    {
+        $certificat = \App\Models\AnafCertificat::create([
+            'thumbprint' => strtoupper(bin2hex(random_bytes(20))),
+            'cn' => 'Certificat fara mesaje azi',
+            'valabil_pana_la' => now()->addYear(),
+        ]);
+
+        $cerute = [];
+
+        $this->mock(\App\Services\Anaf\Spv\SpvClient::class, function ($mock) use (&$cerute) {
+            $mock->shouldReceive('listaMesajeBrut')->andReturnUsing(function ($zile) use (&$cerute) {
+                $cerute[] = $zile;
+
+                return $zile <= 1
+                    ? ['eroare' => 'Nu exista mesaje in ultimele 1 zile']
+                    : ['cui' => 'TEST-D', 'cnp' => '1234567890123', 'serial' => 'serie-test'];
+            });
+        });
+
+        $rezultat = $this->app->make(SocietatiService::class)->sincronizeaza($certificat);
+
+        $this->assertSame([1, (int) config('anaf.spv.zile_max')], $cerute);
+        $this->assertSame(['TEST-D'], $rezultat['cif']);
+
+        AnafSocietate::where('cif', 'TEST-D')->delete();
+        $certificat->delete();
+    }
+
+    /** Cand nici asa nu vine nimic, se spune si ce a raspuns ANAF. */
+    public function test_mesajul_de_la_anaf_ajunge_la_utilizator(): void
+    {
+        $certificat = \App\Models\AnafCertificat::create([
+            'thumbprint' => strtoupper(bin2hex(random_bytes(20))),
+            'cn' => 'Certificat fara drepturi',
+            'valabil_pana_la' => now()->addYear(),
+        ]);
+
+        $this->mock(\App\Services\Anaf\Spv\SpvClient::class, function ($mock) {
+            $mock->shouldReceive('listaMesajeBrut')->andReturn([
+                'eroare' => 'Certificatul nu este inrolat in SPV',
+            ]);
+        });
+
+        try {
+            $this->app->make(SocietatiService::class)->sincronizeaza($certificat);
+            $this->fail('Trebuia să se oprească: nu a venit nicio listă de CIF-uri.');
+        } catch (\App\Services\Anaf\Spv\SpvException $e) {
+            $this->assertStringContainsString('Certificatul nu este inrolat in SPV', $e->getMessage());
+        } finally {
+            $certificat->delete();
+        }
+    }
+
     public function test_denumirea_goala_nu_suprascrie(): void
     {
         $societate = new AnafSocietate();

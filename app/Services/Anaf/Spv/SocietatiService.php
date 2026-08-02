@@ -40,13 +40,27 @@ class SocietatiService
         }
 
         $raspuns = $this->client->listaMesajeBrut(1);
+        $lista = $this->cifurile($raspuns);
 
-        $lista = trim((string) ($raspuns['cui'] ?? ''));
+        /*
+         * Lista de CIF-uri vine in raspunsul la mesaje, iar cand in ziua cerută
+         * nu e niciun mesaj, ANAF raspunde uneori doar cu motivul, fara ea. Se
+         * mai intreaba o data, pe fereastra intreaga: acolo se gaseste aproape
+         * sigur ceva, iar odata cu mesajele vine si lista.
+         */
+        if ($lista === '') {
+            $raspuns = $this->client->listaMesajeBrut((int) config('anaf.spv.zile_max', 60));
+            $lista = $this->cifurile($raspuns);
+        }
 
         if ($lista === '') {
+            // Ce a spus ANAF lamureste mai bine decat orice presupunere a noastra.
+            $spuseDeAnaf = trim((string) ($raspuns['eroare'] ?? ''));
+
             throw new SpvException(
                 'ANAF nu a returnat lista de CIF-uri pentru acest certificat. '
                 . 'Verificați că tokenul este conectat și are drepturi în SPV.'
+                . ($spuseDeAnaf !== '' ? ' ANAF a răspuns: „' . $spuseDeAnaf . '”.' : '')
             );
         }
 
@@ -88,6 +102,23 @@ class SocietatiService
             'dezactivate' => $dezactivate,
             'cif' => $cifuri,
         ];
+    }
+
+    /**
+     * Lista de CIF-uri din raspunsul ANAF, ca text.
+     *
+     * De obicei vine un sir despartit prin virgule, dar raspunsul poate purta
+     * si o lista adevarata; amandoua se citesc la fel de bine.
+     */
+    protected function cifurile(array $raspuns): string
+    {
+        $cui = $raspuns['cui'] ?? '';
+
+        if (is_array($cui)) {
+            $cui = implode(',', $cui);
+        }
+
+        return trim((string) $cui);
     }
 
     /**
