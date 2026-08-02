@@ -45,8 +45,11 @@ class BridgeTransport implements SpvTransport
              * intreg: daca legatura nu se face in zece secunde, nu se mai face.
              * Asa, o adresa de retea locala scrisa pe un certificat lucrat din
              * cloud se vede indata ce e apasat butonul, nu dupa un minut.
+             *
+             * Se scrie ca optiune de Guzzle, nu prin connectTimeout(): metoda
+             * aceea e din Laravel 9, iar aici suntem pe 8.
              */
-            ->connectTimeout(self::CONECTARE_SECUNDE)
+            ->withOptions(['connect_timeout' => self::CONECTARE_SECUNDE])
             ->get($url);
     }
 

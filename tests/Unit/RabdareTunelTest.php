@@ -49,6 +49,32 @@ class RabdareTunelTest extends TestCase
         $this->assertGreaterThan($direct, $tunel, 'Prin tunel trebuie așteptat mai mult, nu la fel.');
     }
 
+    /**
+     * Cererea chiar se poate construi si trimite.
+     *
+     * Verificarea rabdarii se face pe metoda, dar reglajele se pun pe cererea
+     * insasi — iar una dintre ele nu exista in versiunea de Laravel de aici.
+     * Fara apelul acesta, lipsa s-ar fi vazut abia pe serverul de productie.
+     */
+    public function test_cererea_se_trimite_cu_reglajele_puse(): void
+    {
+        \Illuminate\Support\Facades\Http::fake([
+            '*' => \Illuminate\Support\Facades\Http::response('{"mesaje":[]}', 200),
+        ]);
+
+        $certificate = app(CertificatService::class);
+        $certificate->foloseste($this->certificat('directa'));
+
+        $raspuns = (new BridgeTransport(config('anaf.spv'), $certificate))
+            ->get('/listaMesaje', ['zile' => 30]);
+
+        $this->assertSame(200, $raspuns->status());
+
+        \Illuminate\Support\Facades\Http::assertSent(function ($cerere) {
+            return strpos($cerere->url(), '/spv/listaMesaje') !== false;
+        });
+    }
+
     /** Ragazul puntii trebuie sa incapa in rabdarea celui care intreaba. */
     public function test_puntea_raspunde_inainte_ca_apelantul_sa_renunte(): void
     {
