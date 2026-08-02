@@ -83,7 +83,13 @@ class CompanyController extends Controller
     	  "cerber_url"=>$request->cerber_url,           
         ]);
         
-        $company->users()->attach($currentuser->id);
+        // Cine face firma ramane administratorul ei, ca pana acum. Drepturile
+        // se scriu, nu se lasa pe seama valorii implicite a coloanei.
+        $company->users()->attach($currentuser->id, [
+            'administrator' => true,
+            'poate_semna' => true,
+            'poate_depune' => true,
+        ]);
         // CompanyUser::create([
         //         "company_id"=>$company->id,
         //         "user_id"=>$currentuser->id,

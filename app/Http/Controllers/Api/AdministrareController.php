@@ -68,8 +68,18 @@ class AdministrareController extends Controller
                 'data_expirare_parola' => dateFormatStocare(Carbon::today()->addMonths(3)),
             ]);
 
-            // Primul cont al unui client este administratorul lui.
-            $client->users()->attach($user->id, ['administrator' => true]);
+            /*
+             * Primul cont al unui client este administratorul lui.
+             *
+             * Drepturile se scriu toate, nu se lasa pe seama valorii implicite a
+             * coloanei: pe alt server ea poate lipsi, iar legatura n-ar mai putea
+             * fi scrisa deloc.
+             */
+            $client->users()->attach($user->id, [
+                'administrator' => true,
+                'poate_semna' => true,
+                'poate_depune' => true,
+            ]);
 
             $zile = $date['proba_zile'] ?? 30;
 
@@ -118,7 +128,15 @@ class AdministrareController extends Controller
             'data_expirare_parola' => dateFormatStocare(Carbon::today()->addMonths(3)),
         ]);
 
-        $client->users()->attach($user->id, ['administrator' => !empty($date['administrator'])]);
+        $administrator = !empty($date['administrator']);
+
+        $client->users()->attach($user->id, [
+            'administrator' => $administrator,
+            // Semnarea si depunerea nu se dau din greseala: doar administratorul
+            // le are din start, ceilalti le primesc anume, din „Utilizatori".
+            'poate_semna' => $administrator,
+            'poate_depune' => $administrator,
+        ]);
 
         Jurnal::scrie(
             'administrare_utilizator',
