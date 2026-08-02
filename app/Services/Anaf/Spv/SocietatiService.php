@@ -67,11 +67,23 @@ class SocietatiService
         $cifuri = array_values(array_unique(array_filter(array_map('trim', explode(',', $lista)))));
         $noi = 0;
 
-        // Certificatul care a returnat lista devine cel asociat entitatilor.
-        $certificat = $certificat ?: $this->certificate->sincronizeaza([
-            'serial' => $raspuns['serial'] ?? null,
-            'cnp' => $raspuns['cnp'] ?? null,
-        ]);
+        /*
+         * Certificatul care a returnat lista devine cel asociat entitatilor.
+         *
+         * De obicei el e chiar cel cu care tocmai s-a vorbit, si atunci se
+         * pastreaza asa cum e — se completeaza doar seria si CNP-ul aflate de la
+         * ANAF. Numai cand nu se stie cu care s-a lucrat se merge sa fie citit de
+         * pe calculatorul din configuratie.
+         */
+        $certificat = $certificat
+            ?: $this->certificate->completeazaDinSpv([
+                'serial' => $raspuns['serial'] ?? null,
+                'cnp' => $raspuns['cnp'] ?? null,
+            ])
+            ?: $this->certificate->sincronizeaza([
+                'serial' => $raspuns['serial'] ?? null,
+                'cnp' => $raspuns['cnp'] ?? null,
+            ]);
 
         foreach ($cifuri as $cif) {
             $societate = AnafSocietate::firstOrNew(['cif' => $cif]);

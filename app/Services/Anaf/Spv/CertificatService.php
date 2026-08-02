@@ -372,6 +372,37 @@ class CertificatService
     }
 
     /**
+     * Completeaza certificatul cu care se lucreaza acum cu ce a spus ANAF.
+     *
+     * Cand cererea a mers deja pe un certificat anume, nu are rost sa se mearga
+     * si sa fie citit de pe calculatorul din configuratie: el e chiar acesta.
+     * Se scriu doar seria si CNP-ul aflate de la ANAF.
+     *
+     * Intoarce null cand nu se stie cu care certificat s-a lucrat.
+     */
+    public function completeazaDinSpv(array $dateSpv): ?AnafCertificat
+    {
+        $certificat = $this->activ();
+
+        if (!$certificat || !$certificat->exists) {
+            return null;
+        }
+
+        if (!empty($dateSpv['serial'])) {
+            $certificat->serie_anaf = $dateSpv['serial'];
+        }
+
+        if (!empty($dateSpv['cnp'])) {
+            $certificat->cnp = $dateSpv['cnp'];
+        }
+
+        $certificat->ultima_utilizare = now();
+        $certificat->save();
+
+        return $certificat;
+    }
+
+    /**
      * Citeste certificatul de pe un bridge si il inregistreaza in evidenta.
      * Fara parametri se foloseste bridge-ul din configuratie.
      */
@@ -379,6 +410,18 @@ class CertificatService
     {
         $url = $bridgeUrl ?: $this->config['bridge']['url'];
         $token = $bridgeToken ?: ($this->config['bridge']['token'] ?? null);
+
+        /*
+         * Fara adresa nu e nimic de intrebat. Spus asa, se intelege ce lipseste;
+         * altfel cererea pleaca spre o adresa fara gazda si se intoarce cu
+         * „Could not resolve host: certificat", care nu lamureste pe nimeni.
+         */
+        if (trim((string) $url) === '') {
+            throw new SpvException(
+                'Nu se știe pe ce calculator se află certificatul. '
+                . 'Alegeți-l în fila „Certificate digitale" sau descoperiți-l pe calculatorul cu tokenul.'
+            );
+        }
 
         $raspuns = Http::withToken($token)
             ->timeout($this->config['timeout'])

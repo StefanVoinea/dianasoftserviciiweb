@@ -248,7 +248,8 @@
       "Bash(grep -n \"public static function\\\\|/\\\\*\\\\*\" app/Services/AccesIp.php)",
       "Bash(php -r '$t=include \"config/anaf.php\"; echo \"tipuri_documente=\", count\\($t[\"spv\"][\"tipuri_documente\"]\\), \" tipuri_mesaje=\", count\\($t[\"spv\"][\"tipuri_mesaje\"]\\), \"\\\\n\";')",
       "Bash(php -r 'require \"vendor/autoload.php\"; echo \"TIPURI=\", count\\(App\\\\Services\\\\Anaf\\\\Declaratii\\\\DeclaratieXml::TIPURI\\), \"\\\\n\";')",
-      "Bash(vendor/bin/phpunit --filter AutentificareDeOriundeTest)"
+      "Bash(vendor/bin/phpunit --filter AutentificareDeOriundeTest)",
+      "Bash(vendor/bin/phpunit --filter \"SocietatiTest|CertificateTest|RutareBridgeTest\")"
     ]
   }
 }
