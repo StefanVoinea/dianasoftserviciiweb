@@ -27,8 +27,16 @@ class DrepturiImpliciteCompanyUserTest extends TestCase
         $coloana = collect(DB::select('SHOW COLUMNS FROM company_user'))
             ->firstWhere('Field', $drept);
 
-        $this->assertNotNull($coloana, 'Coloana „' . $drept . '” lipsește din company_user.');
-        $this->assertSame('0', (string) $coloana->Default, 'Dreptul „' . $drept . '” nu are implicit „nu”.');
+        $indreptare = ' Baza de date nu e normalizată — se pune la loc cu:'
+            . ' php artisan migrate:rollback --path=database/migrations/2026_08_02_090000_normalizeaza_drepturile_din_company_user.php'
+            . ' && php artisan migrate.';
+
+        $this->assertNotNull($coloana, 'Coloana „' . $drept . '” lipsește din company_user.' . $indreptare);
+        $this->assertSame(
+            '0',
+            (string) $coloana->Default,
+            'Dreptul „' . $drept . '” nu are implicit „nu”.' . $indreptare
+        );
     }
 
     public function drepturi(): array

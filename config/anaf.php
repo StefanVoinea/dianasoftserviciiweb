@@ -19,6 +19,16 @@ return [
         'zile_max' => 60,
         'throttle_ms' => 1200,
         'timeout' => 60,
+
+        /*
+         * Cat se asteapta raspunsul cand programul local e legat prin tunel.
+         *
+         * Inauntrul acestui ragaz incap si drumul comenzii pana la calculatorul
+         * clientului, si apelul lui catre ANAF — care are singur voie sa tina
+         * un minut. Cu aceeasi rabdare ca la legatura directa, cel care intreaba
+         * ar renunta chiar inainte sa vina raspunsul.
+         */
+        'timeout_tunel' => (int) env('SPV_TIMEOUT_TUNEL', 150),
         'storage_disk' => env('SPV_DISK', 'local'),
         'storage_path' => 'spv',
 
