@@ -18,7 +18,19 @@ foreach (File::allFiles(__DIR__ . '/api_routes') as $route_file) {
 }
 
 
-Route::post('/login','Api\AuthController@login')->name('login')->middleware(['throttle:60,1','ipcheck']);
+/*
+ * Autentificarea nu mai trece prin lista globala „ipautorizat".
+ *
+ * Aceea era o lista de adrese ale unui singur birou: cine intra de altundeva
+ * era oprit inainte de a-si scrie parola, oricine ar fi fost — inclusiv
+ * administratorul aplicatiei. Intr-un serviciu cu clienti in toata tara, ea
+ * inchidea afara pe toata lumea in afara catorva adrese.
+ *
+ * Adresele permise se tin acum pe fiecare cont in parte („IP permise", gol
+ * inseamna de oriunde) si se verifica si la autentificare, si la fiecare cerere
+ * de mai departe — vezi App\Services\AccesIp.
+ */
+Route::post('/login','Api\AuthController@login')->name('login')->middleware(['throttle:60,1']);
 Route::post('/registerAPI','Api\AuthController@register');
 // Reinnoirea tokenului pentru aplicatiile care nu pot pastra datele clientului OAuth (cea mobila)
 Route::post('/refresh','Api\AuthController@refresh')->middleware('throttle:60,1');
