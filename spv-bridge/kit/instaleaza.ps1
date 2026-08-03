@@ -128,6 +128,9 @@ if ($continutEnv -match '(?m)^\s*PUNTE_SERVER\s*=\s*\S+') {
         -Description 'Aduce de la aplicatie lucrul pentru tokenul de pe acest calculator, fara sa fie nevoie de porturi deschise.' | Out-Null
 
     Scrie "Sarcina '$numeAgent' a fost creată (legătură prin tunel)." 'Green'
+
+    # Pornirea lui vine după ce răspunde programul: agentul îi duce comenzile.
+    $agentDePornit = $numeAgent
 } else {
     Scrie "Fără PUNTE_SERVER în configurare.env: legătura rămâne directă." 'Yellow'
 }
@@ -164,6 +167,26 @@ try {
     }
 } catch {
     Scrie "Verificarea a eșuat: $($_.Exception.Message)" 'Yellow'
+}
+
+<#
+    7. Agentul, pornit acum, nu la următoarea autentificare.
+
+    Până atunci aplicația n-ar avea pe unde ajunge la tokenul de aici, iar omul
+    care tocmai a instalat ar încerca o operație și ar primi raspunsul ca
+    programul de pe calculatorul cu tokenul nu ruleaza.
+#>
+if ($agentDePornit) {
+    Start-ScheduledTask -TaskName $agentDePornit
+    Start-Sleep -Seconds 3
+
+    $stareAgent = (Get-ScheduledTask -TaskName $agentDePornit).State
+
+    if ($stareAgent -eq 'Running') {
+        Scrie "Agentul a pornit și întreabă aplicația ce are de lucru." 'Green'
+    } else {
+        Scrie "Agentul nu a pornit (stare: $stareAgent). Porniți-l cu porneste-agent.bat." 'Yellow'
+    }
 }
 
 Scrie ""

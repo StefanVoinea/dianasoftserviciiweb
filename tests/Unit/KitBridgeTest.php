@@ -124,6 +124,31 @@ class KitBridgeTest extends TestCase
         $zip->close();
     }
 
+    /** Arhiva poarta numele modulului, ca omul sa stie ce a descarcat. */
+    public function test_arhiva_se_numeste_dupa_modul(): void
+    {
+        $this->assertSame('kit_spv_curier.zip', $this->construieste()['nume']);
+    }
+
+    /**
+     * Agentul se porneste la instalare, nu la urmatoarea autentificare.
+     *
+     * Altfel, cine tocmai a instalat incearca o operatie si i se spune ca
+     * programul de pe calculatorul cu tokenul nu ruleaza.
+     */
+    public function test_instalarea_porneste_si_agentul(): void
+    {
+        $kit = $this->construieste();
+
+        $zip = new ZipArchive();
+        $zip->open($kit['cale']);
+        $script = $zip->getFromName('instaleaza.ps1');
+        $zip->close();
+
+        $this->assertStringContainsString('$agentDePornit', $script);
+        $this->assertStringContainsString('Start-ScheduledTask -TaskName $agentDePornit', $script);
+    }
+
     /** Textele vizibile utilizatorului nu mai folosesc jargonul „bridge”. */
     public function test_instructiunile_nu_folosesc_jargon(): void
     {

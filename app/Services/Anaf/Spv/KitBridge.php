@@ -169,7 +169,8 @@ class KitBridge
 
         return [
             'cale' => $cale,
-            'nume' => 'kit-acces-token-anaf-' . now()->format('Ymd-His') . '.zip',
+            // Numele modulului, ca omul sa stie ce a descarcat si de unde vine.
+            'nume' => 'kit_spv_curier.zip',
             'token' => $token,
         ];
     }

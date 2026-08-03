@@ -781,7 +781,7 @@ export default {
           const url = window.URL.createObjectURL(new Blob([raspuns.data], { type: 'application/zip' }))
           const link = document.createElement('a')
           link.href = url
-          link.download = 'kit-acces-token-anaf.zip'
+          link.download = 'kit_spv_curier.zip'
           document.body.appendChild(link)
           link.click()
           document.body.removeChild(link)
