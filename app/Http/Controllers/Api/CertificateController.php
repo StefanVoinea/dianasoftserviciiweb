@@ -8,6 +8,7 @@ use App\Models\CertificatAbonat;
 use App\Models\CertificatUtilizator;
 use App\Services\Anaf\Bridge\LicentiereBridge;
 use App\Services\Anaf\Bridge\Punte;
+use App\Services\Anaf\CaleWindows;
 use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\CertificatService;
@@ -284,19 +285,42 @@ class CertificateController extends Controller
     }
 
     /** Ruta bridge-ului, certificatul implicit si starea. */
+    /**
+     * Regula pentru o cale de pe calculatorul clientului.
+     *
+     * @param  string  $cePrezinta  cum se numeste calea in mesajul de refuz
+     */
+    protected function caleDeCalculator(string $cePrezinta): \Closure
+    {
+        return function ($atribut, $valoare, $opreste) use ($cePrezinta) {
+            $motiv = CaleWindows::motivRefuz($valoare, $cePrezinta);
+
+            if ($motiv !== null) {
+                $opreste($motiv);
+            }
+        };
+    }
+
     public function update(Request $request, AnafCertificat $certificat)
     {
         $date = $request->validate([
             'bridge_url' => 'nullable|url|max:255',
             'bridge_token' => 'nullable|string|max:255',
-            // Cale intreaga pe calculatorul clientului: "D:\Documente fiscale"
-            // sau un folder din retea. Fara "..", ca sa nu se plimbe nimeni prin
-            // discul lui pornind de la o setare gresita.
-            'arhiva_cale' => ['nullable', 'string', 'max:300', 'regex:/^([A-Za-z]:[\\\\\\/]|\\\\\\\\[^\\\\]+[\\\\\\/])/', 'not_regex:/\.\./'],
+            /*
+             * Cale intreaga pe calculatorul clientului: „D:\Documente fiscale"
+             * sau un dosar din retea. Fara „..", ca sa nu se plimbe nimeni prin
+             * discul lui pornind de la o setare gresita.
+             *
+             * Verificarea se face pe text, nu cu tipare: intr-un tipar scris in
+             * PHP, bara oblica inversa trebuie indoita de patru ori, iar o
+             * singura scapare il face de necitit — si atunci salvarea se opreste
+             * cu eroare de server in loc de un raspuns despre cale.
+             */
+            'arhiva_cale' => ['nullable', 'string', 'max:300', $this->caleDeCalculator('Calea arhivei')],
             'implicit' => 'nullable|boolean',
             'activ' => 'nullable|boolean',
             // Dosarul urmarit: aceleasi reguli ca la arhiva
-            'monitorizare_cale' => ['nullable', 'string', 'max:300', 'regex:/^([A-Za-z]:[\\\/]|\\\\[^\\]+[\\\/])/', 'not_regex:/\.\./'],
+            'monitorizare_cale' => ['nullable', 'string', 'max:300', $this->caleDeCalculator('Dosarul urmărit')],
             'monitorizare_activa' => 'nullable|boolean',
             /*
              * direct — serverul cheamă calculatorul clientului la adresa lui
@@ -304,11 +328,6 @@ class CertificateController extends Controller
              *          făcut, pe 443, fără niciun port deschis pe routerul lui
              */
             'mod_legatura' => 'nullable|in:direct,tunel',
-        ], [
-            'arhiva_cale.regex' => 'Calea arhivei trebuie scrisă întreagă, de exemplu D:\\Documente fiscale sau \\\\server\\arhiva.',
-            'arhiva_cale.not_regex' => 'Calea arhivei nu poate conține „..".',
-            'monitorizare_cale.regex' => 'Dosarul urmărit trebuie scris întreg, de exemplu D:\Declarații de semnat.',
-            'monitorizare_cale.not_regex' => 'Dosarul urmărit nu poate conține „..".',
         ]);
 
         $certificat->fill(array_intersect_key(
