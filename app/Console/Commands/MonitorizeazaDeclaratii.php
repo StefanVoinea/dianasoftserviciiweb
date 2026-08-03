@@ -36,9 +36,18 @@ class MonitorizeazaDeclaratii extends Command
 
         foreach ($clienti as $companie) {
             ContextCompanie::pentru($companie, function () use ($monitorizare, &$total) {
+                /*
+                 * Fiecare certificat isi are cadenta lui (1-60 de minute), iar
+                 * comanda bate din minut in minut: se iau doar cei carora chiar
+                 * le-a venit randul, ca sa nu fie intrebat fiecare calculator
+                 * mai des decat a cerut omul.
+                 */
                 $certificate = AnafCertificat::where('monitorizare_activa', true)
                     ->whereNotNull('monitorizare_cale')
-                    ->get();
+                    ->get()
+                    ->filter(function (AnafCertificat $certificat) {
+                        return $certificat->monitorizareaEsteScadenta();
+                    });
 
                 foreach ($certificate as $certificat) {
                     $rezultat = $monitorizare->pentruCertificat($certificat);

@@ -41,12 +41,12 @@ class Kernel extends ConsoleKernel
         $schedule->command('portaljust:monitorizeaza')->hourly()->withoutOverlapping();
 
         /*
-         * Declarațiile puse în dosarele urmărite, luate din cinci în cinci
-         * minute. Mai des n-ar avea rost: fișierul abia copiat e oricum lăsat
-         * să se liniștească înainte de a fi citit.
+         * Declarațiile puse în dosarele urmărite. Comanda bate din minut în
+         * minut, dar fiecare certificat e verificat doar când îi vine rândul,
+         * după cadența aleasă la el (1–60 de minute, implicit 5).
          */
         $schedule->command('anaf:monitorizeaza-declaratii')
-            ->everyFiveMinutes()
+            ->everyMinute()
             ->withoutOverlapping();
 
         /*

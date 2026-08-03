@@ -497,11 +497,22 @@
         </b-input-group-append>
       </b-input-group>
 
+      <b-form-group
+        v-if="bridgeFormular.monitorizare_activa"
+        label="Cât de des se verifică dosarul"
+        class="mb-1"
+      >
+        <b-form-select
+          v-model="bridgeFormular.monitorizare_cadenta"
+          :options="cadenteMonitorizare"
+        />
+      </b-form-group>
+
       <small
         v-if="bridgeFormular.monitorizare_activa"
         class="text-muted d-block mb-3"
       >
-        Din cinci în cinci minute, declarațiile puse acolo — XML sau PDF — se
+        La cadența aleasă, declarațiile puse acolo — XML sau PDF — se
         încarcă, se validează și se semnează singure, apoi trec în subdosarul
         <code>prelucrate</code>. Un PDF venit deja semnat nu se mai semnează încă
         o dată. Ce nu trece de validare ajunge în
@@ -708,6 +719,16 @@ export default {
       certificatCurent: {},
       utilizatorNou: { email: '', nume: '', avertizare: false },
       eroareModal: '',
+      // Din cât în cât se verifică dosarul urmărit al certificatului
+      cadenteMonitorizare: [
+        { value: 1, text: 'La 1 minut' },
+        { value: 3, text: 'La 3 minute' },
+        { value: 5, text: 'La 5 minute' },
+        { value: 10, text: 'La 10 minute' },
+        { value: 15, text: 'La 15 minute' },
+        { value: 30, text: 'La 30 de minute' },
+        { value: 60, text: 'La 60 de minute' },
+      ],
       campuriUtilizatori: [
         { key: 'email', label: 'Email' },
         { key: 'nume', label: 'Nume' },
@@ -835,6 +856,7 @@ export default {
         arhiva_cale: certificat.arhiva_cale || '',
         monitorizare_cale: certificat.monitorizare_cale || '',
         monitorizare_activa: Boolean(certificat.monitorizare_activa),
+        monitorizare_cadenta: certificat.monitorizare_cadenta || 5,
         monitorizare_la: certificat.monitorizare_la,
         mod_legatura: certificat.mod_legatura || 'direct',
         implicit: certificat.implicit,
@@ -889,6 +911,7 @@ export default {
         arhiva_cale: this.bridgeFormular.arhiva_cale || null,
         monitorizare_cale: this.bridgeFormular.monitorizare_cale || null,
         monitorizare_activa: this.bridgeFormular.monitorizare_activa,
+        monitorizare_cadenta: this.bridgeFormular.monitorizare_cadenta,
         mod_legatura: this.bridgeFormular.mod_legatura,
         implicit: this.bridgeFormular.implicit,
       })

@@ -89,6 +89,51 @@ class ConfigurareCertificatTest extends TestCase
         }
     }
 
+    /** Cadenta dosarului urmarit se salveaza, iar una din afara listei e respinsa. */
+    public function test_cadenta_monitorizarii_se_salveaza_doar_din_lista(): void
+    {
+        $this->salveaza(['monitorizare_cadenta' => 15]);
+
+        $this->assertSame(15, (int) $this->certificat->fresh()->monitorizare_cadenta);
+
+        try {
+            $this->salveaza(['monitorizare_cadenta' => 7]);
+            $this->fail('Trebuia respinsă: 7 minute nu e în lista de cadențe.');
+        } catch (ValidationException $e) {
+            $this->assertArrayHasKey('monitorizare_cadenta', $e->validator->errors()->toArray());
+        }
+    }
+
+    /**
+     * Randul certificatului la verificare vine dupa cadenta lui.
+     *
+     * Planificatorul bate din minut in minut; fara scadenta pe certificat, un
+     * dosar cu cadenta de 30 de minute ar fi intrebat de 30 de ori degeaba.
+     */
+    public function test_scadenta_monitorizarii_urmeaza_cadenta(): void
+    {
+        $this->certificat->update([
+            'monitorizare_activa' => true,
+            'monitorizare_cale' => 'D:\Declarații de semnat',
+            'monitorizare_cadenta' => 15,
+        ]);
+
+        $certificat = $this->certificat->fresh();
+
+        // Neverificat vreodata: ii vine randul acum.
+        $this->assertTrue($certificat->monitorizareaEsteScadenta());
+
+        $certificat->update(['monitorizare_la' => now()->subMinutes(5)]);
+        $this->assertFalse($certificat->fresh()->monitorizareaEsteScadenta());
+
+        $certificat->update(['monitorizare_la' => now()->subMinutes(15)]);
+        $this->assertTrue($certificat->fresh()->monitorizareaEsteScadenta());
+
+        // Oprit din buton, nu se mai verifica oricat ar fi trecut.
+        $certificat->update(['monitorizare_activa' => false]);
+        $this->assertFalse($certificat->fresh()->monitorizareaEsteScadenta());
+    }
+
     protected function salveaza(array $date)
     {
         return (new CertificateController())->update(new Request($date), $this->certificat);

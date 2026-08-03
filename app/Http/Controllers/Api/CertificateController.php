@@ -45,6 +45,7 @@ class CertificateController extends Controller
                     'arhiva_cale' => $certificat->arhiva_cale,
                     'monitorizare_cale' => $certificat->monitorizare_cale,
                     'monitorizare_activa' => (bool) $certificat->monitorizare_activa,
+                    'monitorizare_cadenta' => (int) ($certificat->monitorizare_cadenta ?: 5),
                     'monitorizare_la' => Format::dataOra($certificat->monitorizare_la),
                     'licenta_pana_la' => Format::dataOra($certificat->licenta_pana_la),
                     'mod_legatura' => $certificat->mod_legatura ?: 'direct',
@@ -360,6 +361,8 @@ class CertificateController extends Controller
             // Dosarul urmarit: aceleasi reguli ca la arhiva
             'monitorizare_cale' => ['nullable', 'string', 'max:300', $this->caleDeCalculator('Dosarul urmărit')],
             'monitorizare_activa' => 'nullable|boolean',
+            // Din cat in cat sa fie verificat dosarul, in minute
+            'monitorizare_cadenta' => 'nullable|integer|in:' . implode(',', AnafCertificat::CADENTE_MONITORIZARE),
             /*
              * direct — serverul cheamă calculatorul clientului la adresa lui
              * tunel  — programul de acolo întreabă singur serverul ce are de
@@ -370,7 +373,7 @@ class CertificateController extends Controller
 
         $certificat->fill(array_intersect_key(
             $date,
-            array_flip(['bridge_url', 'bridge_token', 'arhiva_cale', 'monitorizare_cale', 'monitorizare_activa', 'activ', 'mod_legatura'])
+            array_flip(['bridge_url', 'bridge_token', 'arhiva_cale', 'monitorizare_cale', 'monitorizare_activa', 'monitorizare_cadenta', 'activ', 'mod_legatura'])
         ));
 
         if (!empty($date['implicit'])) {
