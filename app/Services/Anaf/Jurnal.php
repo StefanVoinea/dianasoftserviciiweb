@@ -84,7 +84,19 @@ class Jurnal
     protected static function utilizator()
     {
         foreach (['api', null] as $guard) {
-            $user = $guard ? Auth::guard($guard)->user() : Auth::user();
+            try {
+                $user = $guard ? Auth::guard($guard)->user() : Auth::user();
+            } catch (\Throwable $e) {
+                /*
+                 * Nu toate cererile poarta un token al aplicatiei. Agentul de la
+                 * client se legitimeaza cu codul lui de instalare, iar Passport,
+                 * incercand sa-l citeasca drept JWT, se opreste cu „The JWT
+                 * string must have two dots". O insemnare in jurnal n-are voie
+                 * sa dea peste cap lucrarea pe care doar o consemneaza: acolo
+                 * unde nu e nimeni autentificat, randul ramane fara nume.
+                 */
+                continue;
+            }
 
             if ($user) {
                 return $user;
