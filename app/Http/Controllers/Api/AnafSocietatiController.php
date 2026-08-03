@@ -80,11 +80,21 @@ class AnafSocietatiController extends Controller
         $date = $request->validate([
             'tipuri' => 'nullable|array',
             'tipuri.*' => 'string|in:DATE IDENTIFICARE,VECTOR FISCAL',
+            // Transa de firme, cand interfata le trimite pe rand
+            'cif' => 'nullable|array',
+            'cif.*' => 'string|max:20',
+            // Recitirea documentelor deja descarcate, ceruta la primul lot
+            'reinterpreteaza' => 'nullable|boolean',
         ]);
 
         $tipuri = $date['tipuri'] ?? ['DATE IDENTIFICARE', 'VECTOR FISCAL'];
 
-        $rezultat = $serviciu->solicitaDocumente($tipuri, optional($request->user())->id);
+        $rezultat = $serviciu->solicitaDocumente(
+            $tipuri,
+            optional($request->user())->id,
+            $date['cif'] ?? [],
+            $request->boolean('reinterpreteaza', ($date['cif'] ?? []) === [])
+        );
 
         Jurnal::scrie(
             'entitati_solicitare',

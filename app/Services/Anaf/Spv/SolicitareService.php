@@ -59,14 +59,18 @@ class SolicitareService
      * Cauta in mesajele SPV raspunsurile la solicitarile in asteptare, le descarca
      * si le interpreteaza.
      *
-     * @return array{verificate: int, preluate: int, erori: array}
+     * Cu o limita data se preiau cel mult atatea raspunsuri, iar restul raman
+     * pentru chemarea urmatoare: fiecare descarcare are pauza ei impusa de ANAF,
+     * si o suta de raspunsuri nu incap intr-o singura cerere web.
+     *
+     * @return array{verificate: int, preluate: int, ramase: int, erori: array}
      */
-    public function preiaRaspunsuri(int $zile = 60): array
+    public function preiaRaspunsuri(int $zile = 60, ?int $limita = null): array
     {
         $solicitari = SpvSolicitare::inAsteptare()->get();
 
         if ($solicitari->isEmpty()) {
-            return ['verificate' => 0, 'preluate' => 0, 'erori' => []];
+            return ['verificate' => 0, 'preluate' => 0, 'ramase' => 0, 'erori' => []];
         }
 
         $erori = [];
@@ -75,10 +79,16 @@ class SolicitareService
             $lista = $this->client->listaMesaje($zile);
             $mesaje = isset($lista['mesaje']) && is_array($lista['mesaje']) ? $lista['mesaje'] : [];
         } catch (SpvException $e) {
-            return ['verificate' => $solicitari->count(), 'preluate' => 0, 'erori' => ['SPV: ' . $e->getMessage()]];
+            return [
+                'verificate' => $solicitari->count(),
+                'preluate' => 0,
+                'ramase' => $solicitari->count(),
+                'erori' => ['SPV: ' . $e->getMessage()],
+            ];
         }
 
         $preluate = 0;
+        $incercate = 0;
 
         foreach ($solicitari as $solicitare) {
             $mesaj = $this->potrivesteMesaj($solicitare, $mesaje);
@@ -87,15 +97,33 @@ class SolicitareService
                 continue;
             }
 
+            $incercate++;
+
             try {
                 $this->preia($solicitare, $mesaj);
                 $preluate++;
             } catch (\Exception $e) {
                 $erori[] = $solicitare->cif . ' / ' . $solicitare->tip_document . ': ' . $e->getMessage();
             }
+
+            /*
+             * Se numara incercarile, nu izbanzile: si o descarcare picata a
+             * costat drumul pana la ANAF. Altfel, cand raspunsurile nu vin, lotul
+             * s-ar intinde peste toata lista si am ajunge iar la o cerere web
+             * care tine minute.
+             */
+            if ($limita !== null && $incercate >= $limita) {
+                break;
+            }
         }
 
-        return ['verificate' => $solicitari->count(), 'preluate' => $preluate, 'erori' => $erori];
+        return [
+            'verificate' => $solicitari->count(),
+            'preluate' => $preluate,
+            // Cate mai asteapta raspuns dupa lotul acesta
+            'ramase' => SpvSolicitare::inAsteptare()->count(),
+            'erori' => $erori,
+        ];
     }
 
     /**

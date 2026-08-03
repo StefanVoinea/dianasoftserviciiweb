@@ -160,18 +160,39 @@ class SocietatiService
      * Trimite solicitarile SPV lipsa (date identificare si vector fiscal) pentru
      * societatile active. Cererile deja trimise si neprimite nu se repeta.
      *
+     * Cu lista de CIF-uri data, se lucreaza doar pe ele: asa interfata poate
+     * trimite firmele in transe si arata la cate s-a ajuns, in loc sa tina o
+     * singura cerere web minute intregi.
+     *
+     * @param  array<int, string>  $cifuri          gol inseamna toate firmele active
+     * @param  bool                $reinterpreteaza  recitirea documentelor deja descarcate
      * @return array{trimise: int, sarite: int, erori: array}
      */
-    public function solicitaDocumente(array $tipuri = ['DATE IDENTIFICARE', 'VECTOR FISCAL'], ?int $userId = null): array
-    {
-        // Documentele deja descarcate completeaza registrul inainte de cereri noi.
-        $reinterpretate = $this->solicitari->reinterpreteaza();
+    public function solicitaDocumente(
+        array $tipuri = ['DATE IDENTIFICARE', 'VECTOR FISCAL'],
+        ?int $userId = null,
+        array $cifuri = [],
+        bool $reinterpreteaza = true
+    ): array {
+        /*
+         * Documentele deja descarcate completeaza registrul inainte de cereri noi.
+         * Se cere doar la primul lot: pe urmatoarele n-ar mai avea ce afla, iar
+         * recitirea tuturor documentelor la fiecare transa ar fi timp pierdut.
+         */
+        $reinterpretate = $reinterpreteaza ? $this->solicitari->reinterpreteaza() : 0;
 
         $trimise = 0;
         $sarite = 0;
         $erori = [];
 
-        foreach (AnafSocietate::active()->orderBy('cif')->get() as $societate) {
+        $firme = AnafSocietate::active()
+            ->when($cifuri !== [], function ($intrebare) use ($cifuri) {
+                return $intrebare->whereIn('cif', $cifuri);
+            })
+            ->orderBy('cif')
+            ->get();
+
+        foreach ($firme as $societate) {
             // ANAF accepta aceste rapoarte doar pentru persoane juridice.
             if ($societate->tip === 'pf') {
                 $sarite += count($tipuri);

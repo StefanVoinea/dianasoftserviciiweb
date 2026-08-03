@@ -129,7 +129,12 @@ class SpvSolicitariController extends Controller
     /** Cauta in SPV raspunsurile la solicitarile in asteptare si le descarca. */
     public function preia(Request $request, SolicitareService $serviciu)
     {
-        $rezultat = $serviciu->preiaRaspunsuri((int) $request->query('zile', 60));
+        $limita = (int) $request->query('limita', 0);
+
+        $rezultat = $serviciu->preiaRaspunsuri(
+            (int) $request->query('zile', 60),
+            $limita > 0 ? $limita : null
+        );
 
         Jurnal::scrie(
             'solicitare_preluare',

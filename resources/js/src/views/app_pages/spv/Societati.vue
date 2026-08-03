@@ -49,6 +49,34 @@
         </b-col>
       </b-row>
 
+      <!-- Cât ține preluarea datelor, se vede la a câta firmă s-a ajuns: cu
+           zeci de firme, lucrarea ține minute, iar un buton care se învârte
+           mut nu spune nimănui dacă mai are rost să aștepte. -->
+      <div
+        v-if="progres"
+        class="mb-3"
+      >
+        <div class="d-flex justify-content-between align-items-center mb-50">
+          <small class="text-muted">{{ progres.text }}</small>
+          <small
+            v-if="progres.pas === 'solicitari'"
+            class="text-muted"
+          >
+            {{ Math.round((progres.facut / Math.max(progres.total, 1)) * 100) }}%
+          </small>
+        </div>
+        <b-progress
+          :max="Math.max(progres.total, 1)"
+          height="6px"
+          :animated="progres.pas !== 'solicitari'"
+        >
+          <b-progress-bar
+            :value="progres.pas === 'solicitari' ? progres.facut : Math.max(progres.total, 1)"
+            :variant="progres.pas === 'date' ? 'success' : 'primary'"
+          />
+        </b-progress>
+      </div>
+
       <b-alert
         v-if="eroare"
         show
@@ -218,6 +246,19 @@ export default {
       listaInCurs: false,
       sincronizareInCurs: false,
       solicitareInCurs: false,
+      /*
+       * Unde s-a ajuns cu preluarea datelor: pasul, cât s-a făcut și textul de
+       * sub bară. Gol înseamnă că nu se lucrează nimic acum.
+       */
+      progres: null,
+      // Necazurile strânse pe drum; se arată toate la sfârșit, nu una câte una.
+      erori: [],
+      // Câte firme intră într-o cerere: fiecare apel la ANAF are pauza lui.
+      FIRME_PE_LOT: 5,
+      // Câte răspunsuri se citesc într-o cerere
+      RASPUNSURI_PE_LOT: 10,
+      // Câte reluări se fac cel mult, ca o listă lungă să nu învârtă la nesfârșit
+      RUNDE_MAXIME: 40,
       formularVizibil: false,
       formular: {},
       campuri: [
@@ -294,23 +335,43 @@ export default {
           this.sincronizareInCurs = false
         })
     },
+    /**
+     * Aduce datele lipsă ale firmelor, în trei pași.
+     *
+     * Întâi pleacă solicitările către ANAF, firmă cu firmă; apoi se descarcă
+     * mesajele nou intrate, în loturi, până nu mai rămâne niciunul; abia la
+     * urmă se citesc din documentele descărcate denumirile și datele firmelor.
+     *
+     * Se lucrează în tranșe pentru că fiecare apel la ANAF are pauza lui
+     * impusă: cu zeci de firme, totul într-o singură cerere web ar depăși orice
+     * răbdare a serverului. Așa se vede și la a câta firmă s-a ajuns.
+     */
     solicita() {
       this.eroare = ''
       this.info = ''
       this.solicitareInCurs = true
+      this.erori = []
 
-      this.$http.post('/anaf-societati/solicita')
-        .then(raspuns => {
-          const r = raspuns.data.data
+      const cifuri = this.societati.filter(s => s.activ).map(s => s.cif)
+
+      this.progres = {
+        pas: 'solicitari', facut: 0, total: cifuri.length || 1, text: 'Se trimit solicitările...',
+      }
+
+      this.trimiteSolicitari(cifuri)
+        .then(rezumat => this.descarcaMesajeNoi(rezumat))
+        .then(rezumat => this.preiaRaspunsurile(rezumat))
+        .then(rezumat => {
           const parti = []
-          if (r.trimise) parti.push(`${r.trimise} solicitări trimise`)
-          if (r.reinterpretate) parti.push(`${r.reinterpretate} documente reinterpretate`)
-          if (r.sarite) parti.push(`${r.sarite} sărite (deja cerute azi sau persoane fizice)`)
+          if (rezumat.trimise) parti.push(`${rezumat.trimise} solicitări trimise`)
+          if (rezumat.descarcate) parti.push(`${rezumat.descarcate} mesaje descărcate`)
+          if (rezumat.preluate) parti.push(`${rezumat.preluate} răspunsuri citite`)
+          if (rezumat.reinterpretate) parti.push(`${rezumat.reinterpretate} documente reinterpretate`)
+          if (rezumat.sarite) parti.push(`${rezumat.sarite} sărite (deja cerute azi sau persoane fizice)`)
+
           this.info = parti.length ? parti.join(', ') : 'Nu era nimic de solicitat.'
 
-          if (r.erori && r.erori.length) {
-            this.eroare = r.erori.join(' | ')
-          }
+          if (this.erori.length) this.eroare = this.erori.join(' | ')
 
           this.incarcaLista()
         })
@@ -319,7 +380,109 @@ export default {
         })
         .finally(() => {
           this.solicitareInCurs = false
+          this.progres = null
         })
+    },
+
+    /** Pasul întâi: solicitările, în tranșe de câteva firme. */
+    trimiteSolicitari(cifuri) {
+      const rezumat = {
+        trimise: 0, sarite: 0, reinterpretate: 0, descarcate: 0, preluate: 0,
+      }
+
+      const lot = i => {
+        if (i >= cifuri.length) return Promise.resolve(rezumat)
+
+        const acum = cifuri.slice(i, i + this.FIRME_PE_LOT)
+
+        this.progres = {
+          pas: 'solicitari',
+          facut: i,
+          total: cifuri.length,
+          text: `Se trimit solicitările: ${i} din ${cifuri.length} firme`,
+        }
+
+        // Documentele vechi se recitesc o singură dată, la primul lot.
+        return this.$http.post('/anaf-societati/solicita', { cif: acum, reinterpreteaza: i === 0 })
+          .then(raspuns => {
+            const r = raspuns.data.data
+            rezumat.trimise += r.trimise || 0
+            rezumat.sarite += r.sarite || 0
+            rezumat.reinterpretate += r.reinterpretate || 0
+            if (r.erori && r.erori.length) this.erori.push(...r.erori)
+
+            return lot(i + this.FIRME_PE_LOT)
+          })
+      }
+
+      return lot(0)
+    },
+
+    /**
+     * Pasul al doilea: mesajele nou intrate în SPV.
+     *
+     * Serverul aduce fișierele în loturi și spune câte au mai rămas; se cere
+     * din nou până nu mai rămâne niciunul.
+     */
+    descarcaMesajeNoi(rezumatul) {
+      const rezumat = { ...rezumatul }
+
+      const runda = trecute => {
+        this.progres = {
+          pas: 'mesaje',
+          facut: rezumat.descarcate,
+          total: rezumat.descarcate + 1,
+          text: `Se descarcă mesajele noi: ${rezumat.descarcate} aduse`,
+        }
+
+        return this.$http.get('/spv', { params: { zile: 60, descarca: 1 } })
+          .then(raspuns => {
+            const d = raspuns.data.descarcare || {}
+            rezumat.descarcate += d.descarcate || 0
+
+            if (d.erori && d.erori.length) this.erori.push(...d.erori)
+
+            // Se oprește când nu mai rămâne nimic sau când o rundă n-a mai adus nimic.
+            if (!d.ramase || !d.descarcate || trecute >= this.RUNDE_MAXIME) {
+              return rezumat
+            }
+
+            return runda(trecute + 1)
+          })
+      }
+
+      return runda(0)
+    },
+
+    /** Pasul al treilea: din documentele descărcate se iau denumirile și datele. */
+    preiaRaspunsurile(rezumatul) {
+      const rezumat = { ...rezumatul }
+
+      const runda = trecute => {
+        this.progres = {
+          pas: 'date',
+          facut: rezumat.preluate,
+          total: rezumat.preluate + 1,
+          text: `Se citesc datele firmelor: ${rezumat.preluate} răspunsuri prelucrate`,
+        }
+
+        return this.$http.post(`/spv/solicitari/preia?limita=${this.RASPUNSURI_PE_LOT}`)
+          .then(raspuns => {
+            const r = raspuns.data.data || {}
+            rezumat.preluate += r.preluate || 0
+
+            if (r.erori && r.erori.length) this.erori.push(...r.erori)
+
+            // Cele fără răspuns încă nu se mai așteaptă: vin la o rulare viitoare.
+            if (!r.preluate || trecute >= this.RUNDE_MAXIME) {
+              return rezumat
+            }
+
+            return runda(trecute + 1)
+          })
+      }
+
+      return runda(0)
     },
     editeaza(societate) {
       this.formular = { ...societate }
