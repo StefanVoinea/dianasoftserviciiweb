@@ -8,6 +8,7 @@ use App\Models\AnafDeclaratie;
 use App\Models\AnafSocietate;
 use App\Models\CertificatUtilizator;
 use App\Services\Anaf\Arhiva\ArhivaService;
+use App\Services\Anaf\Declaratii\CurataXml;
 use App\Services\Anaf\Declaratii\DeclaratieException;
 use App\Services\Anaf\Declaratii\DeclaratieXml;
 use App\Services\Anaf\Declaratii\DukIntegrator;
@@ -166,7 +167,8 @@ XML;
             $duk ?: $this->duk(true),
             $semnare ?: $this->semnare(),
             $this->app->make(ArhivaService::class),
-            $pdf ?: $this->pdf(self::XML)
+            $pdf ?: $this->pdf(self::XML),
+            new CurataXml()
         );
     }
 

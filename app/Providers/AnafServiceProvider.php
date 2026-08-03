@@ -8,6 +8,7 @@ use App\Services\Anaf\Bridge\LicentiereBridge;
 use App\Services\Anaf\Bridge\Punte;
 use App\Services\Anaf\Declaratii\DepunereService;
 use App\Services\Anaf\Declaratii\ConcatenareService;
+use App\Services\Anaf\Declaratii\CurataXml;
 use App\Services\Anaf\Declaratii\DeclaratieXml;
 use App\Services\Anaf\Declaratii\DukIntegrator;
 use App\Services\Anaf\Declaratii\MonitorizareFolder;
@@ -135,7 +136,8 @@ class AnafServiceProvider extends ServiceProvider
                 $app->make(DukIntegrator::class),
                 $app->make(SemnareService::class),
                 $app->make(ArhivaService::class),
-                $app->make(PdfDeclaratie::class)
+                $app->make(PdfDeclaratie::class),
+                $app->make(CurataXml::class)
             );
         });
 

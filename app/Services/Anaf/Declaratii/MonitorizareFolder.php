@@ -42,6 +42,7 @@ class MonitorizareFolder
     protected $semnare;
     protected $arhiva;
     protected $pdf;
+    protected $curatator;
 
     /**
      * Declaratia scrisa in tabel pentru fisierul care se lucreaza acum.
@@ -58,7 +59,8 @@ class MonitorizareFolder
         DukIntegrator $duk,
         SemnareService $semnare,
         ArhivaService $arhiva,
-        PdfDeclaratie $pdf
+        PdfDeclaratie $pdf,
+        CurataXml $curatator
     ) {
         $this->config = $config;
         $this->certificate = $certificate;
@@ -67,6 +69,7 @@ class MonitorizareFolder
         $this->semnare = $semnare;
         $this->arhiva = $arhiva;
         $this->pdf = $pdf;
+        $this->curatator = $curatator;
     }
 
     /**
@@ -233,7 +236,7 @@ class MonitorizareFolder
     protected function dinXml(AnafCertificat $certificat, string $nume, string $continut): AnafDeclaratie
     {
         $caleXml = $this->config['storage_path'] . '/xml/' . uniqid('mon_', true) . '.xml';
-        Storage::put($caleXml, $continut);
+        Storage::put($caleXml, $this->curatator->curata($continut));
 
         $declaratie = $this->inregistreaza($certificat, $nume, $caleXml, [], [$caleXml]);
 
@@ -274,7 +277,7 @@ class MonitorizareFolder
         }
 
         $caleXml = $trunchi . '.xml';
-        Storage::put($caleXml, $info['xml']);
+        Storage::put($caleXml, $this->curatator->curata($info['xml']));
 
         $declaratie = $this->inregistreaza(
             $certificat,

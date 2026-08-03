@@ -9,6 +9,7 @@ use App\Models\AnafSocietate;
 use App\Services\Anaf\Arhiva\ArhivaException;
 use App\Services\Anaf\Arhiva\ArhivaService;
 use App\Services\Anaf\Declaratii\ConcatenareService;
+use App\Services\Anaf\Declaratii\CurataXml;
 use App\Services\Anaf\Declaratii\DeclaratieException;
 use App\Services\Anaf\Declaratii\DeclaratieXml;
 use App\Services\Anaf\Declaratii\DepunereService;
@@ -81,7 +82,7 @@ class DeclaratiiController extends Controller
      * verificat la fel ca un XML. Daca este deja semnat, ramane asa cum este si
      * trece direct la depunere.
      */
-    public function store(Request $request, DeclaratieXml $analizor, DukIntegrator $duk, PdfDeclaratie $pdf)
+    public function store(Request $request, DeclaratieXml $analizor, DukIntegrator $duk, PdfDeclaratie $pdf, CurataXml $curatator)
     {
         $request->validate([
             'fisiere' => 'required_without:fisier|array|min:1',
@@ -99,8 +100,8 @@ class DeclaratiiController extends Controller
 
             try {
                 $declaratie = strtolower($incarcat->getClientOriginalExtension()) === 'pdf'
-                    ? $this->dinPdf($incarcat, $analizor, $duk, $pdf, $request)
-                    : $this->dinXml($incarcat, $analizor, $duk, $request);
+                    ? $this->dinPdf($incarcat, $analizor, $duk, $pdf, $curatator, $request)
+                    : $this->dinXml($incarcat, $analizor, $duk, $curatator, $request);
 
                 $rezultate[] = $this->prezinta($declaratie);
 
@@ -133,10 +134,13 @@ class DeclaratiiController extends Controller
     }
 
     /** Fișier XML: se validează și se generează PDF-ul oficial. */
-    protected function dinXml($incarcat, DeclaratieXml $analizor, DukIntegrator $duk, Request $request): AnafDeclaratie
+    protected function dinXml($incarcat, DeclaratieXml $analizor, DukIntegrator $duk, CurataXml $curatator, Request $request): AnafDeclaratie
     {
         $director = config('anaf.declaratii.storage_path');
-        $caleXml = $incarcat->storeAs($director . '/xml', uniqid('decl_', true) . '.xml');
+        $caleXml = $director . '/xml/' . uniqid('decl_', true) . '.xml';
+
+        // Caracterele speciale neescapate se repara inainte de analiza si validare.
+        Storage::put($caleXml, $curatator->curata($incarcat->get()));
 
         try {
             $meta = $analizor->analizeaza(Storage::path($caleXml));
@@ -160,7 +164,7 @@ class DeclaratiiController extends Controller
      * Fișier PDF: se extrage XML-ul atașat, se validează cu DUKIntegrator, iar
      * dacă PDF-ul este deja semnat trece direct la pasul de depunere.
      */
-    protected function dinPdf($incarcat, DeclaratieXml $analizor, DukIntegrator $duk, PdfDeclaratie $pdf, Request $request): AnafDeclaratie
+    protected function dinPdf($incarcat, DeclaratieXml $analizor, DukIntegrator $duk, PdfDeclaratie $pdf, CurataXml $curatator, Request $request): AnafDeclaratie
     {
         $director = config('anaf.declaratii.storage_path');
         $calePdf = $incarcat->storeAs($director . '/pdf', uniqid('decl_', true) . '.pdf');
@@ -175,7 +179,7 @@ class DeclaratiiController extends Controller
 
         // XML-ul din PDF se păstrează separat, ca să poată fi validat.
         $caleXml = preg_replace('/\.pdf$/i', '', $calePdf) . '.xml';
-        Storage::put($caleXml, $info['xml']);
+        Storage::put($caleXml, $curatator->curata($info['xml']));
 
         try {
             $meta = $analizor->analizeaza(Storage::path($caleXml));
