@@ -1215,6 +1215,12 @@ if ($metoda === 'GET' && $calea === '/arhiva/foldere') {
         $foldere[] = array('nume' => $nume, 'cale' => $ceruta . $nume);
     }
 
+    // Alfabetic, nu pe coduri de caractere: altfel „Zeta" ar sta inaintea lui
+    // „arhiva". Aplicatia le mai aseaza o data, pentru programele mai vechi.
+    usort($foldere, function ($unul, $altul) {
+        return strnatcasecmp($unul['nume'], $altul['nume']);
+    });
+
     // Rădăcina unui disc n-are părinte în afară de lista de discuri.
     $parinte = preg_match('/^[A-Za-z]:\\\\$/', $ceruta) ? '' : dirname(rtrim($ceruta, '\\'));
 

@@ -244,7 +244,45 @@ class CertificateController extends Controller
             ], 502);
         }
 
-        return response()->json(['success' => true, 'data' => $raspuns->json()]);
+        return response()->json(['success' => true, 'data' => $this->inOrdine($raspuns->json() ?: [])]);
+    }
+
+    /**
+     * Dosarele, asezate alfabetic pentru ochiul omului.
+     *
+     * Programul local le da in ordinea in care le tine Windows-ul, adica pe
+     * coduri de caractere: acolo „Zeta" vine inaintea lui „arhiva", iar
+     * „Ședințe" ajunge tocmai la urma. Se aseaza aici, nu la client: asa se
+     * indreapta si listele venite de la programele deja instalate.
+     */
+    protected function inOrdine(array $payload): array
+    {
+        if (empty($payload['foldere']) || !is_array($payload['foldere'])) {
+            return $payload;
+        }
+
+        usort($payload['foldere'], function ($unul, $altul) {
+            return strnatcmp(
+                self::pentruAsezare($unul['nume'] ?? ''),
+                self::pentruAsezare($altul['nume'] ?? '')
+            );
+        });
+
+        return $payload;
+    }
+
+    /**
+     * Denumirea adusa la o forma buna de asezat: fara diacritice si fara
+     * deosebire intre litere mari si mici, ca „Ședințe" sa stea langa „Sedinte",
+     * nu dupa toate celelalte.
+     */
+    protected static function pentruAsezare(string $nume): string
+    {
+        $fara = strtr(mb_strtolower($nume, 'UTF-8'), [
+            'ă' => 'a', 'â' => 'a', 'î' => 'i', 'ș' => 's', 'ş' => 's', 'ț' => 't', 'ţ' => 't',
+        ]);
+
+        return $fara;
     }
 
     /**
