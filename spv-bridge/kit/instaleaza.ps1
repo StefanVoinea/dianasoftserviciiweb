@@ -177,15 +177,54 @@ try {
     programul de pe calculatorul cu tokenul nu ruleaza.
 #>
 if ($agentDePornit) {
-    Start-ScheduledTask -TaskName $agentDePornit
-    Start-Sleep -Seconds 3
+    try {
+        Start-ScheduledTask -TaskName $agentDePornit -ErrorAction Stop
+    } catch {
+        Scrie "Sarcina agentului nu a putut fi pornită: $($_.Exception.Message)" 'Yellow'
+    }
 
-    $stareAgent = (Get-ScheduledTask -TaskName $agentDePornit).State
+    <#
+        Se așteaptă să apară programul, nu se întreabă doar sarcina.
 
-    if ($stareAgent -eq 'Running') {
+        Starea sarcinii e un răspuns ocolit: la unele așezări de Windows ea
+        rămâne goală chiar și când programul rulează. Ce contează cu adevărat e
+        dacă există un php care ține agentul, iar asta se vede în lista de
+        procese.
+    #>
+    $agentPornit = $false
+
+    foreach ($incercare in 1..10) {
+        Start-Sleep -Seconds 1
+
+        $procese = @(Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -like '*agent.php*' })
+
+        if ($procese.Count -gt 0) {
+            $agentPornit = $true
+            break
+        }
+    }
+
+    if ($agentPornit) {
         Scrie "Agentul a pornit și întreabă aplicația ce are de lucru." 'Green'
     } else {
-        Scrie "Agentul nu a pornit (stare: $stareAgent). Porniți-l cu porneste-agent.bat." 'Yellow'
+        $stareAgent = (Get-ScheduledTask -TaskName $agentDePornit -ErrorAction SilentlyContinue).State
+
+        if ($stareAgent) {
+            Scrie "Agentul nu pare pornit (starea sarcinii: $stareAgent)." 'Yellow'
+        } else {
+            Scrie "Agentul nu pare pornit." 'Yellow'
+        }
+
+        # Agentul isi scrie pasii intr-un jurnal; ultimele randuri spun de ce s-a oprit.
+        $caleJurnal = Join-Path $folder 'agent.log'
+
+        if (Test-Path $caleJurnal) {
+            Scrie "Ultimele rânduri din jurnalul agentului:" 'DarkGray'
+            Get-Content $caleJurnal -Tail 5 | ForEach-Object { Scrie "  $_" 'DarkGray' }
+        }
+
+        Scrie "Porniți-l cu porneste-agent.bat și lăsați fereastra deschisă." 'Yellow'
     }
 }
 
