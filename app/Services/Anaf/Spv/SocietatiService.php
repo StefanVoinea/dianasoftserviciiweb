@@ -200,6 +200,12 @@ class SocietatiService
             }
 
             foreach ($tipuri as $tip) {
+                // Ce s-a aflat deja nu se mai cere: butonul cere datele lipsă.
+                if ($this->areDeja($societate, $tip)) {
+                    $sarite++;
+                    continue;
+                }
+
                 if ($this->existaSolicitareInCurs($societate->cif, $tip)) {
                     $sarite++;
                     continue;
@@ -220,6 +226,22 @@ class SocietatiService
             'reinterpretate' => $reinterpretate,
             'erori' => $erori,
         ];
+    }
+
+    /**
+     * S-a aflat deja documentul acesta pentru firma?
+     *
+     * Butonul cere „datele lipsa": ce s-a citit odata dintr-un document ajuns
+     * in SPV nu se mai cere a doua oara. Cine vrea sa le improspateze cere
+     * documentul anume, din fila de solicitari.
+     */
+    protected function areDeja(AnafSocietate $societate, string $tip): bool
+    {
+        $cand = strcasecmp($tip, 'VECTOR FISCAL') === 0
+            ? $societate->vector_la
+            : $societate->date_identificare_la;
+
+        return $cand !== null;
     }
 
     /** O cerere trimisa azi si inca fara raspuns nu se repeta. */

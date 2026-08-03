@@ -2,6 +2,7 @@
 
 namespace App\Services\Anaf\Spv\Transport;
 
+use App\Services\Anaf\Bridge\LicentiereBridge;
 use App\Services\Anaf\Bridge\Punte;
 use App\Services\Anaf\Spv\CertificatService;
 use App\Services\Anaf\Spv\Contracts\SpvTransport;
@@ -29,6 +30,30 @@ class BridgeTransport implements SpvTransport
 
     public function get($path, array $query = array()): Response
     {
+        $raspuns = $this->cere($path, $query);
+
+        /*
+         * „Programul nu are licenta valida pe acest calculator."
+         *
+         * Se intampla dupa o reinstalare, dupa schimbarea calculatorului sau
+         * cand licenta a expirat cat timp statia a stat inchisa. Serverul stie
+         * s-o dea — o da acum si reia comanda, in loc sa trimita omul in fila
+         * de certificate ca sa apese un buton pe care tot noi il apasam.
+         */
+        if ($this->faraLicenta($raspuns)) {
+            $certificat = $this->certificate->activ();
+
+            if ($certificat && app(LicentiereBridge::class)->reinnoieste($certificat, true)['emisa']) {
+                return $this->cere($path, $query);
+            }
+        }
+
+        return $raspuns;
+    }
+
+    /** Cererea propriu-zisa catre programul local. */
+    protected function cere(string $path, array $query): Response
+    {
         $bridge = $this->certificate->bridge();
 
         $url = rtrim($bridge['url'], '/') . '/spv' . '/' . ltrim($path, '/');
@@ -51,6 +76,16 @@ class BridgeTransport implements SpvTransport
              */
             ->withOptions(['connect_timeout' => self::CONECTARE_SECUNDE])
             ->get($url);
+    }
+
+    /** Programul local a raspuns ca nu are licenta? */
+    protected function faraLicenta(Response $raspuns): bool
+    {
+        if ($raspuns->status() !== 403) {
+            return false;
+        }
+
+        return stripos((string) $raspuns->json('eroare'), 'licen') !== false;
     }
 
     /**

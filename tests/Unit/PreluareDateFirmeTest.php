@@ -65,6 +65,74 @@ class PreluareDateFirmeTest extends TestCase
         });
     }
 
+    /** Firma care are deja documentul nu se mai intreaba a doua oara. */
+    public function test_firma_cu_datele_stiute_nu_se_mai_solicita(): void
+    {
+        ContextCompanie::pentru(self::COMPANIE, function () {
+            AnafSocietate::create([
+                'cif' => 'STIUTA',
+                'tip' => 'pj',
+                'activ' => true,
+                'date_identificare_la' => now()->subDays(3),
+            ]);
+
+            AnafSocietate::create(['cif' => 'NESTIUTA', 'tip' => 'pj', 'activ' => true]);
+
+            $cerute = [];
+
+            $this->mock(SolicitareService::class, function ($mock) use (&$cerute) {
+                $mock->shouldReceive('reinterpreteaza')->andReturn(0);
+                $mock->shouldReceive('solicita')->andReturnUsing(function ($cif) use (&$cerute) {
+                    $cerute[] = $cif;
+
+                    return new SpvSolicitare();
+                });
+            });
+
+            $rezultat = $this->app->make(SocietatiService::class)->solicitaDocumente(
+                ['DATE IDENTIFICARE'],
+                null,
+                ['STIUTA', 'NESTIUTA']
+            );
+
+            $this->assertSame(['NESTIUTA'], $cerute, 'Firma cu datele știute nu trebuia întrebată din nou.');
+            $this->assertSame(1, $rezultat['trimise']);
+            $this->assertSame(1, $rezultat['sarite']);
+        });
+    }
+
+    /** Vectorul fiscal si datele de identificare se socotesc fiecare in parte. */
+    public function test_fiecare_document_se_socoteste_separat(): void
+    {
+        ContextCompanie::pentru(self::COMPANIE, function () {
+            AnafSocietate::create([
+                'cif' => 'JUMATATE',
+                'tip' => 'pj',
+                'activ' => true,
+                'date_identificare_la' => now()->subDay(),
+            ]);
+
+            $cerute = [];
+
+            $this->mock(SolicitareService::class, function ($mock) use (&$cerute) {
+                $mock->shouldReceive('reinterpreteaza')->andReturn(0);
+                $mock->shouldReceive('solicita')->andReturnUsing(function ($cif, $tip) use (&$cerute) {
+                    $cerute[] = $tip;
+
+                    return new SpvSolicitare();
+                });
+            });
+
+            $this->app->make(SocietatiService::class)->solicitaDocumente(
+                ['DATE IDENTIFICARE', 'VECTOR FISCAL'],
+                null,
+                ['JUMATATE']
+            );
+
+            $this->assertSame(['VECTOR FISCAL'], $cerute);
+        });
+    }
+
     /** Recitirea documentelor vechi se cere anume, nu la fiecare transa. */
     public function test_documentele_vechi_se_recitesc_o_singura_data(): void
     {

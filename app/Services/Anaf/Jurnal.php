@@ -83,6 +83,17 @@ class Jurnal
      */
     protected static function utilizator()
     {
+        /*
+         * Cand cererea poarta altceva decat un token al aplicatiei — codul de
+         * instalare al agentului, de pilda — nici nu se mai intreaba gardul.
+         * Altfel Passport incearca sa-l citeasca drept JWT, se opreste, si
+         * scrie el singur in jurnalul serverului cate o eroare la fiecare
+         * cerere a agentului, desi nu s-a stricat nimic.
+         */
+        if (!self::pareTokenulAplicatiei()) {
+            return null;
+        }
+
         foreach (['api', null] as $guard) {
             try {
                 $user = $guard ? Auth::guard($guard)->user() : Auth::user();
@@ -104,6 +115,24 @@ class Jurnal
         }
 
         return null;
+    }
+
+    /**
+     * Poarta cererea un token al aplicatiei?
+     *
+     * Un token Passport e un JWT: trei parti despartite prin doua puncte. Codul
+     * de instalare al agentului nu seamana cu asa ceva, iar fara cerere (in
+     * comenzile din consola) nu e nimeni de cautat.
+     */
+    protected static function pareTokenulAplicatiei(): bool
+    {
+        if (!app()->bound('request')) {
+            return false;
+        }
+
+        $token = (string) request()->bearerToken();
+
+        return $token !== '' && substr_count($token, '.') === 2;
     }
 
     protected static function numeUtilizator($user): ?string

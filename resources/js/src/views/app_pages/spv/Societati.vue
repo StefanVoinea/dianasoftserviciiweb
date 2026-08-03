@@ -355,10 +355,13 @@ export default {
       const cifuri = this.societati.filter(s => s.activ).map(s => s.cif)
 
       this.progres = {
-        pas: 'solicitari', facut: 0, total: cifuri.length || 1, text: 'Se trimit solicitările...',
+        pas: 'mesaje', facut: 0, total: 1, text: 'Se caută documentele venite deja...',
       }
 
-      this.trimiteSolicitari(cifuri)
+      // Întâi se vede ce a intrat de curând: poate datele sunt deja acolo și
+      // n-are rost să se mai ceară o dată de la ANAF.
+      this.ceEDeja()
+        .then(() => this.trimiteSolicitari(cifuri))
         .then(rezumat => this.descarcaMesajeNoi(rezumat))
         .then(rezumat => this.preiaRaspunsurile(rezumat))
         .then(rezumat => {
@@ -381,6 +384,34 @@ export default {
         .finally(() => {
           this.solicitareInCurs = false
           this.progres = null
+        })
+    },
+
+    /**
+     * Pasul dinaintea tuturor: ce a intrat deja în SPV.
+     *
+     * Se aduc mesajele din ultima zi și se citesc răspunsurile venite la
+     * solicitările vechi. Documentul cerut ieri poate fi deja acolo, iar firma
+     * ale cărei date se află astfel nu mai intră în lista de solicitat — nici
+     * ANAF nu are de ce să răspundă a doua oară la aceeași întrebare.
+     */
+    ceEDeja() {
+      return this.$http.get('/spv', { params: { zile: 1, descarca: 1 } })
+        .then(raspuns => {
+          const d = raspuns.data.descarcare || {}
+          if (d.erori && d.erori.length) this.erori.push(...d.erori)
+
+          this.progres = {
+            pas: 'mesaje', facut: 1, total: 1, text: 'Se citesc documentele venite deja...',
+          }
+
+          return this.$http.post(`/spv/solicitari/preia?zile=1&limita=${this.RASPUNSURI_PE_LOT}`)
+        })
+        .then(() => this.incarcaLista())
+        .catch(err => {
+          // Un pas de aflare nu are voie să oprească lucrarea: dacă n-a mers,
+          // se merge mai departe și se cer datele de la ANAF, ca înainte.
+          this.erori.push(this.mesajEroare(err, 'Documentele venite deja nu au putut fi citite'))
         })
     },
 
