@@ -8,16 +8,24 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Pe servere tabelele pot exista deja, facute de mana dupa acest fisier.
+
         // Vectorul fiscal asteptat (periodicitati pe tip de declaratie), editabil manual
-        Schema::create('vector_fiscal', function (Blueprint $table) {
-            $table->id();
-            $table->string('cui', 20)->unique();
-            $table->string('denumire')->nullable();
-            foreach (['D112', 'D300', 'D301', 'D394', 'D100', 'D101', 'D390', 'D205', 'D200', 'BILANT', 'A4200'] as $coloana) {
-                $table->string($coloana, 20)->nullable();
-            }
-            $table->timestamps();
-        });
+        if (!Schema::hasTable('vector_fiscal')) {
+            Schema::create('vector_fiscal', function (Blueprint $table) {
+                $table->id();
+                $table->string('cui', 20)->unique();
+                $table->string('denumire')->nullable();
+                foreach (['D112', 'D300', 'D301', 'D394', 'D100', 'D101', 'D390', 'D205', 'D200', 'BILANT', 'A4200'] as $coloana) {
+                    $table->string($coloana, 20)->nullable();
+                }
+                $table->timestamps();
+            });
+        }
+
+        if (Schema::hasTable('vector_spv')) {
+            return;
+        }
 
         // Vectorul fiscal citit din documentele SPV (istoric pe obligatii)
         Schema::create('vector_spv', function (Blueprint $table) {

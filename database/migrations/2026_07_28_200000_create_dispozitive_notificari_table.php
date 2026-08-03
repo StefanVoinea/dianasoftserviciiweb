@@ -14,6 +14,11 @@ class CreateDispozitiveNotificariTable extends Migration
 {
     public function up()
     {
+        // Pe servere tabelul poate exista deja, facut de mana dupa acest fisier.
+        if (Schema::hasTable('dispozitive_notificari')) {
+            return;
+        }
+
         Schema::create('dispozitive_notificari', function (Blueprint $table) {
             $table->increments('id');
             $table->integer('user_id')->index();

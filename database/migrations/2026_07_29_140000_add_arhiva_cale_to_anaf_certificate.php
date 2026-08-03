@@ -13,6 +13,11 @@ class AddArhivaCaleToAnafCertificate extends Migration
 {
     public function up(): void
     {
+        // Pe servere coloana poate exista deja, pusa de mana dupa acest fisier.
+        if (Schema::hasColumn('anaf_certificate', 'arhiva_cale')) {
+            return;
+        }
+
         Schema::table('anaf_certificate', function (Blueprint $table) {
             $table->string('arhiva_cale', 300)->nullable()->after('bridge_token');
         });
@@ -20,6 +25,10 @@ class AddArhivaCaleToAnafCertificate extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasColumn('anaf_certificate', 'arhiva_cale')) {
+            return;
+        }
+
         Schema::table('anaf_certificate', function (Blueprint $table) {
             $table->dropColumn('arhiva_cale');
         });

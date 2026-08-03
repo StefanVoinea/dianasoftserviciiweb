@@ -14,6 +14,11 @@ class AddPerioadaTipToAnafDeclaratii extends Migration
 {
     public function up(): void
     {
+        // Pe servere coloana poate exista deja, pusa de mana dupa acest fisier.
+        if (Schema::hasColumn('anaf_declaratii', 'perioada_tip')) {
+            return;
+        }
+
         Schema::table('anaf_declaratii', function (Blueprint $table) {
             $table->string('perioada_tip', 1)->nullable()->after('anul');
         });
@@ -21,6 +26,10 @@ class AddPerioadaTipToAnafDeclaratii extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasColumn('anaf_declaratii', 'perioada_tip')) {
+            return;
+        }
+
         Schema::table('anaf_declaratii', function (Blueprint $table) {
             $table->dropColumn('perioada_tip');
         });

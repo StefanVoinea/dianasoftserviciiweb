@@ -12,6 +12,11 @@ class AddAdministratorToCompanyUser extends Migration
 {
     public function up(): void
     {
+        // Pe servere coloana poate exista deja, pusa de mana dupa acest fisier.
+        if (Schema::hasColumn('company_user', 'administrator')) {
+            return;
+        }
+
         Schema::table('company_user', function (Blueprint $table) {
             $table->boolean('administrator')->default(false)->after('user_id');
         });
@@ -19,6 +24,10 @@ class AddAdministratorToCompanyUser extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasColumn('company_user', 'administrator')) {
+            return;
+        }
+
         Schema::table('company_user', function (Blueprint $table) {
             $table->dropColumn('administrator');
         });

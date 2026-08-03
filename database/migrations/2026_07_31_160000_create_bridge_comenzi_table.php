@@ -20,6 +20,11 @@ class CreateBridgeComenziTable extends Migration
 {
     public function up(): void
     {
+        // Pe servere tabelul poate exista deja, facut de mana dupa acest fisier.
+        if (Schema::hasTable('bridge_comenzi')) {
+            return;
+        }
+
         Schema::create('bridge_comenzi', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('company_id')->nullable()->index();

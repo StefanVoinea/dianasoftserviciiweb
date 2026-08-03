@@ -15,6 +15,11 @@ class CreateNotificariAplicatieTable extends Migration
 {
     public function up(): void
     {
+        // Pe servere tabelul poate exista deja, facut de mana dupa acest fisier.
+        if (Schema::hasTable('notificari_aplicatie')) {
+            return;
+        }
+
         Schema::create('notificari_aplicatie', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->index();

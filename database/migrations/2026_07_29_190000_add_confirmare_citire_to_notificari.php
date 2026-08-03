@@ -16,17 +16,30 @@ class AddConfirmareCitireToNotificari extends Migration
 {
     public function up(): void
     {
+        // Pe servere o parte din coloane pot exista deja, puse de mana.
         Schema::table('notificari_aplicatie', function (Blueprint $table) {
-            $table->uuid('lot')->nullable()->after('id')->index();
-            $table->boolean('confirma_citirea')->default(false)->after('pe_email');
-            $table->boolean('este_confirmare')->default(false)->after('confirma_citirea');
+            if (!Schema::hasColumn('notificari_aplicatie', 'lot')) {
+                $table->uuid('lot')->nullable()->after('id')->index();
+            }
+
+            if (!Schema::hasColumn('notificari_aplicatie', 'confirma_citirea')) {
+                $table->boolean('confirma_citirea')->default(false)->after('pe_email');
+            }
+
+            if (!Schema::hasColumn('notificari_aplicatie', 'este_confirmare')) {
+                $table->boolean('este_confirmare')->default(false)->after('confirma_citirea');
+            }
         });
     }
 
     public function down(): void
     {
         Schema::table('notificari_aplicatie', function (Blueprint $table) {
-            $table->dropColumn(['lot', 'confirma_citirea', 'este_confirmare']);
+            foreach (['lot', 'confirma_citirea', 'este_confirmare'] as $coloana) {
+                if (Schema::hasColumn('notificari_aplicatie', $coloana)) {
+                    $table->dropColumn($coloana);
+                }
+            }
         });
     }
 }

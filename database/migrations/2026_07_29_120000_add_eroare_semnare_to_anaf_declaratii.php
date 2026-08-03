@@ -13,6 +13,11 @@ class AddEroareSemnareToAnafDeclaratii extends Migration
 {
     public function up()
     {
+        // Pe servere coloana poate exista deja, pusa de mana dupa acest fisier.
+        if (Schema::hasColumn('anaf_declaratii', 'eroare_semnare')) {
+            return;
+        }
+
         Schema::table('anaf_declaratii', function (Blueprint $table) {
             $table->text('eroare_semnare')->nullable()->after('erori_validare');
         });
@@ -20,6 +25,10 @@ class AddEroareSemnareToAnafDeclaratii extends Migration
 
     public function down()
     {
+        if (!Schema::hasColumn('anaf_declaratii', 'eroare_semnare')) {
+            return;
+        }
+
         Schema::table('anaf_declaratii', function (Blueprint $table) {
             $table->dropColumn('eroare_semnare');
         });

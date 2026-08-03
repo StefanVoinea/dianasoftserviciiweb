@@ -15,16 +15,26 @@ class AddImprimantaToUsers extends Migration
 {
     public function up(): void
     {
+        // Pe servere o parte din coloane pot exista deja, puse de mana.
         Schema::table('users', function (Blueprint $table) {
-            $table->string('imprimanta', 191)->nullable()->after('telefon');
-            $table->unsignedBigInteger('imprimanta_certificat_id')->nullable()->after('imprimanta');
+            if (!Schema::hasColumn('users', 'imprimanta')) {
+                $table->string('imprimanta', 191)->nullable()->after('telefon');
+            }
+
+            if (!Schema::hasColumn('users', 'imprimanta_certificat_id')) {
+                $table->unsignedBigInteger('imprimanta_certificat_id')->nullable();
+            }
         });
     }
 
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn(['imprimanta', 'imprimanta_certificat_id']);
+            foreach (['imprimanta', 'imprimanta_certificat_id'] as $coloana) {
+                if (Schema::hasColumn('users', $coloana)) {
+                    $table->dropColumn($coloana);
+                }
+            }
         });
     }
 }

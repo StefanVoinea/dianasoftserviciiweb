@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Pe servere tabelul poate exista deja, facut de mana dupa acest fisier.
+        if (Schema::hasTable('spv_solicitari')) {
+            return;
+        }
+
         Schema::create('spv_solicitari', function (Blueprint $table) {
             $table->id();
             $table->string('cif', 20)->index();

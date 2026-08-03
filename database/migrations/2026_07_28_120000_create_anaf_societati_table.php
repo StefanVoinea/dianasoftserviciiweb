@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Pe servere tabelul poate exista deja, facut de mana dupa acest fisier.
+        if (Schema::hasTable('anaf_societati')) {
+            return;
+        }
+
         // Societatile pentru care certificatul digital are drept de semnatura.
         // Lista vine de la ANAF (campul "cui" din raspunsul listaMesaje).
         Schema::create('anaf_societati', function (Blueprint $table) {

@@ -12,25 +12,42 @@ class AddArhivaToAnafDeclaratii extends Migration
 {
     public function up(): void
     {
+        // Pe servere o parte din coloane pot exista deja, puse de mana.
         Schema::table('anaf_declaratii', function (Blueprint $table) {
-            $table->string('arhiva_xml', 500)->nullable()->after('cale_recipisa');
-            $table->string('arhiva_semnat', 500)->nullable()->after('arhiva_xml');
-            $table->string('arhiva_recipisa', 500)->nullable()->after('arhiva_semnat');
+            if (!Schema::hasColumn('anaf_declaratii', 'arhiva_xml')) {
+                $table->string('arhiva_xml', 500)->nullable()->after('cale_recipisa');
+            }
+
+            if (!Schema::hasColumn('anaf_declaratii', 'arhiva_semnat')) {
+                $table->string('arhiva_semnat', 500)->nullable();
+            }
+
+            if (!Schema::hasColumn('anaf_declaratii', 'arhiva_recipisa')) {
+                $table->string('arhiva_recipisa', 500)->nullable();
+            }
         });
 
-        Schema::table('spv_mesaje', function (Blueprint $table) {
-            $table->string('arhiva_cale', 500)->nullable()->after('cale_fisier');
-        });
+        if (!Schema::hasColumn('spv_mesaje', 'arhiva_cale')) {
+            Schema::table('spv_mesaje', function (Blueprint $table) {
+                $table->string('arhiva_cale', 500)->nullable()->after('cale_fisier');
+            });
+        }
     }
 
     public function down(): void
     {
         Schema::table('anaf_declaratii', function (Blueprint $table) {
-            $table->dropColumn(['arhiva_xml', 'arhiva_semnat', 'arhiva_recipisa']);
+            foreach (['arhiva_xml', 'arhiva_semnat', 'arhiva_recipisa'] as $coloana) {
+                if (Schema::hasColumn('anaf_declaratii', $coloana)) {
+                    $table->dropColumn($coloana);
+                }
+            }
         });
 
-        Schema::table('spv_mesaje', function (Blueprint $table) {
-            $table->dropColumn('arhiva_cale');
-        });
+        if (Schema::hasColumn('spv_mesaje', 'arhiva_cale')) {
+            Schema::table('spv_mesaje', function (Blueprint $table) {
+                $table->dropColumn('arhiva_cale');
+            });
+        }
     }
 }

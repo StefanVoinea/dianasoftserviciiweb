@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Pe servere tabelul poate exista deja, facut de mana dupa acest fisier.
+        if (Schema::hasTable('anaf_declaratii')) {
+            return;
+        }
+
         Schema::create('anaf_declaratii', function (Blueprint $table) {
             $table->id();
             $table->string('cui', 20)->index();

@@ -14,6 +14,11 @@ class AddLicentaToAnafCertificate extends Migration
 {
     public function up(): void
     {
+        // Pe servere coloana poate exista deja, pusa de mana dupa acest fisier.
+        if (Schema::hasColumn('anaf_certificate', 'licenta_pana_la')) {
+            return;
+        }
+
         Schema::table('anaf_certificate', function (Blueprint $table) {
             $table->timestamp('licenta_pana_la')->nullable()->after('monitorizare_la');
         });
@@ -21,6 +26,10 @@ class AddLicentaToAnafCertificate extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasColumn('anaf_certificate', 'licenta_pana_la')) {
+            return;
+        }
+
         Schema::table('anaf_certificate', function (Blueprint $table) {
             $table->dropColumn('licenta_pana_la');
         });

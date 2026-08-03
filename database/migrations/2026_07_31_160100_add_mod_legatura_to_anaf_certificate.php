@@ -16,6 +16,11 @@ class AddModLegaturaToAnafCertificate extends Migration
 {
     public function up(): void
     {
+        // Pe servere coloana poate exista deja, pusa de mana dupa acest fisier.
+        if (Schema::hasColumn('anaf_certificate', 'mod_legatura')) {
+            return;
+        }
+
         Schema::table('anaf_certificate', function (Blueprint $table) {
             $table->string('mod_legatura', 10)->default('direct')->after('bridge_token');
         });
@@ -23,6 +28,10 @@ class AddModLegaturaToAnafCertificate extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasColumn('anaf_certificate', 'mod_legatura')) {
+            return;
+        }
+
         Schema::table('anaf_certificate', function (Blueprint $table) {
             $table->dropColumn('mod_legatura');
         });

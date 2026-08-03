@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Pe servere tabelul poate exista deja, facut de mana dupa acest fisier.
+        if (Schema::hasTable('spv_mesaje')) {
+            return;
+        }
+
         Schema::create('spv_mesaje', function (Blueprint $table) {
             $table->id();
             $table->string('mesaj_id')->unique();

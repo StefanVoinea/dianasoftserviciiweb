@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Pe servere tabelul poate exista deja, facut de mana dupa acest fisier.
+        if (Schema::hasTable('certificat_utilizatori')) {
+            return;
+        }
+
         // Utilizatorii din retea care folosesc acelasi certificat digital.
         Schema::create('certificat_utilizatori', function (Blueprint $table) {
             $table->id();

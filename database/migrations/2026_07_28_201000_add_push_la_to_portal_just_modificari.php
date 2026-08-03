@@ -12,6 +12,11 @@ class AddPushLaToPortalJustModificari extends Migration
 {
     public function up()
     {
+        // Pe servere coloana poate exista deja, pusa de mana dupa acest fisier.
+        if (Schema::hasColumn('portal_just_modificari', 'push_la')) {
+            return;
+        }
+
         Schema::table('portal_just_modificari', function (Blueprint $table) {
             $table->timestamp('push_la')->nullable()->after('notificat_la');
         });
@@ -19,6 +24,10 @@ class AddPushLaToPortalJustModificari extends Migration
 
     public function down()
     {
+        if (!Schema::hasColumn('portal_just_modificari', 'push_la')) {
+            return;
+        }
+
         Schema::table('portal_just_modificari', function (Blueprint $table) {
             $table->dropColumn('push_la');
         });

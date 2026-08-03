@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Pe servere tabelul poate exista deja, facut de mana dupa acest fisier.
+        if (Schema::hasTable('anaf_jurnal')) {
+            return;
+        }
+
         // Jurnal de activitate al modulului ANAF/SPV: cine ce a facut si cand.
         Schema::create('anaf_jurnal', function (Blueprint $table) {
             $table->id();

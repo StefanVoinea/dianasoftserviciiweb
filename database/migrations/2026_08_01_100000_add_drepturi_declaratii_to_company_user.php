@@ -16,16 +16,30 @@ class AddDrepturiDeclaratiiToCompanyUser extends Migration
 {
     public function up(): void
     {
-        Schema::table('company_user', function (Blueprint $table) {
-            $table->boolean('poate_semna')->default(false)->after('administrator');
-            $table->boolean('poate_depune')->default(false)->after('poate_semna');
-        });
+        // Pe servere, o parte dintre coloane exista deja, puse de mana in
+        // diverse stari; se adauga doar ce lipseste, iar valorile implicite le
+        // indreapta migratia de normalizare care urmeaza.
+        if (!Schema::hasColumn('company_user', 'poate_semna')) {
+            Schema::table('company_user', function (Blueprint $table) {
+                $table->boolean('poate_semna')->default(false)->after('administrator');
+            });
+        }
+
+        if (!Schema::hasColumn('company_user', 'poate_depune')) {
+            Schema::table('company_user', function (Blueprint $table) {
+                $table->boolean('poate_depune')->default(false)->after('poate_semna');
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('company_user', function (Blueprint $table) {
-            $table->dropColumn(['poate_semna', 'poate_depune']);
-        });
+        foreach (['poate_semna', 'poate_depune'] as $coloana) {
+            if (Schema::hasColumn('company_user', $coloana)) {
+                Schema::table('company_user', function (Blueprint $table) use ($coloana) {
+                    $table->dropColumn($coloana);
+                });
+            }
+        }
     }
 }

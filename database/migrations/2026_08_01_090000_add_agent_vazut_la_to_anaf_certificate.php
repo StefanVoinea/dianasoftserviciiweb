@@ -15,6 +15,12 @@ class AddAgentVazutLaToAnafCertificate extends Migration
 {
     public function up(): void
     {
+        // Pe unele servere coloana exista deja (pusa de mana sau de o rulare
+        // care n-a apucat sa fie scrisa in tabelul migrations).
+        if (Schema::hasColumn('anaf_certificate', 'agent_vazut_la')) {
+            return;
+        }
+
         Schema::table('anaf_certificate', function (Blueprint $table) {
             $table->timestamp('agent_vazut_la')->nullable()->after('mod_legatura');
         });
@@ -22,6 +28,10 @@ class AddAgentVazutLaToAnafCertificate extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasColumn('anaf_certificate', 'agent_vazut_la')) {
+            return;
+        }
+
         Schema::table('anaf_certificate', function (Blueprint $table) {
             $table->dropColumn('agent_vazut_la');
         });

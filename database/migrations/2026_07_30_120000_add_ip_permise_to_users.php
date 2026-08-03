@@ -14,6 +14,11 @@ class AddIpPermiseToUsers extends Migration
 {
     public function up(): void
     {
+        // Pe servere coloana poate exista deja, pusa de mana dupa acest fisier.
+        if (Schema::hasColumn('users', 'ip_permise')) {
+            return;
+        }
+
         Schema::table('users', function (Blueprint $table) {
             $table->text('ip_permise')->nullable()->after('imprimanta_certificat_id');
         });
@@ -21,6 +26,10 @@ class AddIpPermiseToUsers extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasColumn('users', 'ip_permise')) {
+            return;
+        }
+
         Schema::table('users', function (Blueprint $table) {
             $table->dropColumn('ip_permise');
         });

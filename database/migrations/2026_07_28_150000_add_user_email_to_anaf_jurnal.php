@@ -9,6 +9,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Pe servere coloana poate exista deja, pusa de mana dupa acest fisier.
+        if (Schema::hasColumn('anaf_jurnal', 'user_email')) {
+            return;
+        }
+
         Schema::table('anaf_jurnal', function (Blueprint $table) {
             $table->string('user_email')->nullable()->after('user_nume');
         });
@@ -23,6 +28,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasColumn('anaf_jurnal', 'user_email')) {
+            return;
+        }
+
         Schema::table('anaf_jurnal', function (Blueprint $table) {
             $table->dropColumn('user_email');
         });

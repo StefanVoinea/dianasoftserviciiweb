@@ -15,6 +15,11 @@ class CreateAlerteMesajeSpvTable extends Migration
 {
     public function up(): void
     {
+        // Pe servere tabelul poate exista deja, facut de mana dupa acest fisier.
+        if (Schema::hasTable('alerte_mesaje_spv')) {
+            return;
+        }
+
         Schema::create('alerte_mesaje_spv', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('company_id')->nullable()->index();
