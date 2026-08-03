@@ -10,6 +10,8 @@ use App\Models\CertificatUtilizator;
 use App\Services\Anaf\Arhiva\ArhivaService;
 use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\CertificatService;
+use App\Support\ContextCompanie;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -40,6 +42,14 @@ class MonitorizareFolder
     protected $semnare;
     protected $arhiva;
     protected $pdf;
+
+    /**
+     * Declaratia scrisa in tabel pentru fisierul care se lucreaza acum.
+     *
+     * Cat timp e goala, fisierul n-a apucat sa aiba rand: daca pica atunci, i se
+     * scrie unul anume, ca sa nu ramana doar mutat in dosarul de erori.
+     */
+    protected $declaratiaInLucru = null;
 
     public function __construct(
         array $config,
@@ -110,6 +120,15 @@ class MonitorizareFolder
                 $rezultat['esuate']++;
                 $rezultat['erori'][] = $fisier['nume'] . ': ' . $e->getMessage();
 
+                /*
+                 * Fisierul picat inainte de a fi inteles — XML de necitit, PDF
+                 * fara declaratie inauntru, calculator inchis la mijloc — nu
+                 * ajunsese sa aiba rand in tabel. Asa, singurul semn ca s-a
+                 * intamplat ceva ramanea fisierul mutat in dosarul „erori", pe
+                 * care nu se uita nimeni. I se scrie randul acum.
+                 */
+                $this->insemneazaEsecul($certificat, $fisier['nume'], $e);
+
                 $this->mutaFisierul($certificat, $fisier['nume'], 'erori');
                 $this->anunta(
                     $certificat,
@@ -146,9 +165,44 @@ class MonitorizareFolder
         }));
     }
 
+    /**
+     * Scrie in tabel esecul unui fisier care n-a apucat sa aiba rand.
+     *
+     * Cand declaratia fusese deja inregistrata, ea poarta chiar ea eroarea —
+     * „eroare_validare" sau „eroare_semnare" — si nu se mai adauga nimic.
+     */
+    protected function insemneazaEsecul(AnafCertificat $certificat, string $nume, \Exception $e): void
+    {
+        if ($this->declaratiaInLucru !== null) {
+            return;
+        }
+
+        $cui = $e instanceof DeclaratieException ? $e->cui : null;
+        $societate = $cui ? AnafSocietate::where('cif', $cui)->first() : null;
+
+        try {
+            AnafDeclaratie::create([
+                'nume_fisier' => $nume,
+                // Nu s-a putut afla ce declaratie e; se vede macar ce fisier.
+                'tip' => '?',
+                'cui' => $cui ?: '-',
+                'den_firma' => optional($societate)->denumire,
+                'certificat_id' => $societate ? $societate->certificat_id : $certificat->id,
+                'pas' => 'eroare_preluare',
+                'erori_validare' => mb_substr($e->getMessage(), 0, 2000),
+            ]);
+        } catch (\Exception $eroareScriere) {
+            // Randul din tabel e o inlesnire; jurnalul si emailul raman oricum.
+            Log::error('Eșecul fișierului ' . $nume . ' nu a putut fi scris în tabel: ' . $eroareScriere->getMessage());
+        }
+    }
+
     /** Aduce fisierul, il inregistreaza, il valideaza si il semneaza. */
     protected function prelucreaza(AnafCertificat $certificat, string $nume): AnafDeclaratie
     {
+        // Se uita ce era de la fisierul dinainte: acesta inca n-are rand in tabel.
+        $this->declaratiaInLucru = null;
+
         $continut = $this->continutul($certificat, $nume);
 
         $extensie = strtolower(pathinfo($nume, PATHINFO_EXTENSION));
@@ -270,7 +324,7 @@ class MonitorizareFolder
 
         $societate = $meta['cui'] ? AnafSocietate::where('cif', $meta['cui'])->first() : null;
 
-        return AnafDeclaratie::create(array_merge([
+        return $this->declaratiaInLucru = AnafDeclaratie::create(array_merge([
             'nume_fisier' => $nume,
             'cale_xml' => $caleXml,
             'pas' => 'incarcat',
@@ -448,6 +502,15 @@ class MonitorizareFolder
             $adrese = $this->adresele($certificat);
         }
 
+        /*
+         * Si daca nu e nimeni legat de niciun certificat, tot trebuie sa afle
+         * cineva: eroarea pleaca la administratorii firmei. Altfel declaratia
+         * ramane in dosarul de erori si toata lumea o crede depusa.
+         */
+        if ($adrese === []) {
+            $adrese = $this->administratorii();
+        }
+
         Jurnal::esec(
             'monitorizare_folder',
             'Declarația „' . $fisier . '" din dosarul urmărit nu a putut fi prelucrată: ' . $motiv,
@@ -463,6 +526,34 @@ class MonitorizareFolder
                 Log::error('Înștiințarea de eroare nu a plecat către ' . $adresa . ': ' . $e->getMessage());
             }
         }
+    }
+
+    /**
+     * Adresele administratorilor firmei clientului.
+     *
+     * Ultima poarta: cand niciun om nu e legat de certificate, ei sunt cei care
+     * pot lega pe cineva — deci tot la ei trebuie sa ajunga vestea.
+     *
+     * @return array<int, string>
+     */
+    protected function administratorii(): array
+    {
+        $companie = ContextCompanie::curenta();
+
+        if (!$companie) {
+            return [];
+        }
+
+        return DB::table('company_user')
+            ->join('users', 'users.id', '=', 'company_user.user_id')
+            ->where('company_user.company_id', $companie)
+            ->where('company_user.administrator', true)
+            ->where('users.blocat', '!=', 'Da')
+            ->pluck('users.email')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /** @return array<int, string> */

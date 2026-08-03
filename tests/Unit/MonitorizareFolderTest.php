@@ -283,9 +283,58 @@ XML;
 
         $this->assertSame(1, $raport['esuate']);
         $this->assertStringContainsString('nu pare o declarație ANAF', $raport['erori'][0]);
-        $this->assertSame(0, AnafDeclaratie::count(), 'nu rămâne nimic pe jumătate în listă');
+
+        /*
+         * Fișierul picat înainte de a fi înțeles primește totuși un rând: mutat
+         * doar în dosarul „erori", n-ar afla nimeni de el până la termen.
+         */
+        $insemnat = AnafDeclaratie::where('nume_fisier', 'factura.pdf')->first();
+
+        $this->assertNotNull($insemnat, 'eșecul trebuia să se vadă în listă');
+        $this->assertSame('eroare_preluare', $insemnat->pas);
+        $this->assertStringContainsString('nu pare o declarație ANAF', $insemnat->erori_validare);
+        $this->assertNull($insemnat->cale_xml, 'nu rămâne nimic pe jumătate pe disc');
 
         Mail::assertSent(EroareDeclaratieEmail::class);
+    }
+
+    /**
+     * Cand niciun om nu e legat de certificate, vestea pleaca la administratorii
+     * firmei: ei sunt cei care pot lega pe cineva. Altfel declarația ar rămâne
+     * în dosarul de erori și toată lumea ar crede-o depusă.
+     */
+    public function test_fara_om_legat_de_certificat_afla_administratorii(): void
+    {
+        $sef = \App\Models\User::create([
+            'name' => 'Șefa firmei',
+            'email' => 'sefa.monitorizare@example.com',
+            'password' => \Illuminate\Support\Facades\Hash::make('ParolaDeProba1'),
+            'user_type' => 'user',
+            'blocat' => 'Nu',
+            'status' => 'activ',
+        ]);
+
+        \Illuminate\Support\Facades\DB::table('company_user')->insert([
+            'company_id' => self::COMPANIE,
+            'user_id' => $sef->id,
+            'administrator' => true,
+            'poate_semna' => true,
+            'poate_depune' => true,
+        ]);
+
+        $this->bridgeCu(
+            [['nume' => 'factura.pdf', 'marime' => 4200, 'gata' => true]],
+            '%PDF-1.4 factura'
+        );
+
+        $this->serviciu(null, null, $this->pdf(null))->pentruCertificat($this->certificat);
+
+        Mail::assertSent(EroareDeclaratieEmail::class, function ($email) use ($sef) {
+            return $email->hasTo($sef->email);
+        });
+
+        \Illuminate\Support\Facades\DB::table('company_user')->where('user_id', $sef->id)->delete();
+        $sef->forceDelete();
     }
 
     /**

@@ -885,6 +885,8 @@ export default {
         { value: null, text: 'Toate' },
         // „Încărcate" și „Validate" sunt pași de trecere: după încărcare,
         // declarațiile ajung singure la semnat sau la eroare de validare.
+        // Fisierele din dosarul urmarit care n-au putut fi citite deloc
+        { value: 'eroare_preluare', text: 'Nu au putut fi citite' },
         { value: 'eroare_validare', text: 'Erori de validare' },
         { value: 'eroare_semnare', text: 'Erori la semnare' },
         { value: 'semnat', text: 'Semnate' },
@@ -1166,6 +1168,7 @@ export default {
       const etichete = {
         incarcat: 'Încărcată',
         validat: 'Validată',
+        eroare_preluare: 'Nu a putut fi citită',
         eroare_validare: 'Eroare validare',
         eroare_semnare: 'Eroare semnare',
         semnat: 'Semnată',
