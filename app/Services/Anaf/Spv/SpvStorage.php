@@ -5,6 +5,7 @@ namespace App\Services\Anaf\Spv;
 use App\Models\AnafDeclaratie;
 use App\Models\AnafSocietate;
 use App\Models\SpvMesaj;
+use App\Models\SpvSolicitare;
 use App\Services\Anaf\Arhiva\ArhivaException;
 use App\Services\Anaf\Arhiva\ArhivaService;
 use App\Services\Anaf\Jurnal;
@@ -221,7 +222,7 @@ class SpvStorage
      */
     protected function destinatiaMesajului(SpvMesaj $mesaj): array
     {
-        $tip = ArhivaService::curata($mesaj->tip) ?: 'Diverse';
+        $tip = $this->tipulDocumentului($mesaj);
 
         // Data descarcarii, nu cea a mesajului: asa se vede cand a intrat
         // documentul in arhiva.
@@ -238,6 +239,39 @@ class SpvStorage
             ]))),
             'inlocuieste' => $mesaj->arhiva_cale,
         ];
+    }
+
+    /**
+     * Felul documentului, asa cum se aseaza el in arhiva.
+     *
+     * Raspunsurile la solicitari poarta in SPV un tip care nu spune nimic despre
+     * ce e inauntru — toate se cheama „RASPUNS SOLICITARE", fie ca e vector
+     * fiscal, fisa rol sau bilant. In dosarul clientului ele stau dupa ce s-a
+     * cerut, ca sa se vada din nume si din dosar ce document e.
+     */
+    protected function tipulDocumentului(SpvMesaj $mesaj): string
+    {
+        $cerut = optional($this->solicitareaMesajului($mesaj))->tip_document;
+
+        return ArhivaService::curata($cerut ?: $mesaj->tip) ?: 'Diverse';
+    }
+
+    /**
+     * Solicitarea la care raspunde mesajul.
+     *
+     * ANAF intoarce numarul solicitarii chiar pe mesaj, acelasi pe care l-a dat
+     * la cerere; dupa el se recunosc una pe alta. Fara el — sau cand cererea a
+     * fost facuta din alta parte — se ramane la tipul spus de SPV.
+     */
+    protected function solicitareaMesajului(SpvMesaj $mesaj): ?SpvSolicitare
+    {
+        if (!$mesaj->id_solicitare) {
+            return null;
+        }
+
+        return SpvSolicitare::query()->totiUtilizatorii()
+            ->where('id_solicitare', (string) $mesaj->id_solicitare)
+            ->first();
     }
 
     /**

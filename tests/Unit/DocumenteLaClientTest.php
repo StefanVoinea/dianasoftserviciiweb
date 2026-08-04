@@ -6,6 +6,7 @@ use App\Models\AnafCertificat;
 use App\Models\AnafDeclaratie;
 use App\Models\AnafSocietate;
 use App\Models\SpvMesaj;
+use App\Models\SpvSolicitare;
 use App\Services\Anaf\Spv\CertificatService;
 use App\Services\Anaf\Spv\SpvStorage;
 use App\Support\ContextCompanie;
@@ -58,6 +59,8 @@ class DocumenteLaClientTest extends TestCase
         SpvMesaj::query()->toateCompaniile()->where('company_id', self::COMPANIE)->delete();
         AnafSocietate::query()->toateCompaniile()->where('company_id', self::COMPANIE)->delete();
         AnafCertificat::query()->toateCompaniile()->where('company_id', self::COMPANIE)->delete();
+        SpvSolicitare::query()->toateCompaniile()->totiUtilizatorii()
+            ->where('company_id', self::COMPANIE)->delete();
 
         ContextCompanie::elibereaza();
 
@@ -129,6 +132,63 @@ class DocumenteLaClientTest extends TestCase
                 && ($intrebare['dosar'] ?? null) === 'SPV/Situatie Sintetica'
                 // Fara extensie: abia raspunsul ANAF spune daca e pdf sau zip.
                 && ($intrebare['nume'] ?? null) === 'Situatie Sintetica_15208744_2026-07-29_5104283612';
+        });
+    }
+
+    /**
+     * Raspunsurile la solicitari poarta in SPV acelasi tip, „RASPUNS
+     * SOLICITARE", fie ca inauntru e vector fiscal sau bilant. In arhiva ele
+     * stau dupa documentul cerut, ca sa se vada din dosar si din nume ce sunt.
+     */
+    public function test_raspunsul_la_solicitare_se_aseaza_dupa_documentul_cerut(): void
+    {
+        SpvSolicitare::create([
+            'company_id' => self::COMPANIE,
+            'cif' => '15208744',
+            'tip_document' => 'VECTOR FISCAL',
+            'id_solicitare' => '77123',
+            'stare' => 'trimisa',
+        ]);
+
+        $mesaj = $this->mesaj([
+            'mesaj_id' => '5104283615',
+            'tip' => 'RASPUNS SOLICITARE',
+            'id_solicitare' => '77123',
+        ]);
+
+        Http::fake([
+            '192.168.1.44:8099/spv-arhiva*' => Http::response(['cale' => 'F/SPV/x.pdf'], 200),
+        ]);
+
+        $this->app->make(SpvStorage::class)->aduce($mesaj, false, 'solicitari');
+
+        Http::assertSent(function (Request $cerere) {
+            parse_str((string) parse_url($cerere->url(), PHP_URL_QUERY), $intrebare);
+
+            return ($intrebare['dosar'] ?? null) === 'SPV/VECTOR FISCAL'
+                && ($intrebare['nume'] ?? null) === 'VECTOR FISCAL_15208744_2026-07-29_5104283615';
+        });
+    }
+
+    /** Fara solicitare cunoscuta se ramane la tipul spus de SPV. */
+    public function test_fara_solicitare_cunoscuta_ramane_tipul_din_spv(): void
+    {
+        $mesaj = $this->mesaj([
+            'mesaj_id' => '5104283616',
+            'tip' => 'RASPUNS SOLICITARE',
+            'id_solicitare' => '99999',
+        ]);
+
+        Http::fake([
+            '192.168.1.44:8099/spv-arhiva*' => Http::response(['cale' => 'F/SPV/x.pdf'], 200),
+        ]);
+
+        $this->app->make(SpvStorage::class)->aduce($mesaj, false, 'solicitari');
+
+        Http::assertSent(function (Request $cerere) {
+            parse_str((string) parse_url($cerere->url(), PHP_URL_QUERY), $intrebare);
+
+            return ($intrebare['dosar'] ?? null) === 'SPV/RASPUNS SOLICITARE';
         });
     }
 
