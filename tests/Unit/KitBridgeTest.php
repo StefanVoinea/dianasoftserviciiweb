@@ -104,6 +104,33 @@ class KitBridgeTest extends TestCase
     }
 
     /**
+     * BOM-ul se pune si in fisierele din depozit, nu doar la impachetare.
+     *
+     * Fara el, un script copiat de-a dreptul pe un calculator (cum se face la
+     * dezvoltare si la reparatii pe teren) e citit de PowerShell 5.1 ca ANSI:
+     * liniuta — ajunge sa se termine cu octetul pe care PowerShell il ia drept
+     * ghilimea, iar scriptul nu se mai compileaza deloc. Instalarea nu porneste
+     * si nimeni nu afla de ce.
+     */
+    public function test_scripturile_din_depozit_au_bom_utf8(): void
+    {
+        $scripturi = array_merge(
+            glob(base_path('spv-bridge/*.ps1')),
+            glob(base_path('spv-bridge/kit/*.ps1'))
+        );
+
+        $this->assertNotEmpty($scripturi);
+
+        foreach ($scripturi as $cale) {
+            $this->assertStringStartsWith(
+                "\xEF\xBB\xBF",
+                file_get_contents($cale),
+                basename($cale) . ' nu are BOM în depozit'
+            );
+        }
+    }
+
+    /**
      * PowerShell trateaza ghilimelele romanesti drept delimitatori de sir, deci
      * scripturile nu trebuie sa le contina.
      */

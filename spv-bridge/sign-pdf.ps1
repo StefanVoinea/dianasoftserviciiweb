@@ -1,4 +1,4 @@
-# Semneaza un PDF de declaratie cu certificatul de pe token (Windows cert store),
+﻿# Semneaza un PDF de declaratie cu certificatul de pe token (Windows cert store),
 # replicand semnatura aplicatiei desktop: /Filter Adobe.PPKMS, /SubFilter adbe.pkcs7.sha1,
 # camp vizibil pe pagina aleasa, digest SHA-1, CMS ne-detasat prin CSP-ul tokenului.
 #

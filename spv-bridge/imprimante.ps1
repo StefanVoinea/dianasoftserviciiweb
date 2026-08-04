@@ -1,8 +1,15 @@
-# Imprimantele vazute de acest calculator, pentru bridge.
+﻿# Imprimantele vazute de acest calculator, pentru bridge.
 # Fara diacritice si fara caractere peste ASCII: PowerShell citeste fisierul ca
 # ANSI daca nu are BOM, iar textul s-ar strica.
 
 $ErrorActionPreference = 'Stop'
+
+<#
+    Raspunsul pleaca spre programul care a chemat scriptul, iar el asteapta
+    UTF-8. Fara randul acesta, PowerShell scrie in codul de pagini al consolei:
+    diacriticele ies octeti nevalizi, iar JSON-ul nu se mai poate citi deloc.
+#>
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
 
 function Descrie($imprimanta, $implicita) {
     [ordered]@{

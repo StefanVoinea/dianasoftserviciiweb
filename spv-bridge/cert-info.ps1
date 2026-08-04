@@ -1,4 +1,4 @@
-# Certificatele din magazinul de certificate Windows, pentru bridge.
+﻿# Certificatele din magazinul de certificate Windows, pentru bridge.
 # Fara -Thumbprint intoarce toate certificatele disponibile acum (util cand pe
 # acelasi calculator se conecteaza succesiv mai multe tokene).
 param(
@@ -6,6 +6,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+<#
+    Raspunsul pleaca spre programul care a chemat scriptul, iar el asteapta
+    UTF-8. Fara randul acesta, PowerShell scrie in codul de pagini al consolei:
+    diacriticele ies octeti nevalizi, iar JSON-ul nu se mai poate citi deloc.
+#>
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
 
 function Descrie($cert) {
     [ordered]@{

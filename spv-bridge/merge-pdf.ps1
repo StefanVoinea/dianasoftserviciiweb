@@ -1,4 +1,4 @@
-# Uneste mai multe PDF-uri intr-unul singur, pentru tiparire.
+﻿# Uneste mai multe PDF-uri intr-unul singur, pentru tiparire.
 #
 # Fisierul rezultat NU mai poarta semnaturile digitale ale celor de la care
 # vine: la copierea paginilor ele se pierd, fiind legate de octetii documentului

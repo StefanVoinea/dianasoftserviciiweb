@@ -11,12 +11,17 @@ rem  ramane neatins - il stergeti dumneavoastra, daca doriti.
 setlocal
 cd /d "%~dp0"
 
+rem  Fereastra pe UTF-8, ca diacriticele din mesaje sa se vada cum trebuie.
+chcp 65001 >nul 2>&1
+
 echo.
 echo   Se scoate programul de acces la certificatul digital...
 echo.
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "Get-ChildItem -Path '%~dp0*.ps1' | Unblock-File; & '%~dp0dezinstaleaza.ps1'"
+  "Get-ChildItem -Path '%~dp0*.ps1' | Unblock-File" >nul 2>&1
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0dezinstaleaza.ps1"
 
 echo.
 echo   Gata. Documentele si configurarea au ramas in acest dosar.

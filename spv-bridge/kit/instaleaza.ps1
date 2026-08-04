@@ -1,4 +1,4 @@
-# Instalează programul de acces la token ca sarcină programată care pornește automat la logon.
+﻿# Instalează programul de acces la token ca sarcină programată care pornește automat la logon.
 #
 # Programul TREBUIE să ruleze sub contul utilizatorului care deține certificatul:
 # certificatul de pe token stă în magazinul CurrentUser\My, invizibil pentru un
@@ -77,11 +77,25 @@ if (-not (Test-Path $caleEnv)) {
     exit 1
 }
 
-# 3. Curăță o instalare anterioară
+<#
+    3. Curăță o instalare anterioară.
+
+    Dacă sarcina veche a fost făcută dintr-o fereastră de administrator, acum nu
+    mai poate fi ștearsă: Windows răspunde "Access is denied". Se spune limpede
+    ce e de făcut, în loc să se oprească totul cu un mesaj în engleză.
+#>
 $existenta = Get-ScheduledTask -TaskName $NumeSarcina -ErrorAction SilentlyContinue
 if ($existenta) {
     Scrie "Există deja o sarcină cu acest nume — se înlocuiește." 'Yellow'
-    Unregister-ScheduledTask -TaskName $NumeSarcina -Confirm:$false
+
+    try {
+        Unregister-ScheduledTask -TaskName $NumeSarcina -Confirm:$false -ErrorAction Stop
+    } catch {
+        Scrie "Sarcina veche nu a putut fi ștearsă: $($_.Exception.Message)" 'Red'
+        Scrie "A fost făcută, cel mai probabil, dintr-o fereastră de administrator." 'Yellow'
+        Scrie "Dați clic dreapta pe instaleaza.bat și alegeți 'Run as administrator'." 'Yellow'
+        exit 1
+    }
 }
 
 # 4. Sarcina programată
@@ -112,6 +126,7 @@ Scrie "Sarcina '$NumeSarcina' a fost creată (pornire la logon)." 'Green'
 # este scris PUNTE_SERVER; altfel nu se instaleaza nimic si legatura ramane
 # directa, ca pana acum.
 $continutEnv = Get-Content $caleEnv -Raw
+$agentDePornit = $null
 
 if ($continutEnv -match '(?m)^\s*PUNTE_SERVER\s*=\s*\S+') {
     $numeAgent = "$NumeSarcina - agent"
@@ -127,14 +142,31 @@ if ($continutEnv -match '(?m)^\s*PUNTE_SERVER\s*=\s*\S+') {
     #>
     $actiuneAgent = New-ScheduledTaskAction -Execute $PhpPath -Argument "${argumentePhp}agent.php" -WorkingDirectory $folder
 
-    Register-ScheduledTask -TaskName $numeAgent -Action $actiuneAgent -Trigger $declansator `
-        -Principal $principal -Settings $setari `
-        -Description 'Aduce de la aplicatie lucrul pentru tokenul de pe acest calculator, fara sa fie nevoie de porturi deschise.' | Out-Null
+    <#
+        Se prinde esecul si se verifica dupa aceea ca sarcina chiar exista.
 
-    Scrie "Sarcina '$numeAgent' a fost creată (legătură prin tunel)." 'Green'
+        Fara asta, o inregistrare picata trecea nespusa: instalarea pornea
+        agentul o data, cu Start-Process, si totul parea in regula — pana la
+        prima repornire a calculatorului, cand nu-l mai pornea nimeni, fiindca
+        sarcina care trebuia sa-l porneasca la logon nu se facuse niciodata.
+    #>
+    try {
+        Register-ScheduledTask -TaskName $numeAgent -Action $actiuneAgent -Trigger $declansator `
+            -Principal $principal -Settings $setari `
+            -Description 'Aduce de la aplicatie lucrul pentru tokenul de pe acest calculator, fara sa fie nevoie de porturi deschise.' -ErrorAction Stop | Out-Null
+    } catch {
+        Scrie "Sarcina '$numeAgent' NU a putut fi înregistrată: $($_.Exception.Message)" 'Red'
+    }
 
-    # Pornirea lui vine după ce răspunde programul: agentul îi duce comenzile.
-    $agentDePornit = $numeAgent
+    if (Get-ScheduledTask -TaskName $numeAgent -ErrorAction SilentlyContinue) {
+        Scrie "Sarcina '$numeAgent' a fost creată (legătură prin tunel)." 'Green'
+
+        # Pornirea lui vine după ce răspunde programul: agentul îi duce comenzile.
+        $agentDePornit = $numeAgent
+    } else {
+        Scrie "Agentul nu va porni singur la pornirea calculatorului." 'Red'
+        Scrie "Până la lămurirea cauzei, porniți-l cu porneste-agent.bat și lăsați fereastra deschisă." 'Yellow'
+    }
 } else {
     Scrie "Fără PUNTE_SERVER în configurare.env: legătura rămâne directă." 'Yellow'
 }
@@ -223,12 +255,34 @@ if ($agentDePornit) {
         # Agentul isi scrie pasii intr-un jurnal; ultimele randuri spun de ce s-a oprit.
         $caleJurnal = Join-Path $folder 'agent.log'
 
+        # -Encoding UTF8: jurnalul e scris in UTF-8, iar fara asta randurile ies
+        # pline de semne fara noima exact cand omul are nevoie sa le citeasca.
         if (Test-Path $caleJurnal) {
             Scrie "Ultimele rânduri din jurnalul agentului:" 'DarkGray'
-            Get-Content $caleJurnal -Tail 5 | ForEach-Object { Scrie "  $_" 'DarkGray' }
+            Get-Content $caleJurnal -Tail 5 -Encoding UTF8 | ForEach-Object { Scrie "  $_" 'DarkGray' }
         }
 
         Scrie "Porniți-l cu porneste-agent.bat și lăsați fereastra deschisă." 'Yellow'
+    }
+}
+
+<#
+    8. Ce va porni singur data viitoare.
+
+    Se citesc sarcinile asa cum sunt ele acum in Windows, nu cum ar fi trebuit
+    sa iasa instalarea: numai asta spune daca la urmatoarea pornire a
+    calculatorului lucrurile chiar merg de la sine.
+#>
+Scrie ""
+Scrie "La pornirea calculatorului vor porni singure:" 'Cyan'
+
+foreach ($nume in @($NumeSarcina, "$NumeSarcina - agent")) {
+    $sarcina = Get-ScheduledTask -TaskName $nume -ErrorAction SilentlyContinue
+
+    if ($sarcina) {
+        Scrie "  [da] $nume" 'Green'
+    } elseif ($nume -eq $NumeSarcina -or $agentDePornit -or $continutEnv -match '(?m)^\s*PUNTE_SERVER\s*=\s*\S+') {
+        Scrie "  [NU] $nume — va trebui pornit de fiecare data cu mana" 'Red'
     }
 }
 

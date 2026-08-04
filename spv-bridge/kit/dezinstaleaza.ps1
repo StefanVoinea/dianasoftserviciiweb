@@ -1,4 +1,4 @@
-# Oprește și elimină programul care dă acces la tokenul ANAF.
+﻿# Oprește și elimină programul care dă acces la tokenul ANAF.
 param(
     [string]$NumeSarcina = 'Acces token ANAF',
     [int]$Port = 8099

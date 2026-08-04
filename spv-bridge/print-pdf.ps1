@@ -1,4 +1,4 @@
-# Trimite un PDF la imprimanta, de pe acest calculator.
+﻿# Trimite un PDF la imprimanta, de pe acest calculator.
 #
 # Windows nu are o comanda proprie de tiparit PDF-uri, asa ca se incearca doua
 # cai, in ordinea in care sunt de incredere:
