@@ -224,8 +224,20 @@ class SpvStorage
     {
         $tip = $this->tipulDocumentului($mesaj);
 
-        // Data descarcarii, nu cea a mesajului: asa se vede cand a intrat
-        // documentul in arhiva.
+        /*
+         * Numele poarta doua date, in ordinea asta:
+         *
+         *   <Tip>_<CIF>_<data ANAF>_<data descarcarii>_<numarul mesajului>
+         *
+         * Intai cea de la ANAF, ziua in care documentul a fost intocmit: dupa
+         * ea se cauta, si tot dupa ea se insira dosarul cand e sortat pe nume.
+         * A doua spune cand a intrat documentul in arhiva — nu e acelasi lucru,
+         * fiindca un document poate fi adus si dupa saptamani.
+         *
+         * Mesajele mai vechi, aduse inainte de a fi tinuta minte data de la
+         * ANAF, poarta mai departe o singura data: a descarcarii.
+         */
+        $creat = $mesaj->data_creare ? Carbon::parse($mesaj->data_creare) : null;
         $descarcat = $mesaj->descarcat_la ? Carbon::parse($mesaj->descarcat_la) : now();
 
         return [
@@ -234,6 +246,7 @@ class SpvStorage
             'nume' => ArhivaService::curata(implode('_', array_filter([
                 $tip,
                 $mesaj->cif,
+                $creat ? $creat->format('Y-m-d') : null,
                 $descarcat->format('Y-m-d'),
                 $mesaj->mesaj_id,
             ]))),
@@ -277,6 +290,9 @@ class SpvStorage
     /**
      * Dosarul firmei: denumirea din Entitati inrolate; daca CUI-ul nu e inrolat,
      * cea de pe declaratia la care raspunde documentul.
+     *
+     * Entitatea poate fi si o persoana, inrolata cu CNP-ul ei: si ea are spatiu
+     * privat virtual, si ea cere documente de acolo.
      */
     protected function dosarulFirmei(SpvMesaj $mesaj, ?AnafDeclaratie $declaratie): string
     {

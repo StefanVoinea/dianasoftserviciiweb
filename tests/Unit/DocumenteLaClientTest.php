@@ -136,6 +136,55 @@ class DocumenteLaClientTest extends TestCase
     }
 
     /**
+     * Numele poarta amandoua datele: intai ziua in care ANAF a intocmit
+     * documentul — dupa ea se cauta si se insira dosarul — apoi cea in care
+     * documentul a intrat in arhiva. Nu sunt acelasi lucru: un document poate
+     * fi adus si dupa saptamani.
+     */
+    public function test_numele_poarta_data_de_la_anaf_si_pe_cea_a_descarcarii(): void
+    {
+        $mesaj = $this->mesaj([
+            'mesaj_id' => '5104283617',
+            'tip' => 'SOMATIE',
+            'data_creare' => '2026-06-11 09:00:00',
+            'descarcat_la' => '2026-07-29 08:30:00',
+        ]);
+
+        Http::fake([
+            '192.168.1.44:8099/spv-arhiva*' => Http::response(['cale' => 'F/SPV/x.pdf'], 200),
+        ]);
+
+        $this->app->make(SpvStorage::class)->aduce($mesaj);
+
+        Http::assertSent(function (Request $cerere) {
+            parse_str((string) parse_url($cerere->url(), PHP_URL_QUERY), $intrebare);
+
+            return ($intrebare['nume'] ?? null) === 'SOMATIE_15208744_2026-06-11_2026-07-29_5104283617';
+        });
+    }
+
+    /**
+     * Mesajele aduse inainte de a fi tinuta minte data de la ANAF poarta mai
+     * departe o singura data, a descarcarii — nu se lasa o gaura in nume.
+     */
+    public function test_fara_data_de_la_anaf_ramane_doar_cea_a_descarcarii(): void
+    {
+        $mesaj = $this->mesaj(['mesaj_id' => '5104283618', 'tip' => 'SOMATIE']);
+
+        Http::fake([
+            '192.168.1.44:8099/spv-arhiva*' => Http::response(['cale' => 'F/SPV/x.pdf'], 200),
+        ]);
+
+        $this->app->make(SpvStorage::class)->aduce($mesaj);
+
+        Http::assertSent(function (Request $cerere) {
+            parse_str((string) parse_url($cerere->url(), PHP_URL_QUERY), $intrebare);
+
+            return ($intrebare['nume'] ?? null) === 'SOMATIE_15208744_2026-07-29_5104283618';
+        });
+    }
+
+    /**
      * Raspunsurile la solicitari poarta in SPV acelasi tip, „RASPUNS
      * SOLICITARE", fie ca inauntru e vector fiscal sau bilant. In arhiva ele
      * stau dupa documentul cerut, ca sa se vada din dosar si din nume ce sunt.

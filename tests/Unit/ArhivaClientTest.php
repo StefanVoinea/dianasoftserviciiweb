@@ -250,7 +250,7 @@ class ArhivaClientTest extends TestCase
         ]);
 
         Http::fakeSequence()
-            ->push(['cale' => 'DIANA SOFT SRL (15208744)/SPV/RECIPISA/RECIPISA_15208744_2026-07-29_5104283611.pdf'], 200)
+            ->push(['cale' => 'DIANA SOFT SRL (15208744)/SPV/RECIPISA/RECIPISA_15208744_2026-07-20_2026-07-29_5104283611.pdf'], 200)
             ->push(['cale' => 'DIANA SOFT SRL (15208744)/D112/D112_15208744_2026-06_recipisa_912239948.pdf'], 200);
 
         $cale = $this->app->make(SpvStorage::class)->arhiveazaMesaj(
@@ -260,7 +260,7 @@ class ArhivaClientTest extends TestCase
 
         // Documentul mesajului ramane cel din SPV...
         $this->assertSame(
-            'DIANA SOFT SRL (15208744)/SPV/RECIPISA/RECIPISA_15208744_2026-07-29_5104283611.pdf',
+            'DIANA SOFT SRL (15208744)/SPV/RECIPISA/RECIPISA_15208744_2026-07-20_2026-07-29_5104283611.pdf',
             $cale
         );
 
@@ -279,7 +279,7 @@ class ArhivaClientTest extends TestCase
         });
 
         $this->assertSame([
-            ['SPV/RECIPISA', 'RECIPISA_15208744_2026-07-29_5104283611.pdf'],
+            ['SPV/RECIPISA', 'RECIPISA_15208744_2026-07-20_2026-07-29_5104283611.pdf'],
             ['D112', 'D112_15208744_2026-06_recipisa_912239948.pdf'],
         ], $trimise);
     }
@@ -342,8 +342,12 @@ class ArhivaClientTest extends TestCase
         });
     }
 
-    /** Documentele din SPV stau pe firme si pe tipuri, cu data descarcarii. */
-    public function test_documentele_spv_stau_pe_tipuri_cu_data_descarcarii(): void
+    /**
+     * Documentele din SPV stau pe firme si pe tipuri, cu amandoua datele in
+     * nume: intai ziua in care ANAF a intocmit documentul, apoi cea in care a
+     * intrat in arhiva.
+     */
+    public function test_documentele_spv_stau_pe_tipuri_cu_datele_in_nume(): void
     {
         // Denumirea dosarului vine din Entitati inrolate.
         AnafSocietate::create([
@@ -376,7 +380,7 @@ class ArhivaClientTest extends TestCase
 
             return self::camp($corp, 'firma') === 'DIANA SOFT SRL (15208744)'
                 && self::camp($corp, 'dosar') === 'SPV/Situatie Sintetica'
-                && self::camp($corp, 'nume') === 'Situatie Sintetica_15208744_2026-07-29_5104283612.pdf';
+                && self::camp($corp, 'nume') === 'Situatie Sintetica_15208744_2026-07-20_2026-07-29_5104283612.pdf';
         });
     }
 
