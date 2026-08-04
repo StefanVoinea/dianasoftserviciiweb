@@ -21,14 +21,237 @@ class SpvStorage
     /** Instiintarile pe email pentru mesajele nou intrate. */
     protected $alerte;
 
+    /** Legatura cu programul local, pentru descarcarea de-a dreptul in arhiva. */
+    protected $client;
+
     public function __construct(
         ?CertificatService $certificate = null,
         ?ArhivaService $arhiva = null,
-        ?AlerteMesaje $alerte = null
+        ?AlerteMesaje $alerte = null,
+        ?SpvClient $client = null
     ) {
         $this->certificate = $certificate;
         $this->arhiva = $arhiva;
         $this->alerte = $alerte;
+        $this->client = $client;
+    }
+
+    /**
+     * Aduce documentul mesajului pe drumul cel mai scurt cu putinta.
+     *
+     * Intai se incearca drumul scurt: programul local il ia de la ANAF si il
+     * scrie in arhiva lui, iar aici nu ajunge nimic. Instalarile mai vechi nu
+     * stiu inca operatia asta, iar pentru ele se face ca inainte — documentul
+     * trece prin server, dar se scrie pe disc doar daca arhiva clientului nu l-a
+     * primit.
+     *
+     * @param bool   $vreaText  daca aplicatia are ceva de citit din document
+     * @param string $subdosar  unde ramane pe server, cand n-are incotro
+     *
+     * @return array{cale: ?string, text: ?string, hash: ?string, pe_server: ?string}
+     */
+    public function aduce(SpvMesaj $mesaj, bool $vreaText = false, string $subdosar = 'downloads'): array
+    {
+        try {
+            $rezultat = $this->aduceInArhiva($mesaj, $vreaText);
+
+            /*
+             * Programul local n-a stiut sa citeasca textul. Documentul se cere
+             * inapoi din arhiva doar cat sa fie citit, in memorie; pe discul
+             * serverului tot nu ajunge.
+             */
+            if ($vreaText && $rezultat['text'] === null) {
+                $rezultat['text'] = $this->textDinArhiva($rezultat['cale']);
+            }
+
+            return $rezultat + ['pe_server' => null];
+        } catch (ProgramLocalVechiException $e) {
+            // Drumul dinainte, mai jos.
+        }
+
+        if (!$this->client) {
+            throw new SpvException('Nu este configurată legătura cu programul local al clientului.');
+        }
+
+        $fisier = $this->client->descarcare($mesaj->mesaj_id);
+
+        $mesaj->update([
+            'descarcat_la' => now(),
+            'hash_fisier' => $fisier->hash(),
+            'ultima_eroare' => null,
+        ]);
+
+        $cale = $this->arhiveazaMesaj($mesaj, $fisier);
+        $peServer = null;
+
+        // Fara arhiva la client — sau cu ea neizbutita — documentul ramane aici,
+        // ca pana acum: altfel s-ar pierde cu totul.
+        if ($cale === null) {
+            $salvat = $this->saveFile($fisier, $subdosar);
+            $mesaj->update(['cale_fisier' => $salvat['path']]);
+            $peServer = $salvat['path'];
+        }
+
+        return [
+            'cale' => $cale,
+            'text' => $vreaText ? $this->textul($fisier) : null,
+            'hash' => $fisier->hash(),
+            'pe_server' => $peServer,
+        ];
+    }
+
+    /** Textul unui document adus in memorie; null daca nu se poate citi. */
+    protected function textul(SpvFisier $fisier): ?string
+    {
+        if (ltrim($fisier->extensie, '.') !== 'pdf') {
+            return null;
+        }
+
+        try {
+            return TextPdf::dinContinut($fisier->continut);
+        } catch (SpvException $e) {
+            return null;
+        }
+    }
+
+    /** Textul unui document care se afla deja in arhiva clientului. */
+    protected function textDinArhiva(?string $cale): ?string
+    {
+        if (!$cale || !$this->arhiva || strtolower(pathinfo($cale, PATHINFO_EXTENSION)) !== 'pdf') {
+            return null;
+        }
+
+        try {
+            return TextPdf::dinContinut($this->arhiva->ia($cale));
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Aduce documentul din SPV de-a dreptul in arhiva de pe calculatorul
+     * clientului, fara sa treaca prin server.
+     *
+     * Programul local il ia de la ANAF si il scrie in dosarul firmei; inapoi vin
+     * doar calea sub care l-a pus si, cand e nevoie, textul din el — atat cat sa
+     * se stie ce scrie ANAF in recipisa sau in vectorul fiscal.
+     *
+     * @param bool $vreaText daca aplicatia are ceva de citit din document
+     *
+     * @return array{cale: string, text: ?string, hash: string}
+     *
+     * @throws ProgramLocalVechiException programul de la client nu stie inca
+     * @throws SpvException               orice alta piedica
+     */
+    public function aduceInArhiva(SpvMesaj $mesaj, bool $vreaText = false): array
+    {
+        if (!$this->client) {
+            throw new ProgramLocalVechiException('Nu este configurată legătura cu programul local.');
+        }
+
+        if (!$this->arhiva || !$this->arhiva->activa()) {
+            throw new ProgramLocalVechiException('Arhiva de pe calculatorul clientului nu este pornită.');
+        }
+
+        $destinatie = $this->destinatiaMesajului($mesaj);
+        $destinatie['text'] = $vreaText;
+
+        $rezultat = $this->client->descarcaInArhiva($mesaj->mesaj_id, $destinatie);
+
+        $mesaj->update([
+            'arhiva_cale' => $rezultat['cale'],
+            'hash_fisier' => $rezultat['hash'] ?: $mesaj->hash_fisier,
+            'descarcat_la' => now(),
+            'ultima_eroare' => null,
+        ]);
+
+        $this->copiazaLangaDeclaratie($mesaj, $rezultat['cale']);
+
+        return [
+            'cale' => $rezultat['cale'],
+            'text' => $rezultat['text'] ?? null,
+            'hash' => (string) $rezultat['hash'],
+        ];
+    }
+
+    /**
+     * Recipisa primeste o copie si langa declaratia la care raspunde.
+     *
+     * Copia se face intre doua dosare de pe calculatorul clientului: documentul
+     * e deja acolo, deci nu are de ce sa mai faca drumul pana la server.
+     */
+    protected function copiazaLangaDeclaratie(SpvMesaj $mesaj, string $cale): void
+    {
+        $declaratie = $this->declaratiaMesajului($mesaj);
+
+        if (!$declaratie || $declaratie->arhiva_recipisa) {
+            return;
+        }
+
+        $extensie = '.' . (pathinfo($cale, PATHINFO_EXTENSION) ?: 'pdf');
+
+        try {
+            $copie = $this->arhiva->copiaza(
+                $cale,
+                $this->dosarulFirmei($mesaj, $declaratie),
+                ArhivaService::curata($declaratie->tip) ?: 'Diverse',
+                ArhivaService::numeDeclaratie($declaratie, 'recipisa', $extensie)
+            );
+        } catch (ArhivaException $e) {
+            Jurnal::esec(
+                'mesaj_arhivare',
+                'Recipisa nu a putut fi pusă lângă declarația ' . $declaratie->tip
+                    . ' pentru ' . $declaratie->cui . ': ' . $e->getMessage(),
+                [],
+                $declaratie->cui
+            );
+
+            return;
+        }
+
+        $declaratie->update(['arhiva_recipisa' => $copie]);
+    }
+
+    /**
+     * Unde ii sta documentului acestui mesaj: dosarul firmei, subdosarul SPV pe
+     * tipuri si numele lui, fara extensie — abia raspunsul ANAF spune daca e pdf
+     * sau zip.
+     *
+     * @return array{firma: string, dosar: string, nume: string, inlocuieste: ?string}
+     */
+    protected function destinatiaMesajului(SpvMesaj $mesaj): array
+    {
+        $tip = ArhivaService::curata($mesaj->tip) ?: 'Diverse';
+
+        // Data descarcarii, nu cea a mesajului: asa se vede cand a intrat
+        // documentul in arhiva.
+        $descarcat = $mesaj->descarcat_la ? Carbon::parse($mesaj->descarcat_la) : now();
+
+        return [
+            'firma' => $this->dosarulFirmei($mesaj, $this->declaratiaMesajului($mesaj)),
+            'dosar' => config('anaf.arhiva.dosar_spv', 'SPV') . '/' . $tip,
+            'nume' => ArhivaService::curata(implode('_', array_filter([
+                $tip,
+                $mesaj->cif,
+                $descarcat->format('Y-m-d'),
+                $mesaj->mesaj_id,
+            ]))),
+            'inlocuieste' => $mesaj->arhiva_cale,
+        ];
+    }
+
+    /**
+     * Dosarul firmei: denumirea din Entitati inrolate; daca CUI-ul nu e inrolat,
+     * cea de pe declaratia la care raspunde documentul.
+     */
+    protected function dosarulFirmei(SpvMesaj $mesaj, ?AnafDeclaratie $declaratie): string
+    {
+        $societate = $mesaj->cif ? AnafSocietate::where('cif', $mesaj->cif)->first() : null;
+
+        return ArhivaService::dosarFirma(
+            optional($societate)->denumire ?: optional($declaratie)->den_firma,
+            $mesaj->cif
+        );
     }
 
     /**
@@ -51,35 +274,17 @@ class SpvStorage
             return null;
         }
 
-        $societate = $mesaj->cif ? AnafSocietate::where('cif', $mesaj->cif)->first() : null;
         $declaratie = $this->declaratiaMesajului($mesaj);
         $extensie = '.' . ltrim($fisier->extensie, '.');
-
-        $firma = ArhivaService::dosarFirma(
-            optional($societate)->denumire ?: optional($declaratie)->den_firma,
-            $mesaj->cif
-        );
-
-        $tip = ArhivaService::curata($mesaj->tip) ?: 'Diverse';
-
-        // Data descarcarii, nu cea a mesajului: asa se vede cand a intrat
-        // documentul in arhiva.
-        $descarcat = $mesaj->descarcat_la ? Carbon::parse($mesaj->descarcat_la) : now();
-
-        $nume = ArhivaService::curata(implode('_', array_filter([
-            $tip,
-            $mesaj->cif,
-            $descarcat->format('Y-m-d'),
-            $mesaj->mesaj_id,
-        ]))) . $extensie;
+        $destinatie = $this->destinatiaMesajului($mesaj);
 
         try {
             $cale = $this->arhiva->pune(
                 $fisier->continut,
-                $firma,
-                config('anaf.arhiva.dosar_spv', 'SPV') . '/' . $tip,
-                $nume,
-                $mesaj->arhiva_cale
+                $destinatie['firma'],
+                $destinatie['dosar'],
+                $destinatie['nume'] . $extensie,
+                $destinatie['inlocuieste']
             );
         } catch (ArhivaException $e) {
             Jurnal::esec(
@@ -97,7 +302,7 @@ class SpvStorage
         // Copia de langa declaratie se face o singura data: daca recipisa a fost
         // deja adusa acolo, nu se mai adauga inca un fisier.
         if ($declaratie && !$declaratie->arhiva_recipisa) {
-            $this->punaLangaDeclaratie($declaratie, $fisier, $firma, $extensie);
+            $this->punaLangaDeclaratie($declaratie, $fisier, $destinatie['firma'], $extensie);
         }
 
         if ($this->arhiva->stergeDePeServer() && $mesaj->cale_fisier) {

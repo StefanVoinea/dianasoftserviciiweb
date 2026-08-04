@@ -68,6 +68,42 @@ class VectorFiscalParserTest extends TestCase
                     'data_sfarsit' => '2025-12-31',
                 ],
             ],
+
+            /*
+             * Citit pe calculatorul clientului, acelasi rand vine cu coloanele
+             * in ordinea de pe hartie. Documentul nu mai urca pe server, deci
+             * randurile trebuie recunoscute si asa.
+             */
+            'citit la client, obligatie incheiata' => [
+                '100 Profit 01/01/2010 31/12/2010 Trimestriala',
+                [
+                    'cod_imp' => '100',
+                    'semnificatie' => 'Profit',
+                    'perfisc' => 'Trimestrial',
+                    'data_inceput' => '2010-01-01',
+                    'data_sfarsit' => '2010-12-31',
+                ],
+            ],
+            'citit la client, obligatie in vigoare' => [
+                '120 Microintreprinderi 01/01/2011  /  / Trimestriala',
+                [
+                    'cod_imp' => '120',
+                    'semnificatie' => 'Microintreprinderi',
+                    'perfisc' => 'Trimestrial',
+                    'data_inceput' => '2011-01-01',
+                    'data_sfarsit' => null,
+                ],
+            ],
+            'citit la client, semnificatie cu diacritice' => [
+                '480 Contribuţie asiguratorie 01/01/2018  /  / Lunara',
+                [
+                    'cod_imp' => '480',
+                    'semnificatie' => 'Contribuţie asiguratorie',
+                    'perfisc' => 'Lunar',
+                    'data_inceput' => '2018-01-01',
+                    'data_sfarsit' => null,
+                ],
+            ],
         ];
     }
 
@@ -88,6 +124,7 @@ class VectorFiscalParserTest extends TestCase
     {
         return [
             'antet tabel' => ["DATA_SFARSITCOD_IMP\tPERFISCDATA_INCEPUTSEMNIFICATIE"],
+            'antet tabel citit la client' => ['COD_IMP SEMNIFICATIE DATA_INCEPUT DATA_SFARSIT PERFISC'],
             'titlu document' => ['DATE PRIVIND SOCIETATEA DIANA SOFT SRL CE ARE CUI-ul 15208744'],
             'data raportului' => ['28/07/2026 10.54 AM'],
             'linie goala' => [''],

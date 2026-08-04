@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\AnafCertificat;
 use App\Models\AnafSocietate;
 use App\Models\SpvSolicitare;
+use App\Services\Anaf\Arhiva\ArhivaException;
+use App\Services\Anaf\Arhiva\ArhivaService;
 use App\Services\Anaf\Declaratii\ConcatenareService;
 use App\Services\Anaf\Declaratii\DeclaratieException;
 use App\Services\Anaf\Format;
@@ -164,12 +166,12 @@ class SpvSolicitariController extends Controller
         ]);
 
         $solicitari = SpvSolicitare::whereIn('id', $date['id'])
-            ->whereNotNull('cale_fisier')
             ->orderBy('cif')
             ->orderBy('tip_document')
             ->get()
             ->filter(function (SpvSolicitare $solicitare) {
-                return Storage::exists($solicitare->cale_fisier);
+                return $solicitare->arhiva_cale
+                    || ($solicitare->cale_fisier && Storage::exists($solicitare->cale_fisier));
             });
 
         if ($solicitari->isEmpty()) {
@@ -179,9 +181,29 @@ class SpvSolicitariController extends Controller
             ], 422);
         }
 
-        $cai = $solicitari->map(function (SpvSolicitare $solicitare) {
-            return Storage::path($solicitare->cale_fisier);
-        })->values()->all();
+        /*
+         * Documentele din arhiva clientului se aduc intr-un fisier trecator, cat
+         * tine tiparirea, si se sterg imediat: pe server nu ramane nimic.
+         */
+        $trecatoare = [];
+
+        try {
+            $cai = $solicitari->map(function (SpvSolicitare $solicitare) use (&$trecatoare) {
+                if ($solicitare->cale_fisier && Storage::exists($solicitare->cale_fisier)) {
+                    return Storage::path($solicitare->cale_fisier);
+                }
+
+                $temporar = tempnam(sys_get_temp_dir(), 'spvt') . '.pdf';
+                file_put_contents($temporar, app(ArhivaService::class)->ia($solicitare->arhiva_cale));
+                $trecatoare[] = $temporar;
+
+                return $temporar;
+            })->values()->all();
+        } catch (ArhivaException $e) {
+            $this->stergeTrecatoarele($trecatoare);
+
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
+        }
 
         // Filigranul poarta denumirea firmei fiecarui document: intr-un teanc
         // tiparit pot intra raspunsuri ale mai multor societati. Denumirea vine
@@ -195,6 +217,8 @@ class SpvSolicitariController extends Controller
         $utilizator = $request->user();
 
         if (!$utilizator || !$utilizator->imprimanta) {
+            $this->stergeTrecatoarele($trecatoare);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Nu aveți o imprimantă aleasă. Administratorul firmei o poate seta din fila Utilizatori.',
@@ -216,6 +240,8 @@ class SpvSolicitariController extends Controller
             Jurnal::esec('solicitare_tiparire', 'Tipărirea răspunsurilor a eșuat: ' . $e->getMessage());
 
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        } finally {
+            $this->stergeTrecatoarele($trecatoare);
         }
 
         Jurnal::scrie(
@@ -234,14 +260,34 @@ class SpvSolicitariController extends Controller
         ]);
     }
 
-    /**
-     * Documentele SPV stau pe discul privat (storage/app), nu sub public/,
-     * asa ca sunt servite prin aplicatie, nu printr-un link direct.
-     */
-    public function fisier(SpvSolicitare $solicitare)
+    /** Fisierele aduse din arhiva clientului doar pentru tiparire. */
+    protected function stergeTrecatoarele(array $cai): void
     {
-        if (!$solicitare->cale_fisier || !Storage::exists($solicitare->cale_fisier)) {
+        foreach ($cai as $cale) {
+            @unlink($cale);
+        }
+    }
+
+    /**
+     * Documentul cerut, luat de unde se afla: din arhiva de pe calculatorul
+     * clientului sau, pentru cele aduse inainte, de pe discul serverului.
+     */
+    public function fisier(SpvSolicitare $solicitare, ArhivaService $arhiva)
+    {
+        $peServer = $solicitare->cale_fisier && Storage::exists($solicitare->cale_fisier);
+
+        if (!$peServer && !$solicitare->arhiva_cale) {
             return response()->json(['success' => false, 'message' => 'Documentul nu a fost găsit.'], 404);
+        }
+
+        // Documentul sta pe calculatorul clientului; se cere de acolo doar cat
+        // sa fie aratat, si nu se scrie nicaieri pe server.
+        try {
+            $continut = $peServer
+                ? Storage::get($solicitare->cale_fisier)
+                : $arhiva->ia($solicitare->arhiva_cale);
+        } catch (ArhivaException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
         }
 
         Jurnal::scrie(
@@ -253,7 +299,7 @@ class SpvSolicitariController extends Controller
 
         $nume = str_replace(' ', '_', $solicitare->tip_document) . '_' . $solicitare->cif . '.pdf';
 
-        return response()->file(Storage::path($solicitare->cale_fisier), [
+        return response($continut, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="' . $nume . '"',
         ]);

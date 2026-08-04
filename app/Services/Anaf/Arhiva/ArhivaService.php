@@ -75,6 +75,25 @@ class ArhivaService
         return $this->cale($raspuns, 'Scrierea în arhiva locală a eșuat');
     }
 
+    /**
+     * Inca un exemplar al unui document deja arhivat, in alt dosar al arhivei.
+     *
+     * Copia se face intre doua dosare de pe calculatorul clientului: documentul
+     * e deja acolo, deci nu are de ce sa mai faca drumul pana la server si
+     * inapoi doar ca sa fie scris a doua oara.
+     */
+    public function copiaza(string $caleRelativa, string $firma, string $dosar, string $nume): string
+    {
+        $raspuns = $this->cerere()->asForm()->post($this->url('/arhiva/copiaza'), [
+            'cale' => $caleRelativa,
+            'firma' => $firma,
+            'dosar' => $dosar,
+            'nume' => $nume,
+        ]);
+
+        return $this->cale($raspuns, 'Copia în arhiva locală a eșuat');
+    }
+
     /** Continutul unui document din arhiva clientului. */
     public function ia(string $caleRelativa): string
     {

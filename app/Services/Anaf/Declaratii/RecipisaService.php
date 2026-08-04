@@ -8,8 +8,6 @@ use App\Services\Anaf\Spv\SpvClient;
 use App\Services\Anaf\Spv\SpvException;
 use App\Services\Anaf\Spv\SpvStorage;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Storage;
-use Smalot\PdfParser\Parser;
 
 /**
  * Preluarea recipiselor pentru declaratiile depuse. Sursa principala este SPV
@@ -117,32 +115,26 @@ class RecipisaService
 
     protected function preiaDinSpv(AnafDeclaratie $declaratie, array $mesaj): bool
     {
-        $fisier = $this->spvClient->descarcare($mesaj['id']);
-        $salvat = $this->spvStorage->saveFile($fisier, 'recipise');
-
         $inregistrat = $this->spvStorage->saveMessage($mesaj, $mesaj['cif'] ?? $declaratie->cui);
-        $inregistrat->update(['descarcat_la' => now()]);
 
-        $stare = $this->citesteRecipisa(Storage::path($salvat['path']), $declaratie->cui);
+        /*
+         * Recipisa merge de la ANAF drept in arhiva clientului — in dosarul SPV
+         * al firmei si, pe deasupra, cu o copie langa declaratia la care
+         * raspunde. Incoace vine doar textul din ea, atat cat sa se stie
+         * verdictul ANAF.
+         */
+        $adus = $this->spvStorage->aduce($inregistrat, true, 'recipise');
+
+        $stare = $adus['text'] !== null
+            ? $this->verdictul($adus['text'], $declaratie->cui)
+            : 'In prelucrare';
 
         $declaratie->update([
-            'cale_recipisa' => $salvat['path'],
+            'cale_recipisa' => $adus['pe_server'],
             'stare_declaratie' => mb_substr($stare, 0, 1000),
             'data_recipisa' => now(),
             'pas' => 'finalizat',
         ]);
-
-        /*
-         * Arhivarea trece prin acelasi loc ca pentru orice document din SPV:
-         * recipisa intra in dosarul SPV al firmei si, pe deasupra, primeste o
-         * copie langa declaratia la care raspunde.
-         */
-        $this->spvStorage->arhiveazaMesaj($inregistrat, $fisier);
-
-        if ($this->arhiva && $this->arhiva->stergeDePeServer() && $declaratie->fresh()->arhiva_recipisa) {
-            Storage::delete($declaratie->cale_recipisa);
-            $declaratie->update(['cale_recipisa' => null]);
-        }
 
         return true;
     }
@@ -186,16 +178,14 @@ class RecipisaService
     }
 
     /**
-     * Verdictul ANAF din PDF-ul recipisei: textul de dupa prima aparitie a CUI-ului.
+     * Verdictul ANAF din recipisa: textul de dupa prima aparitie a CUI-ului.
+     *
+     * Lucreaza pe textul documentului, nu pe fisierul lui: recipisa e citita pe
+     * calculatorul clientului, acolo unde ramane, iar incoace vine doar ce scrie
+     * in ea.
      */
-    public function citesteRecipisa(string $calePdf, string $cui): string
+    public function verdictul(string $text, string $cui): string
     {
-        try {
-            $text = (new Parser())->parseFile($calePdf)->getText();
-        } catch (\Exception $e) {
-            return 'In prelucrare';
-        }
-
         $pozitie = strpos($text, $cui);
 
         if ($pozitie === false) {

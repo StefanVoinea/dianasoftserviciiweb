@@ -5,6 +5,7 @@ namespace App\Services\Anaf\Spv;
 use App\Models\AnafSocietate;
 use App\Models\SpvSolicitare;
 use App\Models\VectorFiscal;
+use App\Services\Anaf\Arhiva\ArhivaService;
 use Illuminate\Support\Facades\Storage;
 
 
@@ -20,16 +21,21 @@ class SolicitareService
     protected $parser;
     protected $certificate;
 
+    /** Arhiva de pe calculatorul clientului; lipseste doar in teste. */
+    protected $arhiva;
+
     public function __construct(
         SpvClient $client,
         SpvStorage $storage,
         VectorFiscalParser $parser,
-        CertificatService $certificate
+        CertificatService $certificate,
+        ?ArhivaService $arhiva = null
     ) {
         $this->client = $client;
         $this->storage = $storage;
         $this->parser = $parser;
         $this->certificate = $certificate;
+        $this->arhiva = $arhiva;
     }
 
     public function solicita(string $cui, string $tipDocument, array $optiuni = [], ?int $userId = null): SpvSolicitare
@@ -134,15 +140,20 @@ class SolicitareService
      */
     public function reinterpreteaza(): int
     {
-        $solicitari = SpvSolicitare::whereNotNull('cale_fisier')->get();
+        $solicitari = SpvSolicitare::where(function ($query) {
+            $query->whereNotNull('cale_fisier')->orWhereNotNull('arhiva_cale');
+        })->get();
+
         $procesate = 0;
 
         foreach ($solicitari as $solicitare) {
-            if (!Storage::exists($solicitare->cale_fisier)) {
+            $text = $this->textulRaspunsului($solicitare);
+
+            if ($text === null) {
                 continue;
             }
 
-            $obs = $this->interpreteaza($solicitare, Storage::path($solicitare->cale_fisier));
+            $obs = $this->interpreteaza($solicitare, $text);
 
             if ($obs !== null) {
                 $solicitare->update(['obs' => $obs]);
@@ -152,6 +163,28 @@ class SolicitareService
         }
 
         return $procesate;
+    }
+
+    /**
+     * Textul raspunsului deja preluat, luat de unde se afla documentul: din
+     * arhiva de pe calculatorul clientului sau, pentru cele aduse inainte, de pe
+     * discul serverului. Nici intr-un caz, nici in celalalt nu se scrie nimic.
+     */
+    protected function textulRaspunsului(SpvSolicitare $solicitare): ?string
+    {
+        try {
+            if ($solicitare->cale_fisier && Storage::exists($solicitare->cale_fisier)) {
+                return TextPdf::dinCale(Storage::path($solicitare->cale_fisier));
+            }
+
+            if ($solicitare->arhiva_cale && $this->arhiva) {
+                return TextPdf::dinContinut($this->arhiva->ia($solicitare->arhiva_cale));
+            }
+        } catch (\Exception $e) {
+            return null;
+        }
+
+        return null;
     }
 
     protected function potrivesteMesaj(SpvSolicitare $solicitare, array $mesaje): ?array
@@ -169,15 +202,23 @@ class SolicitareService
 
     protected function preia(SpvSolicitare $solicitare, array $mesaj): void
     {
-        $fisier = $this->client->descarcare($mesaj['id']);
-        $salvat = $this->storage->saveFile($fisier, 'solicitari');
-        $this->storage->saveMessage($mesaj, $solicitare->cif);
+        $inregistrat = $this->storage->saveMessage($mesaj, $solicitare->cif);
 
-        $obs = $this->interpreteaza($solicitare, Storage::path($salvat['path']));
+        /*
+         * Raspunsul merge de la ANAF drept in arhiva clientului; incoace vine
+         * doar textul din el, atat cat sa fie citit vectorul fiscal, situatia
+         * sintetica sau datele de identificare.
+         */
+        $adus = $this->storage->aduce($inregistrat, true, 'solicitari');
+
+        $obs = $adus['text'] !== null
+            ? $this->interpreteaza($solicitare, $adus['text'])
+            : 'Documentul nu a putut fi citit pe calculatorul clientului.';
 
         $solicitare->update([
             'mesaj_id' => $mesaj['id'],
-            'cale_fisier' => $salvat['path'],
+            'cale_fisier' => $adus['pe_server'],
+            'arhiva_cale' => $adus['cale'],
             'data_afisare' => now(),
             'detalii' => $mesaj['detalii'] ?? $solicitare->detalii,
             'obs' => $obs,
@@ -186,18 +227,18 @@ class SolicitareService
     }
 
     /** Interpretarea documentului descarcat, in functie de tip. */
-    protected function interpreteaza(SpvSolicitare $solicitare, string $calePdf): ?string
+    protected function interpreteaza(SpvSolicitare $solicitare, string $text): ?string
     {
         $tip = mb_strtoupper($solicitare->tip_document);
 
         try {
             if (strpos($tip, 'VECTOR FISCAL') !== false) {
-                $rezultat = $this->parser->citesteVectorFiscal($calePdf, $solicitare->cif);
+                $rezultat = $this->parser->citesteVectorFiscal($text, $solicitare->cif);
                 $numar = count($rezultat['randuri']);
 
                 // Antetul vectorului contine denumirea oficiala a contribuabilului.
                 $this->actualizeazaSocietatea($solicitare->cif, [
-                    'denumire' => $this->parser->citesteDenumire($calePdf, $solicitare->cif),
+                    'denumire' => $this->parser->citesteDenumire($text, $solicitare->cif),
                     'sursa' => 'vector',
                     'campuri' => ['vector_la' => now()],
                 ]);
@@ -228,7 +269,7 @@ class SolicitareService
                     'denumire' => $denumire,
                     'sursa' => 'date_identificare',
                     'campuri' => [
-                        'date_identificare' => mb_substr($this->parser->textDocument($calePdf), 0, 5000),
+                        'date_identificare' => mb_substr($this->parser->textDocument($text), 0, 5000),
                         'date_identificare_la' => now(),
                     ],
                 ]);

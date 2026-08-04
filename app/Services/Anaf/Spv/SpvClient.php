@@ -82,6 +82,25 @@ class SpvClient
         return new SpvFisier($id, $response->body(), $extensie, $contentType);
     }
 
+    /**
+     * Descarca documentul de-a dreptul in arhiva de pe calculatorul clientului.
+     *
+     * Cererea o duce programul local pana la ANAF si tot el scrie documentul in
+     * dosarul firmei; aici se intoarce doar calea sub care l-a pus.
+     *
+     * @param array $destinatie firma, dosar, nume (fara extensie), inlocuieste, text
+     *
+     * @return array{cale: string, extensie: string, marime: int, hash: string, text: ?string}
+     */
+    public function descarcaInArhiva(string $id, array $destinatie): array
+    {
+        // Pauza ceruta de ANAF intre apeluri se tine si aici: apelul lui e tot
+        // unul catre ei, doar ca facut de la celalalt capat.
+        usleep($this->config['throttle_ms'] * 1000);
+
+        return $this->transport->descarcaInArhiva($id, $destinatie);
+    }
+
     private function json(string $path, array $query): array
     {
         $response = $this->call($path, $query);

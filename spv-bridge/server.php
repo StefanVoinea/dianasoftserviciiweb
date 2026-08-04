@@ -17,6 +17,7 @@
  *
  * Rute:
  *   GET  /spv/<cale>      — proxy REST SPV (listaMesaje, descarcare, cerere)
+ *   GET  /spv-arhiva      — aduce documentul din SPV direct în arhiva de aici
  *   POST /decl/login      — handshake autentificare decl.anaf.mfinante.gov.ro
  *   POST /decl/upload     — depunere PDF semnat (multipart linkdoc)
  *   POST /semnare         — semnează PDF-ul din corpul cererii (PowerShell+iTextSharp)
@@ -25,6 +26,7 @@
  *   POST /arhiva          — scrie un document în arhiva locală
  *   GET  /arhiva          — citește un document din arhiva locală
  *   POST /arhiva/redenumeste — schimbă numele unui document arhivat
+ *   POST /arhiva/copiaza  — încă un exemplar al unui document deja arhivat
  *   GET  /monitorizare    — declarațiile puse în dosarul urmărit
  *   POST /monitorizare/mutat — scoate din dosar fișierul prelucrat
  */
@@ -206,6 +208,66 @@ function arhiva_destinatie($dosar, $nume, $inlocuieste = '')
 }
 
 /**
+ * Rădăcina arhivei pentru cererea de față, gata de scris.
+ *
+ * Aplicația o trimite la fiecare cerere, în antet, ca să nu fie umblat prin
+ * configurare.env pe fiecare stație; valoarea de acolo rămâne ca rezervă. Dacă
+ * ceva nu e în regulă, se răspunde pe loc și execuția nu se mai întoarce aici.
+ */
+function arhiva_radacina_pregatita(array $config)
+{
+    $radacina = $config['arhiva'];
+
+    if (!empty($_SERVER['HTTP_X_ARHIVA_CALE'])) {
+        $ceruta = arhiva_radacina_ceruta($_SERVER['HTTP_X_ARHIVA_CALE']);
+
+        if ($ceruta === '') {
+            raspunde_json(400, array(
+                'eroare' => 'Calea arhivei este greșită.',
+                'detalii' => 'Se așteaptă o cale completă, de forma D:\\Documente fiscale sau \\\\server\\arhiva.',
+            ));
+        }
+
+        $radacina = $ceruta;
+    }
+
+    if (!is_dir($radacina) && !@mkdir($radacina, 0777, true)) {
+        raspunde_json(500, array(
+            'eroare' => 'Dosarul de arhivă nu poate fi creat.',
+            'detalii' => $radacina,
+        ));
+    }
+
+    return $radacina;
+}
+
+/**
+ * Textul scris în paginile unui PDF, citit cu biblioteca de lângă program.
+ *
+ * Cu el, aplicația află verdictul recipisei sau rândurile vectorului fiscal
+ * fără ca documentul să plece de pe calculatorul acesta. Un eșec nu strică
+ * nimic: aplicația rămâne fără text și se descurcă altfel.
+ */
+function pdf_text($dosar, $fisier)
+{
+    exec(implode(' ', array(
+        'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+        '-File', escapeshellarg($dosar . '\\pdf-info.ps1'),
+        '-Cale', escapeshellarg($fisier),
+        '-Text',
+        '2>nul',
+    )), $iesire, $cod_iesire);
+
+    if ($cod_iesire !== 0) {
+        return null;
+    }
+
+    $json = json_decode(implode('', $iesire), true);
+
+    return isset($json['text']) && $json['text'] !== '' ? $json['text'] : null;
+}
+
+/**
  * Rulează curl.exe cu certificatul din store și întoarce
  * array(status, content_type, fisier_corp, iesire, cod_iesire).
  *
@@ -264,6 +326,46 @@ function executa_curl(array $config, $url, array $optiuni = array())
         'iesire' => implode(' | ', $iesire),
         'cod_iesire' => $cod_iesire,
     );
+}
+
+/**
+ * Cere ceva de la SPV, cu o a doua încercare pe sesiune nouă.
+ *
+ * Lanțul F5 al ANAF resetează uneori conexiunea; atunci se aruncă prăjitura de
+ * sesiune și se întreabă din nou. Întoarce rezultatul curl, cu corpul scris în
+ * fișierul temporar — cine îl primește răspunde de ștergerea lui.
+ */
+function spv_cere(array $config, $tinta)
+{
+    $rezultat = array(
+        'status' => 0,
+        'content_type' => '',
+        'fisier_corp' => null,
+        'iesire' => '',
+        'cod_iesire' => -1,
+    );
+
+    for ($incercare = 1; $incercare <= 2; $incercare++) {
+        $rezultat = executa_curl($config, $tinta, array(
+            'location',
+            'cookie-jar = ' . $config['cookie_jar'],
+            'cookie = ' . $config['cookie_jar'],
+        ));
+
+        if ($rezultat['status'] >= 100) {
+            return $rezultat;
+        }
+
+        @unlink($rezultat['fisier_corp']);
+        $rezultat['fisier_corp'] = null;
+
+        if ($incercare === 1) {
+            @unlink($config['cookie_jar']);
+            sleep(3);
+        }
+    }
+
+    return $rezultat;
 }
 
 function trimite_fisier($status, $tip_continut, $fisier_corp)
@@ -618,31 +720,126 @@ if ($metoda === 'GET' && preg_match('#^/spv/([A-Za-z0-9_\-/.]+)$#', $calea, $pot
         $tinta .= '?' . $_SERVER['QUERY_STRING'];
     }
 
-    $rezultat = array('cod_iesire' => -1, 'iesire' => '');
+    $rezultat = spv_cere($config, $tinta);
 
-    for ($incercare = 1; $incercare <= 2; $incercare++) {
-        $rezultat = executa_curl($config, $tinta, array(
-            'location',
-            'cookie-jar = ' . $config['cookie_jar'],
-            'cookie = ' . $config['cookie_jar'],
-        ));
-
-        if ($rezultat['status'] >= 100) {
-            trimite_fisier($rezultat['status'], $rezultat['content_type'], $rezultat['fisier_corp']);
-        }
-
-        @unlink($rezultat['fisier_corp']);
-
-        if ($incercare === 1) {
-            @unlink($config['cookie_jar']);
-            sleep(3);
-        }
+    if ($rezultat['status'] >= 100) {
+        trimite_fisier($rezultat['status'], $rezultat['content_type'], $rezultat['fisier_corp']);
     }
 
     raspunde_json(502, array(
         'eroare'  => 'Apelul către ANAF a eșuat (curl exit ' . $rezultat['cod_iesire'] . ')',
         'detalii' => $rezultat['iesire'],
     ));
+}
+
+/*
+ * GET /spv-arhiva?id=...&firma=...&dosar=...&nume=... — aduce documentul din
+ * SPV și îl scrie de-a dreptul în arhiva de pe calculatorul acesta.
+ *
+ * Până acum documentul făcea un ocol fără rost: venea de la ANAF aici, urca la
+ * aplicație și se întorcea ca să fie scris tot aici. Acum nu mai pleacă nicăieri
+ * — aplicația primește doar calea sub care l-a găsit și, la cerere, textul din
+ * el, atât cât să știe ce scrie ANAF în recipisă sau în vectorul fiscal.
+ *
+ * „nume" vine fără extensie: abia răspunsul ANAF spune dacă e pdf sau zip.
+ */
+if ($metoda === 'GET' && $calea === '/spv-arhiva') {
+    $id = isset($_GET['id']) ? trim($_GET['id']) : '';
+    $firma = arhiva_bucata(isset($_GET['firma']) ? $_GET['firma'] : '');
+    $nume = arhiva_bucata(isset($_GET['nume']) ? $_GET['nume'] : '');
+
+    if (!preg_match('/^[A-Za-z0-9_\-]{1,60}$/', $id)) {
+        raspunde_json(400, array('eroare' => 'Lipsește numărul mesajului de descărcat.'));
+    }
+
+    if ($firma === '' || $nume === '') {
+        raspunde_json(400, array('eroare' => 'Lipsește firma sau numele documentului.'));
+    }
+
+    $radacina = arhiva_radacina_pregatita($config);
+
+    $rezultat = spv_cere($config, rtrim($config['base_url'], '/') . '/descarcare?id=' . rawurlencode($id));
+
+    if ($rezultat['status'] < 100) {
+        raspunde_json(502, array(
+            'eroare'  => 'Apelul către ANAF a eșuat (curl exit ' . $rezultat['cod_iesire'] . ')',
+            'detalii' => $rezultat['iesire'],
+        ));
+    }
+
+    /*
+     * ANAF răspunde cu JSON când nu dă documentul (mesaj inexistent, drepturi
+     * lipsă). Se spune mai departe motivul lui, nu un cod de stare.
+     */
+    $inceput = ltrim((string) @file_get_contents($rezultat['fisier_corp'], false, null, 0, 200));
+
+    if (strpos(strtolower($rezultat['content_type']), 'json') !== false
+        || (isset($inceput[0]) && $inceput[0] === '{')) {
+        $primit = json_decode((string) @file_get_contents($rezultat['fisier_corp']), true);
+        @unlink($rezultat['fisier_corp']);
+
+        raspunde_json(502, array(
+            'eroare' => isset($primit['eroare']) ? $primit['eroare'] : 'Descărcarea documentului a eșuat.',
+            'detalii' => mb_substr($inceput, 0, 300),
+        ));
+    }
+
+    if ($rezultat['status'] !== 200) {
+        @unlink($rezultat['fisier_corp']);
+
+        raspunde_json(502, array(
+            'eroare' => 'ANAF a răspuns cu ' . $rezultat['status'] . ' la descărcarea documentului.',
+            'detalii' => mb_substr($inceput, 0, 300),
+        ));
+    }
+
+    $extensie = strpos(strtolower($rezultat['content_type']), 'zip') !== false ? 'zip' : 'pdf';
+
+    $dosarul = arhiva_cale_ceruta($radacina, $firma . '/' . (isset($_GET['dosar']) ? $_GET['dosar'] : ''));
+
+    if (!is_dir($dosarul) && !@mkdir($dosarul, 0777, true)) {
+        @unlink($rezultat['fisier_corp']);
+
+        raspunde_json(500, array('eroare' => 'Dosarul nu poate fi creat.', 'detalii' => $dosarul));
+    }
+
+    $inlocuieste = isset($_GET['inlocuieste'])
+        ? arhiva_cale_ceruta($radacina, $_GET['inlocuieste'])
+        : '';
+
+    $destinatie = arhiva_destinatie($dosarul, $nume . '.' . $extensie, $inlocuieste);
+
+    /*
+     * Fișierul vine din dosarul temporar al Windows-ului, care poate fi pe alt
+     * disc decât arhiva; acolo mutarea dintr-o bucată nu merge, deci se copiază.
+     */
+    if (!@rename($rezultat['fisier_corp'], $destinatie)) {
+        if (!@copy($rezultat['fisier_corp'], $destinatie)) {
+            @unlink($rezultat['fisier_corp']);
+
+            raspunde_json(500, array('eroare' => 'Documentul nu a putut fi scris.', 'detalii' => $destinatie));
+        }
+
+        @unlink($rezultat['fisier_corp']);
+    }
+
+    $raspuns = array(
+        'cale' => arhiva_relativa($radacina, $destinatie),
+        'cale_completa' => $destinatie,
+        'extensie' => $extensie,
+        'marime' => filesize($destinatie),
+        'hash' => sha1_file($destinatie),
+    );
+
+    if (!empty($_GET['text']) && $extensie === 'pdf') {
+        $text = pdf_text(__DIR__, $destinatie);
+
+        if ($text !== null) {
+            $raspuns['text'] = $text;
+        }
+    }
+
+    raspunde_json(200, $raspuns);
 }
 
 /*
@@ -1237,25 +1434,7 @@ if (strpos($calea, '/arhiva') === 0) {
      * de acest calculator, și vine cu fiecare cerere. Așa nu mai trebuie umblat
      * prin bridge.env pe fiecare stație; valoarea de acolo rămâne ca rezervă.
      */
-    if (!empty($_SERVER['HTTP_X_ARHIVA_CALE'])) {
-        $ceruta = arhiva_radacina_ceruta($_SERVER['HTTP_X_ARHIVA_CALE']);
-
-        if ($ceruta === '') {
-            raspunde_json(400, array(
-                'eroare' => 'Calea arhivei este greșită.',
-                'detalii' => 'Se așteaptă o cale completă, de forma D:\\Documente fiscale sau \\\\server\\arhiva.',
-            ));
-        }
-
-        $config['arhiva'] = $ceruta;
-    }
-
-    if (!is_dir($config['arhiva']) && !@mkdir($config['arhiva'], 0777, true)) {
-        raspunde_json(500, array(
-            'eroare' => 'Dosarul de arhivă nu poate fi creat.',
-            'detalii' => $config['arhiva'],
-        ));
-    }
+    $config['arhiva'] = arhiva_radacina_pregatita($config);
 
     // POST /arhiva — scrie un document primit de la aplicație
     if ($metoda === 'POST' && $calea === '/arhiva') {
@@ -1348,6 +1527,47 @@ if (strpos($calea, '/arhiva') === 0) {
             if (!@rename($fisier, $destinatie)) {
                 raspunde_json(500, array('eroare' => 'Documentul nu a putut fi redenumit.'));
             }
+        }
+
+        raspunde_json(200, array(
+            'cale' => arhiva_relativa($config['arhiva'], $destinatie),
+            'cale_completa' => $destinatie,
+        ));
+    }
+
+    /*
+     * POST /arhiva/copiaza — încă un exemplar al unui document deja arhivat.
+     *
+     * Recipisa stă și lângă declarația la care răspunde, acolo unde o caută
+     * omul. Copia se face aici, între două dosare de pe același calculator, ca
+     * documentul să nu mai facă drumul până la aplicație și înapoi.
+     */
+    if ($metoda === 'POST' && $calea === '/arhiva/copiaza') {
+        $sursa = arhiva_cale_ceruta($config['arhiva'], isset($_POST['cale']) ? $_POST['cale'] : '');
+        $firma = arhiva_bucata(isset($_POST['firma']) ? $_POST['firma'] : '');
+        $nume = arhiva_bucata(isset($_POST['nume']) ? $_POST['nume'] : '');
+
+        if ($sursa === '' || !is_file($sursa)) {
+            raspunde_json(404, array('eroare' => 'Documentul de copiat nu se află în arhivă.'));
+        }
+
+        if ($firma === '' || $nume === '') {
+            raspunde_json(400, array('eroare' => 'Lipsește firma sau numele copiei.'));
+        }
+
+        $dosarul = arhiva_cale_ceruta(
+            $config['arhiva'],
+            $firma . '/' . (isset($_POST['dosar']) ? $_POST['dosar'] : '')
+        );
+
+        if (!is_dir($dosarul) && !@mkdir($dosarul, 0777, true)) {
+            raspunde_json(500, array('eroare' => 'Dosarul nu poate fi creat.', 'detalii' => $dosarul));
+        }
+
+        $destinatie = arhiva_destinatie($dosarul, $nume);
+
+        if (!@copy($sursa, $destinatie)) {
+            raspunde_json(500, array('eroare' => 'Copia nu a putut fi scrisă.', 'detalii' => $destinatie));
         }
 
         raspunde_json(200, array(

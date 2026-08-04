@@ -6,6 +6,8 @@ use App\Services\Anaf\Bridge\LicentiereBridge;
 use App\Services\Anaf\Bridge\Punte;
 use App\Services\Anaf\Spv\CertificatService;
 use App\Services\Anaf\Spv\Contracts\SpvTransport;
+use App\Services\Anaf\Spv\ProgramLocalVechiException;
+use App\Services\Anaf\Spv\SpvException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
@@ -26,6 +28,93 @@ class BridgeTransport implements SpvTransport
     {
         $this->config = $config;
         $this->certificate = $certificate;
+    }
+
+    /**
+     * Aduce documentul din SPV de-a dreptul in arhiva clientului.
+     *
+     * Serverul nu mai vede documentul deloc: programul local il ia de la ANAF si
+     * il scrie in dosarul firmei, iar inapoi vine doar calea sub care l-a pus si,
+     * daca s-a cerut, textul din el — atat cat sa se stie ce scrie ANAF acolo.
+     */
+    public function descarcaInArhiva(string $id, array $destinatie): array
+    {
+        $intrebare = array_filter([
+            'id' => $id,
+            'firma' => $destinatie['firma'] ?? '',
+            'dosar' => $destinatie['dosar'] ?? '',
+            'nume' => $destinatie['nume'] ?? '',
+            'inlocuieste' => $destinatie['inlocuieste'] ?? null,
+            'text' => !empty($destinatie['text']) ? 1 : null,
+        ], function ($valoare) {
+            return $valoare !== null && $valoare !== '';
+        });
+
+        $raspuns = $this->cereDinArhiva($intrebare);
+
+        if ($this->faraLicenta($raspuns)) {
+            $certificat = $this->certificate->activ();
+
+            if ($certificat && app(LicentiereBridge::class)->reinnoieste($certificat, true)['emisa']) {
+                $raspuns = $this->cereDinArhiva($intrebare);
+            }
+        }
+
+        /*
+         * Kiturile mai vechi nu stiu de operatia asta. Se spune limpede, ca
+         * lucrarea sa se faca pe drumul dinainte in loc sa esueze.
+         */
+        if ($raspuns->status() === 404) {
+            throw new ProgramLocalVechiException(
+                'Programul local de pe calculatorul clientului nu cunoaște descărcarea direct în arhivă.'
+            );
+        }
+
+        if ($raspuns->failed()) {
+            $primit = json_decode($raspuns->body(), true);
+
+            throw new SpvException(trim(
+                ($primit['eroare'] ?? 'Descărcarea în arhiva locală a eșuat (HTTP ' . $raspuns->status() . ').')
+                . ' ' . ($primit['detalii'] ?? '')
+            ));
+        }
+
+        $cale = $raspuns->json('cale');
+
+        if (!is_string($cale) || $cale === '') {
+            throw new SpvException('Programul local nu a întors calea documentului arhivat.');
+        }
+
+        return [
+            'cale' => $cale,
+            'extensie' => (string) $raspuns->json('extensie'),
+            'marime' => (int) $raspuns->json('marime'),
+            'hash' => (string) $raspuns->json('hash'),
+            'text' => $raspuns->json('text'),
+        ];
+    }
+
+    /** Cererea catre capatul care descarca si arhiveaza intr-un singur pas. */
+    protected function cereDinArhiva(array $intrebare): Response
+    {
+        $bridge = $this->certificate->bridge();
+
+        $antete = [];
+
+        if ($bridge['thumbprint']) {
+            $antete['X-Thumbprint'] = $bridge['thumbprint'];
+        }
+
+        // Unde tine clientul arhiva; gol inseamna ce scrie in configurare.env.
+        if ($bridge['arhiva']) {
+            $antete['X-Arhiva-Cale'] = $bridge['arhiva'];
+        }
+
+        return Http::withToken($bridge['token'])
+            ->withHeaders($antete)
+            ->timeout($this->rabdarea())
+            ->withOptions(['connect_timeout' => self::CONECTARE_SECUNDE])
+            ->get(rtrim($bridge['url'], '/') . '/spv-arhiva', $intrebare);
     }
 
     public function get($path, array $query = array()): Response

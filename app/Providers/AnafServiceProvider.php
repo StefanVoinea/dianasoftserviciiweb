@@ -63,7 +63,9 @@ class AnafServiceProvider extends ServiceProvider
             return new SpvStorage(
                 $app->make(CertificatService::class),
                 $app->make(ArhivaService::class),
-                $app->make(AlerteMesaje::class)
+                $app->make(AlerteMesaje::class),
+                // Cu el, documentul merge de la ANAF drept in arhiva clientului.
+                $app->make(SpvClient::class)
             );
         });
 

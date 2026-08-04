@@ -379,7 +379,7 @@
 
         <template #cell(actiuni)="rand">
           <b-button
-            v-if="rand.item.cale_fisier"
+            v-if="areDocument(rand.item)"
             size="sm"
             variant="outline-secondary"
             class="mr-1"
@@ -577,6 +577,16 @@ export default {
     cere(parametru) {
       return (this.parametriTip[this.tipDocument] || []).indexOf(parametru) !== -1
     },
+    /*
+     * Răspunsul are document de arătat?
+     *
+     * De acum el stă în arhiva de pe calculatorul clientului (arhiva_cale), nu
+     * pe server. Cele preluate înainte sunt încă pe server (cale_fisier), deci
+     * se ține seama de amândouă.
+     */
+    areDocument(solicitare) {
+      return Boolean(solicitare.arhiva_cale || solicitare.cale_fisier)
+    },
     // Documentele stau pe discul privat, deci se cer prin API (cu token) si se
     // deschid dintr-un blob local, nu printr-un link direct catre /storage.
     deschide(solicitare) {
@@ -653,7 +663,7 @@ export default {
       this.preiaInCurs = true
 
       // Ce era deja preluat înainte: la sfârșit se tipăresc doar noutățile.
-      const inainte = this.solicitari.filter(s => s.cale_fisier).map(s => s.id)
+      const inainte = this.solicitari.filter(s => this.areDocument(s)).map(s => s.id)
 
       return this.$http.post('/spv/solicitari/preia')
         .then(raspuns => {
@@ -681,7 +691,7 @@ export default {
             if (!this.tiparire) return null
 
             const noi = this.solicitari
-              .filter(s => s.cale_fisier && inainte.indexOf(s.id) === -1)
+              .filter(s => this.areDocument(s) && inainte.indexOf(s.id) === -1)
               .map(s => s.id)
 
             return noi.length ? this.tipareste(noi) : null

@@ -7,7 +7,6 @@ use App\Models\SpvMesaj;
 use App\Services\Anaf\Arhiva\ArhivaException;
 use App\Services\Anaf\Arhiva\ArhivaService;
 use App\Services\Anaf\Jurnal;
-use App\Services\Anaf\Spv\SpvClient;
 use App\Services\Anaf\Spv\SpvException;
 use App\Services\Anaf\Spv\SpvStorage;
 use Illuminate\Http\Request;
@@ -55,7 +54,7 @@ class SpvFileController extends Controller
         ]);
     }
 
-    public function download(Request $request, SpvClient $spvClient, SpvStorage $storage)
+    public function download(Request $request, SpvStorage $storage)
     {
         try {
             $id = $request->query('id');
@@ -65,29 +64,21 @@ class SpvFileController extends Controller
                 return response()->json(['success' => false, 'message' => 'Mesajul nu a fost găsit'], 404);
             }
 
-            $fisier = $spvClient->descarcare($id);
-            $saved = $storage->saveFile($fisier, 'downloads');
-
-            $message->update([
-                'cale_fisier' => $saved['path'],
-                'hash_fisier' => $saved['hash'],
-                'descarcat_la' => now(),
-            ]);
-
-            // Documentul ramane la client, in dosarul firmei lui.
-            $storage->arhiveazaMesaj($message, $fisier);
+            // Documentul merge de la ANAF drept in dosarul firmei, la client.
+            $adus = $storage->aduce($message);
 
             Jurnal::scrie(
                 'mesaj_descarcare',
                 'A descărcat fișierul mesajului ' . $message->tip . ' (' . $id . ')',
-                ['mesaj_id' => $id, 'hash' => $saved['hash']],
+                ['mesaj_id' => $id, 'hash' => $adus['hash']],
                 $message->cif
             );
 
             return response()->json([
                 'success' => true,
-                'path' => $saved['path'],
-                'hash' => $saved['hash'],
+                // Calea din arhiva clientului; pe server nu mai ramane nimic.
+                'path' => $adus['cale'] ?: $adus['pe_server'],
+                'hash' => $adus['hash'],
             ]);
         } catch (SpvException $e) {
             Jurnal::esec('mesaj_descarcare', 'Descărcarea mesajului ' . $id . ' a eșuat: ' . $e->getMessage());

@@ -4,23 +4,26 @@ namespace App\Services\Anaf\Spv;
 
 use App\Models\VectorSpv;
 use Carbon\Carbon;
-use Smalot\PdfParser\Parser;
 
 /**
  * Citeste documentele SPV cu continut structurat: vectorul fiscal (obligatiile
  * declarative), situatia sintetica (obligatii de plata restante) si datele de
  * identificare ale contribuabilului.
+ *
+ * Lucreaza pe textul documentului, nu pe fisierul lui: textul vine de la
+ * programul local, care citeste documentul acolo unde sta — pe calculatorul
+ * clientului — fara sa-l mai trimita incoace.
  */
 class VectorFiscalParser
 {
     /**
-     * Parseaza PDF-ul de vector fiscal si sincronizeaza tabela vector_spv.
+     * Citeste textul vectorului fiscal si sincronizeaza tabela vector_spv.
      *
      * @return array{modificat: bool, randuri: array}
      */
-    public function citesteVectorFiscal(string $calePdf, string $cui): array
+    public function citesteVectorFiscal(string $text, string $cui): array
     {
-        $linii = $this->linii($calePdf);
+        $linii = $this->linii($text);
         $dataVector = null;
         $randuri = [];
         $inTabel = false;
@@ -85,30 +88,50 @@ class VectorFiscalParser
     }
 
     /**
-     * Randurile din PDF-ul ANAF au forma (coloanele separate prin tab-uri):
-     *   <cod_imp> <data_sfarsit sau "/ /"> <perfisc><semnificatie> <data_inceput>
-     * ex: "100\t31/12/2010 TrimestrialaProfit\t01/01/2010"
-     *     "480  /  / LunaraContribuţie asiguratorie\t01/01/2018"
-     * Periodicitatea e lipita de semnificatie, iar datele sunt in format zz/ll/aaaa.
+     * Acelasi rand arata altfel dupa cine a citit PDF-ul, pentru ca extractoarele
+     * insira bucatile de text in ordini diferite:
+     *
+     *   citit aici, pe server:  "100\t31/12/2010 TrimestrialaProfit\t01/01/2010"
+     *   citit la client:        "100 Profit 01/01/2010 31/12/2010 Trimestriala"
+     *
+     * Se incearca amandoua. Nu se pot incurca intre ele: primul se termina cu o
+     * data, al doilea cu periodicitatea. Datele sunt in format zz/ll/aaaa, iar
+     * "/ /" tine locul datei de sfarsit la obligatiile inca in vigoare.
      */
     protected function parseazaRand(string $linie): ?array
     {
         $linie = trim(preg_replace('/[\t ]+/u', ' ', $linie));
+        $perioade = 'Lunar[ăa]|Trimestrial[ăa]|Semestrial[ăa]|Anual[ăa]';
 
-        $tipar = '#^(\d{2,4})\s+(?:(\d{2}/\d{2}/\d{4})|/\s*/)\s*'
-            . '(Lunar[ăa]|Trimestrial[ăa]|Semestrial[ăa]|Anual[ăa])\s*(.*?)\s+(\d{2}/\d{2}/\d{4})$#ui';
+        // <cod> <sfarsit> <perfisc><semnificatie> <inceput>
+        $amestecat = '#^(\d{2,4})\s+(?:(\d{2}/\d{2}/\d{4})|/\s*/)\s*'
+            . '(' . $perioade . ')\s*(.*?)\s+(\d{2}/\d{2}/\d{4})$#ui';
 
-        if (!preg_match($tipar, $linie, $m)) {
-            return null;
+        if (preg_match($amestecat, $linie, $m)) {
+            return [
+                'cod_imp' => $m[1],
+                'semnificatie' => trim($m[4]) ?: null,
+                'perfisc' => $this->periodicitate($m[3]),
+                'data_inceput' => $this->data($m[5]),
+                'data_sfarsit' => $m[2] !== '' ? $this->data($m[2]) : null,
+            ];
         }
 
-        return [
-            'cod_imp' => $m[1],
-            'semnificatie' => trim($m[4]) ?: null,
-            'perfisc' => $this->periodicitate($m[3]),
-            'data_inceput' => $this->data($m[5]),
-            'data_sfarsit' => $m[2] !== '' ? $this->data($m[2]) : null,
-        ];
+        // <cod> <semnificatie> <inceput> <sfarsit> <perfisc>
+        $inOrdine = '#^(\d{2,4})\s+(.*?)\s+(\d{2}/\d{2}/\d{4})\s+'
+            . '(?:(\d{2}/\d{2}/\d{4})|/\s*/)\s*(' . $perioade . ')$#ui';
+
+        if (preg_match($inOrdine, $linie, $m)) {
+            return [
+                'cod_imp' => $m[1],
+                'semnificatie' => trim($m[2]) ?: null,
+                'perfisc' => $this->periodicitate($m[5]),
+                'data_inceput' => $this->data($m[3]),
+                'data_sfarsit' => $m[4] !== '' ? $this->data($m[4]) : null,
+            ];
+        }
+
+        return null;
     }
 
     /** "Trimestriala" -> "Trimestrial", ca in vectorul declarat manual. */
@@ -118,10 +141,8 @@ class VectorFiscalParser
     }
 
     /** Situatia sintetica: exista obligatii de plata restante? */
-    public function areObligatiiRestante(string $calePdf): bool
+    public function areObligatiiRestante(string $text): bool
     {
-        $text = $this->text($calePdf);
-
         return stripos($text, 'NU SUNT OBLIGATII DE PLATA RESTANTE') === false
             && stripos($text, 'OBLIGATII DE PLATA RESTANTE') !== false;
     }
@@ -131,12 +152,18 @@ class VectorFiscalParser
      * ("DATE PRIVIND SOCIETATEA <nume> CE ARE CUI-ul <cif>"), iar documentul de
      * date identificare o listeaza pe un rand de forma "Denumire: <nume>".
      */
-    public function citesteDenumire(string $calePdf, ?string $cui = null): ?string
+    public function citesteDenumire(string $text, ?string $cui = null): ?string
     {
-        $text = $this->text($calePdf);
+        /*
+         * Vectorul fiscal: "DATE PRIVIND SOCIETATEA <nume> CE ARE CUI-ul <cif>".
+         *
+         * Antetul se cauta in textul intins pe un singur rand: cand documentul e
+         * citit la client, denumirea si "CE ARE CUI-ul" cad pe randuri diferite,
+         * iar cautarea pe randul original n-ar mai gasi nimic.
+         */
+        $intins = preg_replace('/\s+/u', ' ', $text);
 
-        // Vectorul fiscal: "DATE PRIVIND SOCIETATEA <nume> CE ARE CUI-ul <cif>"
-        if (preg_match('/DATE PRIVIND SOCIETATEA\s+(.+?)\s+CE ARE CUI[-\s]*ul/iu', $text, $m)) {
+        if (preg_match('/DATE PRIVIND SOCIETATEA\s+(.+?)\s+CE ARE CUI[-\s]*ul/iu', $intins, $m)) {
             return $this->curata($m[1]);
         }
 
@@ -156,10 +183,10 @@ class VectorFiscalParser
         return null;
     }
 
-    /** Textul brut al documentului, pentru pastrare ca referinta. */
-    public function textDocument(string $calePdf): string
+    /** Textul documentului, strans la un singur spatiu, pentru pastrare ca referinta. */
+    public function textDocument(string $text): string
     {
-        return trim(preg_replace('/[ \t]+/u', ' ', $this->text($calePdf)));
+        return trim(preg_replace('/[ \t]+/u', ' ', $text));
     }
 
     protected function curata(string $valoare): ?string
@@ -169,18 +196,9 @@ class VectorFiscalParser
         return $valoare !== '' ? $valoare : null;
     }
 
-    protected function text(string $calePdf): string
+    protected function linii(string $text): array
     {
-        try {
-            return (new Parser())->parseFile($calePdf)->getText();
-        } catch (\Exception $e) {
-            throw new SpvException('Nu s-a putut citi PDF-ul: ' . $e->getMessage());
-        }
-    }
-
-    protected function linii(string $calePdf): array
-    {
-        return preg_split('/\r\n|\r|\n/', $this->text($calePdf));
+        return preg_split('/\r\n|\r|\n/', $text);
     }
 
     protected function data(string $valoare): ?string

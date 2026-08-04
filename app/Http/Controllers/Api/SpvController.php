@@ -45,7 +45,7 @@ class SpvController extends Controller
                 : config('anaf.spv.descarcare_automata');
 
             $rezultatDescarcare = $descarcare
-                ? $this->descarcaFisiereLipsa($salvate, $spvClient, $storage)
+                ? $this->descarcaFisiereLipsa($salvate, $storage)
                 : ['descarcate' => 0, 'ramase' => 0, 'erori' => []];
 
             Jurnal::scrie(
@@ -136,7 +136,7 @@ class SpvController extends Controller
      * @param  SpvMesaj[]  $mesaje
      * @return array{descarcate: int, ramase: int, erori: array}
      */
-    protected function descarcaFisiereLipsa(array $mesaje, SpvClient $spvClient, SpvStorage $storage): array
+    protected function descarcaFisiereLipsa(array $mesaje, SpvStorage $storage): array
     {
         $limita = (int) config('anaf.spv.limita_descarcari');
         $incercariMax = (int) config('anaf.spv.incercari_max');
@@ -165,18 +165,8 @@ class SpvController extends Controller
 
         foreach ($lot as $mesaj) {
             try {
-                $fisier = $spvClient->descarcare($mesaj->mesaj_id);
-                $salvat = $storage->saveFile($fisier, 'downloads');
-
-                $mesaj->update([
-                    'cale_fisier' => $salvat['path'],
-                    'hash_fisier' => $salvat['hash'],
-                    'descarcat_la' => now(),
-                    'ultima_eroare' => null,
-                ]);
-
-                // Documentul ramane la client, in dosarul firmei lui.
-                $storage->arhiveazaMesaj($mesaj, $fisier);
+                // Documentul merge de la ANAF drept in dosarul firmei, la client.
+                $storage->aduce($mesaj);
 
                 $descarcate++;
             } catch (SpvException $e) {

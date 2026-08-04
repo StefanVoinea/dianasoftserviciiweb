@@ -50,18 +50,11 @@ class SocietatiTest extends TestCase
      */
     public function test_denumirea_se_extrage_din_ambele_documente(string $text, ?string $cui, ?string $asteptat): void
     {
-        $parser = new class extends \App\Services\Anaf\Spv\VectorFiscalParser {
-            public $textFals = '';
+        // Parserul lucreaza pe textul documentului: el vine de la programul
+        // local, care citeste PDF-ul acolo unde sta, pe calculatorul clientului.
+        $parser = new \App\Services\Anaf\Spv\VectorFiscalParser();
 
-            protected function text(string $calePdf): string
-            {
-                return $this->textFals;
-            }
-        };
-
-        $parser->textFals = $text;
-
-        $this->assertSame($asteptat, $parser->citesteDenumire('oricare.pdf', $cui));
+        $this->assertSame($asteptat, $parser->citesteDenumire($text, $cui));
     }
 
     public function texteDocumente(): array
