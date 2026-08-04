@@ -43,6 +43,7 @@ class MonitorizareFolder
     protected $arhiva;
     protected $pdf;
     protected $curatator;
+    protected $depunere;
 
     /**
      * Declaratia scrisa in tabel pentru fisierul care se lucreaza acum.
@@ -60,7 +61,8 @@ class MonitorizareFolder
         SemnareService $semnare,
         ArhivaService $arhiva,
         PdfDeclaratie $pdf,
-        CurataXml $curatator
+        CurataXml $curatator,
+        DepunereService $depunere
     ) {
         $this->config = $config;
         $this->certificate = $certificate;
@@ -70,6 +72,7 @@ class MonitorizareFolder
         $this->arhiva = $arhiva;
         $this->pdf = $pdf;
         $this->curatator = $curatator;
+        $this->depunere = $depunere;
     }
 
     /**
@@ -110,7 +113,7 @@ class MonitorizareFolder
                 Jurnal::scrie(
                     'monitorizare_folder',
                     'A preluat din dosarul urmărit declarația ' . $declaratie->tip
-                        . ' pentru ' . $declaratie->cui . ' și a semnat-o',
+                        . ' pentru ' . $declaratie->cui . ' și ' . $this->ispravaDupaPas($declaratie),
                     ['fisier' => $fisier['nume']],
                     $declaratie->cui
                 );
@@ -220,16 +223,88 @@ class MonitorizareFolder
             );
         }
 
-        // PDF-ul venit deja semnat nu se mai semneaza o data.
-        if (!$declaratie->semnat) {
+        /*
+         * Semnarea si depunerea urmeaza bifele de la certificatul care
+         * urmareste dosarul: unii vor doar validarea (semneaza omul), altii
+         * vor tot drumul pana la ANAF. PDF-ul venit deja semnat nu se mai
+         * semneaza o data, iar depunerea se face numai pentru ce e semnat.
+         *
+         * Bifa de semnare inca nescrisa (rand dinaintea coloanei) inseamna
+         * purtarea de pana acum: se semneaza.
+         */
+        $semneazaVrut = $certificat->monitorizare_semneaza === null || $certificat->monitorizare_semneaza;
+
+        if (!$declaratie->semnat && $semneazaVrut) {
             $this->semneaza($declaratie);
         }
 
         $declaratie = $declaratie->fresh();
 
+        if ($declaratie->semnat && $certificat->monitorizare_depune) {
+            $this->depuneDeclaratia($declaratie);
+            $declaratie = $declaratie->fresh();
+        }
+
         $this->arhiveaza($declaratie);
 
         return $declaratie->fresh();
+    }
+
+    /** Ce s-a intamplat cu declaratia, pe limba jurnalului. */
+    protected function ispravaDupaPas(AnafDeclaratie $declaratie): string
+    {
+        if ($declaratie->pas === 'depus') {
+            return 'a depus-o (index de încărcare ' . $declaratie->index_recipisa . ')';
+        }
+
+        if ($declaratie->pas === 'semnat') {
+            return 'a semnat-o';
+        }
+
+        // Semnarea e oprita din setarile certificatului: ramane validata.
+        return 'a validat-o';
+    }
+
+    /**
+     * Depune declaratia semnata la ANAF, cand certificatul are bifa de depunere.
+     *
+     * Depunerea merge pe certificatul cu care e inrolata firma, ca la semnare.
+     * Esecul opreste doar declaratia aceasta: fisierul pleaca in „erori" si
+     * oamenii firmei afla pe email — declaratia ramane insa semnata, deci se
+     * poate depune de mana din fila de declaratii.
+     */
+    protected function depuneDeclaratia(AnafDeclaratie $declaratie): void
+    {
+        $this->folosesteCertificatulFirmei($declaratie);
+
+        try {
+            $this->depunere->autentificare();
+            $rezultat = $this->depunere->depune(Storage::path($declaratie->cale_pdf_semnat));
+        } catch (DeclaratieException $e) {
+            $eroare = new DeclaratieException('Depunerea a eșuat: ' . $e->getMessage());
+            $eroare->cui = $declaratie->cui;
+
+            throw $eroare;
+        }
+
+        if ($rezultat['index_recipisa'] === null) {
+            $declaratie->update([
+                'pas' => 'eroare_depunere',
+                'stare_declaratie' => $rezultat['eroare'],
+            ]);
+
+            $eroare = new DeclaratieException('ANAF a respins depunerea: ' . $rezultat['eroare']);
+            $eroare->cui = $declaratie->cui;
+
+            throw $eroare;
+        }
+
+        $declaratie->update([
+            'index_recipisa' => $rezultat['index_recipisa'],
+            'data_depunere' => now(),
+            'pas' => 'depus',
+            'stare_declaratie' => null,
+        ]);
     }
 
     /** XML: se valideaza si DUKIntegrator scoate PDF-ul oficial. */
@@ -365,18 +440,25 @@ class MonitorizareFolder
         }
     }
 
+    /** Semnarea si depunerea merg pe tokenul cu care e inrolata firma. */
+    protected function folosesteCertificatulFirmei(AnafDeclaratie $declaratie): void
+    {
+        if (!$declaratie->certificat_id) {
+            return;
+        }
+
+        $alFirmei = AnafCertificat::find($declaratie->certificat_id);
+
+        if ($alFirmei) {
+            $this->certificate->foloseste($alFirmei);
+        }
+    }
+
     protected function semneaza(AnafDeclaratie $declaratie): void
     {
         $caleSemnat = preg_replace('/\.pdf$/i', '', $declaratie->cale_pdf) . '_semnat.pdf';
 
-        // Semnarea merge pe tokenul cu care e inrolata firma, ca in tot modulul.
-        if ($declaratie->certificat_id) {
-            $alFirmei = AnafCertificat::find($declaratie->certificat_id);
-
-            if ($alFirmei) {
-                $this->certificate->foloseste($alFirmei);
-            }
-        }
+        $this->folosesteCertificatulFirmei($declaratie);
 
         try {
             $this->semnare->semneaza(Storage::path($declaratie->cale_pdf), Storage::path($caleSemnat));
@@ -413,13 +495,16 @@ class MonitorizareFolder
         $tip = ArhivaService::curata($declaratie->tip) ?: 'Diverse';
         $cai = [];
 
+        // Depusa deja, documentul poarta din prima indicele de incarcare in nume.
+        $stare = $declaratie->index_recipisa ? 'depusa' : 'semnata';
+
         try {
             if ($declaratie->cale_pdf_semnat && Storage::exists($declaratie->cale_pdf_semnat)) {
                 $cai['arhiva_semnat'] = $this->arhiva->pune(
                     Storage::get($declaratie->cale_pdf_semnat),
                     $dosar,
                     $tip,
-                    ArhivaService::numeDeclaratie($declaratie, 'semnata', 'pdf'),
+                    ArhivaService::numeDeclaratie($declaratie, $stare, 'pdf'),
                     $declaratie->arhiva_semnat
                 );
             }

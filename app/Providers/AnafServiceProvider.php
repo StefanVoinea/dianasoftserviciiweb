@@ -137,7 +137,8 @@ class AnafServiceProvider extends ServiceProvider
                 $app->make(SemnareService::class),
                 $app->make(ArhivaService::class),
                 $app->make(PdfDeclaratie::class),
-                $app->make(CurataXml::class)
+                $app->make(CurataXml::class),
+                $app->make(DepunereService::class)
             );
         });
 

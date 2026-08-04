@@ -11,6 +11,7 @@ use App\Services\Anaf\Arhiva\ArhivaService;
 use App\Services\Anaf\Declaratii\CurataXml;
 use App\Services\Anaf\Declaratii\DeclaratieException;
 use App\Services\Anaf\Declaratii\DeclaratieXml;
+use App\Services\Anaf\Declaratii\DepunereService;
 use App\Services\Anaf\Declaratii\DukIntegrator;
 use App\Services\Anaf\Declaratii\MonitorizareFolder;
 use App\Services\Anaf\Declaratii\PdfDeclaratie;
@@ -155,10 +156,47 @@ XML;
         };
     }
 
+    /**
+     * Depunerea, fara ANAF: intoarce indicele sau eroarea ceruta. Nechemata
+     * dinadins (bifa stinsa), orice apel e un esec al testului.
+     */
+    protected function depunere(?string $index = null, ?string $eroare = null, bool $asteptata = true): DepunereService
+    {
+        return new class($index, $eroare, $asteptata) extends DepunereService {
+            protected $index;
+            protected $eroare;
+            protected $asteptata;
+
+            public function __construct(?string $index, ?string $eroare, bool $asteptata)
+            {
+                $this->index = $index;
+                $this->eroare = $eroare;
+                $this->asteptata = $asteptata;
+            }
+
+            public function autentificare(): void
+            {
+                if (!$this->asteptata) {
+                    throw new DeclaratieException('Nu trebuia chemată depunerea.');
+                }
+            }
+
+            public function depune(string $calePdfSemnat): array
+            {
+                return [
+                    'index_recipisa' => $this->index,
+                    'eroare' => $this->eroare,
+                    'raspuns' => '',
+                ];
+            }
+        };
+    }
+
     protected function serviciu(
         DukIntegrator $duk = null,
         SemnareService $semnare = null,
-        PdfDeclaratie $pdf = null
+        PdfDeclaratie $pdf = null,
+        DepunereService $depunere = null
     ): MonitorizareFolder {
         return new MonitorizareFolder(
             config('anaf.declaratii'),
@@ -168,7 +206,8 @@ XML;
             $semnare ?: $this->semnare(),
             $this->app->make(ArhivaService::class),
             $pdf ?: $this->pdf(self::XML),
-            new CurataXml()
+            new CurataXml(),
+            $depunere ?: $this->depunere(null, null, false)
         );
     }
 
@@ -209,6 +248,98 @@ XML;
         Http::assertSent(function (Request $cerere) {
             return $cerere->url() === 'http://192.168.1.77:8099/monitorizare/mutat'
                 && strpos($cerere->body(), 'unde=prelucrate') !== false;
+        });
+    }
+
+    /** Cu bifa de semnare stinsa, declaratia doar se valideaza. */
+    public function test_cu_semnarea_oprita_declaratia_ramane_doar_validata(): void
+    {
+        $this->certificat->update(['monitorizare_semneaza' => false]);
+
+        $this->bridgeCu([['nume' => 'd394_iunie.xml', 'marime' => 812, 'gata' => true]]);
+
+        $raport = $this->serviciu(null, $this->semnare('Nu trebuia chemată semnarea.'))
+            ->pentruCertificat($this->certificat->fresh());
+
+        $this->assertSame(1, $raport['semnate']);
+        $this->assertSame([], $raport['erori']);
+
+        $declaratie = AnafDeclaratie::first();
+
+        $this->assertSame('validat', $declaratie->pas);
+        $this->assertFalse((bool) $declaratie->semnat);
+
+        // Prelucrata pana unde s-a cerut, iese din dosar ca orice alta.
+        Http::assertSent(function (Request $cerere) {
+            return $cerere->url() === 'http://192.168.1.77:8099/monitorizare/mutat'
+                && strpos($cerere->body(), 'unde=prelucrate') !== false;
+        });
+    }
+
+    /** Cu bifa de depunere aprinsa, declaratia semnata pleaca la ANAF. */
+    public function test_cu_bifa_de_depunere_declaratia_semnata_pleaca_la_anaf(): void
+    {
+        $this->certificat->update(['monitorizare_depune' => true]);
+
+        // PDF venit gata semnat: exista pe disc, deci pleaca si in arhiva.
+        $this->bridgeCu(
+            [['nume' => 'd394_semnat.pdf', 'marime' => 91000, 'gata' => true]],
+            '%PDF-1.4 declaratie semnata'
+        );
+
+        $raport = $this->serviciu(null, null, $this->pdf(self::XML, true), $this->depunere('123456789'))
+            ->pentruCertificat($this->certificat->fresh());
+
+        $this->assertSame(1, $raport['semnate']);
+        $this->assertSame([], $raport['erori']);
+
+        $declaratie = AnafDeclaratie::first();
+
+        $this->assertSame('depus', $declaratie->pas);
+        $this->assertSame('123456789', $declaratie->index_recipisa);
+        $this->assertNotNull($declaratie->data_depunere);
+
+        // In arhiva clientului, documentul poarta din prima indicele in nume.
+        Http::assertSent(function (Request $cerere) {
+            return $cerere->url() === 'http://192.168.1.77:8099/arhiva'
+                && strpos($cerere->body(), 'depusa_123456789.pdf') !== false;
+        });
+    }
+
+    /** Depunerea respinsa de ANAF nu ramane tacuta: erori + email. */
+    public function test_depunerea_respinsa_de_anaf_este_raportata(): void
+    {
+        $this->certificat->update(['monitorizare_depune' => true]);
+
+        CertificatUtilizator::create([
+            'company_id' => self::COMPANIE,
+            'certificat_id' => $this->certificat->id,
+            'email' => 'contabil@diana-soft.ro',
+            'activ' => true,
+        ]);
+
+        $this->bridgeCu([['nume' => 'd394_iunie.xml', 'marime' => 812, 'gata' => true]]);
+
+        $raport = $this->serviciu(null, null, null, $this->depunere(null, 'CUI inexistent în evidența ANAF'))
+            ->pentruCertificat($this->certificat->fresh());
+
+        $this->assertSame(1, $raport['esuate']);
+        $this->assertStringContainsString('ANAF a respins depunerea', $raport['erori'][0]);
+
+        $declaratie = AnafDeclaratie::first();
+
+        $this->assertSame('eroare_depunere', $declaratie->pas);
+        $this->assertStringContainsString('CUI inexistent', $declaratie->stare_declaratie);
+        // Semnata ramane: se poate depune de mana din fila de declaratii.
+        $this->assertTrue((bool) $declaratie->semnat);
+
+        Http::assertSent(function (Request $cerere) {
+            return $cerere->url() === 'http://192.168.1.77:8099/monitorizare/mutat'
+                && strpos($cerere->body(), 'unde=erori') !== false;
+        });
+
+        Mail::assertSent(EroareDeclaratieEmail::class, function ($email) {
+            return $email->hasTo('contabil@diana-soft.ro');
         });
     }
 

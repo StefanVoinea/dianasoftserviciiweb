@@ -509,12 +509,40 @@
         />
       </b-form-group>
 
+      <!-- Cât de departe merge singur: doar validare, și semnare, sau tot
+           drumul până la ANAF. Depunerea nu se mai poate lua înapoi, de aceea
+           vine debifată. -->
+      <b-form-checkbox
+        v-if="bridgeFormular.monitorizare_activa"
+        v-model="bridgeFormular.monitorizare_semneaza"
+        class="mb-50"
+      >
+        Semnează declarațiile valide
+        <small class="d-block text-muted">
+          Nebifat, declarațiile doar se validează; semnarea rămâne de făcut
+          din fila Declarații fiscale.
+        </small>
+      </b-form-checkbox>
+
+      <b-form-checkbox
+        v-if="bridgeFormular.monitorizare_activa"
+        v-model="bridgeFormular.monitorizare_depune"
+        class="mb-1"
+      >
+        Depune declarațiile semnate
+        <small class="d-block text-muted">
+          Pleacă la ANAF doar ce a ajuns semnat — semnat aici sau venit gata
+          semnat. Depunerea nu se mai poate lua înapoi.
+        </small>
+      </b-form-checkbox>
+
       <small
         v-if="bridgeFormular.monitorizare_activa"
         class="text-muted d-block mb-3"
       >
-        La cadența aleasă, declarațiile puse acolo — XML sau PDF — se
-        încarcă, se validează și se semnează singure, apoi trec în subdosarul
+        La cadența aleasă, declarațiile puse acolo — XML sau PDF — se încarcă
+        și se validează singure, apoi, după bifele de mai sus, se semnează și
+        se depun; la final trec în subdosarul
         <code>prelucrate</code>. Un PDF venit deja semnat nu se mai semnează încă
         o dată. Ce nu trece de validare ajunge în
         <code>erori</code>, iar utilizatorii atașați certificatului firmei
@@ -860,6 +888,8 @@ export default {
         monitorizare_cale: certificat.monitorizare_cale || '',
         monitorizare_activa: Boolean(certificat.monitorizare_activa),
         monitorizare_cadenta: certificat.monitorizare_cadenta || 5,
+        monitorizare_semneaza: certificat.monitorizare_semneaza !== false,
+        monitorizare_depune: Boolean(certificat.monitorizare_depune),
         monitorizare_la: certificat.monitorizare_la,
         mod_legatura: certificat.mod_legatura || 'direct',
         implicit: certificat.implicit,
@@ -915,6 +945,8 @@ export default {
         monitorizare_cale: this.bridgeFormular.monitorizare_cale || null,
         monitorizare_activa: this.bridgeFormular.monitorizare_activa,
         monitorizare_cadenta: this.bridgeFormular.monitorizare_cadenta,
+        monitorizare_semneaza: this.bridgeFormular.monitorizare_semneaza,
+        monitorizare_depune: this.bridgeFormular.monitorizare_depune,
         mod_legatura: this.bridgeFormular.mod_legatura,
         implicit: this.bridgeFormular.implicit,
       })
