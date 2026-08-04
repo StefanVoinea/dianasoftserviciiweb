@@ -219,6 +219,7 @@ XML;
             '192.168.1.77:8099/monitorizare/mutat' => Http::response(['mutat' => true], 200),
             '192.168.1.77:8099/monitorizare' => Http::response(['fisiere' => $fisiere], 200),
             // Documentele semnate pleaca in arhiva de la client
+            '192.168.1.77:8099/arhiva/uneste-dosarul' => Http::response(['mutate' => 0, 'unit' => false], 200),
             '192.168.1.77:8099/arhiva' => Http::response(
                 ['cale' => 'DIANA SOFT SRL (15208744)/D394/document.pdf'],
                 200
@@ -508,6 +509,7 @@ XML;
             '192.168.1.77:8099/monitorizare' => Http::response([
                 'fisiere' => [['nume' => 'd394_iunie.xml', 'marime' => 812, 'gata' => true]],
             ], 200),
+            '192.168.1.77:8099/arhiva/uneste-dosarul' => Http::response(['mutate' => 0, 'unit' => false], 200),
             '192.168.1.77:8099/arhiva' => Http::response(['eroare' => 'Discul este plin.'], 500),
         ]);
 

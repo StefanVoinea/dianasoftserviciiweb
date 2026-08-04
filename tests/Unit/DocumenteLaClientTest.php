@@ -51,6 +51,15 @@ class DocumenteLaClientTest extends TestCase
         ]);
 
         $this->app->make(CertificatService::class)->foloseste($this->certificat);
+
+        /*
+         * Inaintea fiecarei scrieri se cere strangerea dosarelor firmei la un
+         * loc. Aici n-are ce uni, dar raspunsul trebuie sa existe: altfel
+         * cererea ar pleca in retea si testele ar astepta degeaba.
+         */
+        Http::fake([
+            '192.168.1.44:8099/arhiva/uneste-dosarul' => Http::response(['mutate' => 0, 'unit' => false], 200),
+        ]);
     }
 
     protected function tearDown(): void

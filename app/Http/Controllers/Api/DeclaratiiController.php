@@ -270,6 +270,10 @@ class DeclaratiiController extends Controller
         $tip = ArhivaService::curata($declaratie->tip) ?: 'Diverse';
         $cai = [];
 
+        // Documentele scrise cat timp denumirea firmei nu era stiuta stau intr-un
+        // dosar purtand doar codul ei; se strang la un loc inainte de a scrie aici.
+        $arhiva->uneste($declaratie->cui, $dosar);
+
         try {
             /*
              * Calea scrisa data trecuta se trimite ca sa poata fi inlocuita:

@@ -3,6 +3,7 @@
 namespace App\Services\Anaf\Arhiva;
 
 use App\Models\AnafDeclaratie;
+use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\CertificatService;
 use Illuminate\Support\Facades\Http;
 
@@ -21,8 +22,14 @@ use Illuminate\Support\Facades\Http;
  */
 class ArhivaService
 {
+    /** Cat se asteapta strangerea dosarelor la un loc — e doar o asezare. */
+    protected const UNIRE_SECUNDE = 15;
+
     protected $config;
     protected $certificate;
+
+    /** Firmele ale caror dosare au fost deja stranse la un loc. */
+    protected $unite = [];
 
     public function __construct(array $config, CertificatService $certificate)
     {
@@ -92,6 +99,60 @@ class ArhivaService
         ]);
 
         return $this->cale($raspuns, 'Copia în arhiva locală a eșuat');
+    }
+
+    /**
+     * Strange la un loc cele doua dosare ale unei firme.
+     *
+     * Dosarul poarta denumirea firmei, cu CUI-ul in paranteza; pana cand
+     * denumirea e stiuta, el poarta doar codul. Asa o firma ajunge cu
+     * documentele impartite in doua — „15208744" si „ALFA SRL (15208744)" —
+     * care arata a dezordine, desi nu s-a pierdut nimic.
+     *
+     * Se cere o singura data pe firma intr-o cerere web: dupa prima unire nu mai
+     * e nimic de mutat, iar raspunsul ar fi mereu acelasi.
+     *
+     * Un esec nu are voie sa strice arhivarea care urmeaza: documentul e mai
+     * important decat asezarea dosarelor, asa ca se scrie doar in jurnal.
+     */
+    public function uneste(?string $cui, string $firma): void
+    {
+        $cui = trim((string) $cui);
+
+        // Fara denumire cunoscuta, dosarul e chiar codul: n-are cu ce fi unit.
+        if (!$this->activa() || $cui === '' || $firma === $cui) {
+            return;
+        }
+
+        if (isset($this->unite[$cui])) {
+            return;
+        }
+
+        $this->unite[$cui] = true;
+
+        try {
+            /*
+             * Cu rabdare putina, si la conectare, si la raspuns: asezarea
+             * dosarelor e o inlesnire, nu o treaba de care atarna documentul.
+             * Daca programul local nu raspunde, se merge mai departe fara ea —
+             * scrierea care urmeaza va spune oricum ce s-a intamplat.
+             */
+            $this->cerere()
+                ->timeout(self::UNIRE_SECUNDE)
+                ->withOptions(['connect_timeout' => self::UNIRE_SECUNDE])
+                ->asForm()
+                ->post($this->url('/arhiva/uneste-dosarul'), [
+                    'din' => $cui,
+                    'in' => $firma,
+                ]);
+        } catch (\Exception $e) {
+            Jurnal::esec(
+                'arhiva_unire',
+                'Dosarele firmei ' . $cui . ' nu au putut fi strânse la un loc: ' . $e->getMessage(),
+                [],
+                $cui
+            );
+        }
     }
 
     /** Continutul unui document din arhiva clientului. */

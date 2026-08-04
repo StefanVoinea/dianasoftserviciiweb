@@ -157,6 +157,10 @@ class SpvStorage
         $destinatie = $this->destinatiaMesajului($mesaj);
         $destinatie['text'] = $vreaText;
 
+        // Documentele scrise cat timp denumirea firmei nu era stiuta stau intr-un
+        // dosar purtand doar codul ei; se strang la un loc inainte de a scrie aici.
+        $this->arhiva->uneste($mesaj->cif, $destinatie['firma']);
+
         $rezultat = $this->client->descarcaInArhiva($mesaj->mesaj_id, $destinatie);
 
         $mesaj->update([
@@ -327,6 +331,8 @@ class SpvStorage
         $declaratie = $this->declaratiaMesajului($mesaj);
         $extensie = '.' . ltrim($fisier->extensie, '.');
         $destinatie = $this->destinatiaMesajului($mesaj);
+
+        $this->arhiva->uneste($mesaj->cif, $destinatie['firma']);
 
         try {
             $cale = $this->arhiva->pune(

@@ -495,6 +495,10 @@ class MonitorizareFolder
         $tip = ArhivaService::curata($declaratie->tip) ?: 'Diverse';
         $cai = [];
 
+        // Documentele scrise cat timp denumirea firmei nu era stiuta stau intr-un
+        // dosar purtand doar codul ei; se strang la un loc inainte de a scrie aici.
+        $this->arhiva->uneste($declaratie->cui, $dosar);
+
         // Depusa deja, documentul poarta din prima indicele de incarcare in nume.
         $stare = $declaratie->index_recipisa ? 'depusa' : 'semnata';
 

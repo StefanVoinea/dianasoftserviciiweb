@@ -27,6 +27,7 @@
  *   GET  /arhiva          — citește un document din arhiva locală
  *   POST /arhiva/redenumeste — schimbă numele unui document arhivat
  *   POST /arhiva/copiaza  — încă un exemplar al unui document deja arhivat
+ *   POST /arhiva/uneste-dosarul — strânge la un loc cele două dosare ale firmei
  *   GET  /monitorizare    — declarațiile puse în dosarul urmărit
  *   POST /monitorizare/mutat — scoate din dosar fișierul prelucrat
  */
@@ -205,6 +206,63 @@ function arhiva_destinatie($dosar, $nume, $inlocuieste = '')
     }
 
     return $cale;
+}
+
+/**
+ * Mută tot ce se află într-un dosar în altul, păstrând structura dinăuntru.
+ *
+ * Fișierul care ar suprascrie ceva primește nume liber — „... (2)" —, la fel ca
+ * la scrierea obișnuită: două documente cu același nume nu sunt neapărat același
+ * document. Dosarele golite se șterg pe drum, iar cel vechi la sfârșit.
+ *
+ * Întoarce câte fișiere s-au mutat, sau false dacă vreunul n-a putut fi mutat —
+ * atunci nu se șterge nimic, ca omul să vadă ce a rămas.
+ */
+function arhiva_muta_cuprinsul($din, $in)
+{
+    $cuprins = @scandir($din);
+
+    if ($cuprins === false) {
+        return false;
+    }
+
+    $mutate = 0;
+
+    foreach ($cuprins as $nume) {
+        if ($nume === '.' || $nume === '..') {
+            continue;
+        }
+
+        $sursa = $din . DIRECTORY_SEPARATOR . $nume;
+        $tinta = $in . DIRECTORY_SEPARATOR . $nume;
+
+        if (is_dir($sursa)) {
+            if (!is_dir($tinta) && !@mkdir($tinta, 0777, true)) {
+                return false;
+            }
+
+            $adanc = arhiva_muta_cuprinsul($sursa, $tinta);
+
+            if ($adanc === false) {
+                return false;
+            }
+
+            $mutate += $adanc;
+
+            continue;
+        }
+
+        if (!@rename($sursa, arhiva_destinatie($in, $nume))) {
+            return false;
+        }
+
+        $mutate++;
+    }
+
+    // Ramas gol, dosarul vechi nu mai are de ce sa stea.
+    @rmdir($din);
+
+    return $mutate;
 }
 
 /**
@@ -1574,6 +1632,51 @@ if (strpos($calea, '/arhiva') === 0) {
             'cale' => arhiva_relativa($config['arhiva'], $destinatie),
             'cale_completa' => $destinatie,
         ));
+    }
+
+    /*
+     * POST /arhiva/uneste-dosarul — muta cuprinsul unui dosar de firmă în altul.
+     *
+     * Dosarul firmei poartă denumirea ei, cu CUI-ul în paranteză; până când
+     * denumirea e știută, el poartă doar codul. Așa o firmă ajunge cu documentele
+     * împărțite în două dosare — „15208744" și „ALFA SRL (15208744)" — care
+     * arată a dezordine, deși nu s-a pierdut nimic.
+     *
+     * Aici se strâng la un loc: dacă dosarul nou nu există încă, cel vechi e doar
+     * redenumit; altfel fișierele se mută unul câte unul, iar cele care s-ar
+     * suprascrie primesc nume liber, ca peste tot în arhivă.
+     */
+    if ($metoda === 'POST' && $calea === '/arhiva/uneste-dosarul') {
+        $vechi = arhiva_bucata(isset($_POST['din']) ? $_POST['din'] : '');
+        $nou = arhiva_bucata(isset($_POST['in']) ? $_POST['in'] : '');
+
+        if ($vechi === '' || $nou === '' || $vechi === $nou) {
+            raspunde_json(400, array('eroare' => 'Lipsește dosarul de unit sau cel în care se unește.'));
+        }
+
+        $caleVeche = $config['arhiva'] . DIRECTORY_SEPARATOR . $vechi;
+        $caleNoua = $config['arhiva'] . DIRECTORY_SEPARATOR . $nou;
+
+        // Nimic de unit: raspuns cuminte, ca aplicatia sa nu trateze asta ca esec.
+        if (!is_dir($caleVeche)) {
+            raspunde_json(200, array('mutate' => 0, 'unit' => false));
+        }
+
+        if (!is_dir($caleNoua)) {
+            if (!@rename($caleVeche, $caleNoua)) {
+                raspunde_json(500, array('eroare' => 'Dosarul nu a putut fi redenumit.', 'detalii' => $caleNoua));
+            }
+
+            raspunde_json(200, array('mutate' => 0, 'unit' => true, 'redenumit' => true));
+        }
+
+        $mutate = arhiva_muta_cuprinsul($caleVeche, $caleNoua);
+
+        if ($mutate === false) {
+            raspunde_json(500, array('eroare' => 'Cuprinsul dosarului nu a putut fi mutat.'));
+        }
+
+        raspunde_json(200, array('mutate' => $mutate, 'unit' => true, 'redenumit' => false));
     }
 
     raspunde_json(404, array('eroare' => 'Operație necunoscută pe arhivă.'));

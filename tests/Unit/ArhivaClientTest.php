@@ -149,10 +149,70 @@ class ArhivaClientTest extends TestCase
         );
     }
 
+    /**
+     * Cat timp denumirea firmei nu e stiuta, dosarul poarta doar codul ei. Cand
+     * se afla denumirea, cele doua dosare se strang la un loc — altfel firma ar
+     * ramane cu documentele imprastiate in doua locuri.
+     */
+    public function test_dosarele_firmei_se_strang_la_un_loc(): void
+    {
+        Http::fake([
+            '192.168.1.44:8099/arhiva/uneste-dosarul' => Http::response(['mutate' => 4, 'unit' => true], 200),
+        ]);
+
+        $this->serviciu()->uneste('15208744', 'DIANA SOFT SRL (15208744)');
+
+        Http::assertSent(function (Request $cerere) {
+            return $cerere->url() === 'http://192.168.1.44:8099/arhiva/uneste-dosarul'
+                && $cerere['din'] === '15208744'
+                && $cerere['in'] === 'DIANA SOFT SRL (15208744)';
+        });
+    }
+
+    /** Fara denumire stiuta, dosarul e chiar codul: n-are cu ce fi unit. */
+    public function test_fara_denumire_nu_se_cere_nicio_unire(): void
+    {
+        Http::fake();
+
+        $this->serviciu()->uneste('15208744', '15208744');
+        $this->serviciu()->uneste('', 'DIANA SOFT SRL');
+
+        Http::assertNothingSent();
+    }
+
+    /** Se cere o singura data pe firma: dupa prima unire nu mai e ce muta. */
+    public function test_unirea_se_cere_o_singura_data_pe_firma(): void
+    {
+        Http::fake([
+            '192.168.1.44:8099/arhiva/uneste-dosarul' => Http::response(['mutate' => 0, 'unit' => false], 200),
+        ]);
+
+        $serviciu = $this->serviciu();
+
+        $serviciu->uneste('15208744', 'DIANA SOFT SRL (15208744)');
+        $serviciu->uneste('15208744', 'DIANA SOFT SRL (15208744)');
+        $serviciu->uneste('15208744', 'DIANA SOFT SRL (15208744)');
+
+        Http::assertSentCount(1);
+    }
+
+    /** Asezarea dosarelor nu are voie sa strice arhivarea care urmeaza. */
+    public function test_unirea_picata_nu_opreste_nimic(): void
+    {
+        Http::fake([
+            '192.168.1.44:8099/arhiva/uneste-dosarul' => Http::response(['eroare' => 'nu merge'], 500),
+        ]);
+
+        $this->serviciu()->uneste('15208744', 'DIANA SOFT SRL (15208744)');
+
+        $this->assertTrue(true, 'nu s-a aruncat nimic');
+    }
+
     /** Documentul pleaca spre bridge-ul certificatului ales, nu spre server. */
     public function test_documentul_este_trimis_programului_local_cu_dosarul_si_numele_lui(): void
     {
         Http::fake([
+            '192.168.1.44:8099/arhiva/uneste-dosarul' => Http::response(['mutate' => 0, 'unit' => false], 200),
             '192.168.1.44:8099/arhiva' => Http::response(
                 ['cale' => 'DIANA SOFT SRL (15208744)/D112/D112_15208744_2026-06_semnata.pdf'],
                 200
@@ -186,6 +246,7 @@ class ArhivaClientTest extends TestCase
     public function test_esecul_programului_local_este_spus_pe_intelesul_omului(): void
     {
         Http::fake([
+            '192.168.1.44:8099/arhiva/uneste-dosarul' => Http::response(['mutate' => 0, 'unit' => false], 200),
             '192.168.1.44:8099/arhiva' => Http::response(['eroare' => 'Dosarul nu poate fi creat.'], 500),
         ]);
 
@@ -202,6 +263,7 @@ class ArhivaClientTest extends TestCase
     public function test_resemnarea_inlocuieste_doar_propriul_document(): void
     {
         Http::fake([
+            '192.168.1.44:8099/arhiva/uneste-dosarul' => Http::response(['mutate' => 0, 'unit' => false], 200),
             '192.168.1.44:8099/arhiva' => Http::response(['cale' => 'F/D394/D394_2026-06_semnata.pdf'], 200),
         ]);
 
@@ -222,7 +284,9 @@ class ArhivaClientTest extends TestCase
     /** Un document nou nu trimite nicio cale de inlocuit. */
     public function test_documentul_nou_nu_cere_inlocuirea_niciunui_fisier(): void
     {
-        Http::fake(['192.168.1.44:8099/arhiva' => Http::response(['cale' => 'F/D394/x.pdf'], 200)]);
+        Http::fake([
+            '192.168.1.44:8099/arhiva/uneste-dosarul' => Http::response(['mutate' => 0, 'unit' => false], 200),
+            '192.168.1.44:8099/arhiva' => Http::response(['cale' => 'F/D394/x.pdf'], 200)]);
 
         $this->serviciu()->pune('%PDF', 'DIANA SOFT SRL (15208744)', 'D394', 'x.pdf');
 
@@ -250,6 +314,8 @@ class ArhivaClientTest extends TestCase
         ]);
 
         Http::fakeSequence()
+            // Intai se strang la un loc dosarele firmei, daca a ramas vreunul vechi.
+            ->push(['mutate' => 0, 'unit' => false], 200)
             ->push(['cale' => 'DIANA SOFT SRL (15208744)/SPV/RECIPISA/RECIPISA_15208744_2026-07-20_2026-07-29_5104283611.pdf'], 200)
             ->push(['cale' => 'DIANA SOFT SRL (15208744)/D112/D112_15208744_2026-06_recipisa_912239948.pdf'], 200);
 
@@ -270,10 +336,15 @@ class ArhivaClientTest extends TestCase
             $declaratie->fresh()->arhiva_recipisa
         );
 
+        // Doar scrierile de documente, nu si unirea dosarelor de dinaintea lor.
         $trimise = [];
 
         Http::assertSent(function (Request $cerere) use (&$trimise) {
-            $trimise[] = [self::camp($cerere->body(), 'dosar'), self::camp($cerere->body(), 'nume')];
+            $dosar = self::camp($cerere->body(), 'dosar');
+
+            if ($dosar !== null) {
+                $trimise[] = [$dosar, self::camp($cerere->body(), 'nume')];
+            }
 
             return true;
         });
@@ -301,14 +372,17 @@ class ArhivaClientTest extends TestCase
             'descarcat_la' => '2026-07-29 08:30:00',
         ]);
 
-        Http::fake(['192.168.1.44:8099/arhiva' => Http::response(['cale' => 'F/SPV/RECIPISA/x.pdf'], 200)]);
+        Http::fake([
+            '192.168.1.44:8099/arhiva/uneste-dosarul' => Http::response(['mutate' => 0, 'unit' => false], 200),
+            '192.168.1.44:8099/arhiva' => Http::response(['cale' => 'F/SPV/RECIPISA/x.pdf'], 200)]);
 
         $this->app->make(SpvStorage::class)->arhiveazaMesaj(
             $mesaj,
             new SpvFisier('5104283613', '%PDF-1.4 recipisa', 'pdf', 'application/pdf')
         );
 
-        Http::assertSentCount(1);
+        // Unirea dosarelor si scrierea documentului — copia nu se mai face.
+        Http::assertSentCount(2);
     }
 
     /**
@@ -321,7 +395,9 @@ class ArhivaClientTest extends TestCase
         $this->certificat->update(['arhiva_cale' => 'D:\\Documente fiscale']);
         $this->app->make(CertificatService::class)->foloseste($this->certificat->fresh());
 
-        Http::fake(['192.168.1.44:8099/arhiva' => Http::response(['cale' => 'F/D112/x.pdf'], 200)]);
+        Http::fake([
+            '192.168.1.44:8099/arhiva/uneste-dosarul' => Http::response(['mutate' => 0, 'unit' => false], 200),
+            '192.168.1.44:8099/arhiva' => Http::response(['cale' => 'F/D112/x.pdf'], 200)]);
 
         $this->serviciu()->pune('%PDF', 'DIANA SOFT SRL (15208744)', 'D112', 'x.pdf');
 
@@ -333,7 +409,9 @@ class ArhivaClientTest extends TestCase
     /** Nesetat, hotaraste bridge.env de pe acel calculator. */
     public function test_fara_dosar_setat_nu_se_trimite_niciun_antet(): void
     {
-        Http::fake(['192.168.1.44:8099/arhiva' => Http::response(['cale' => 'F/D112/x.pdf'], 200)]);
+        Http::fake([
+            '192.168.1.44:8099/arhiva/uneste-dosarul' => Http::response(['mutate' => 0, 'unit' => false], 200),
+            '192.168.1.44:8099/arhiva' => Http::response(['cale' => 'F/D112/x.pdf'], 200)]);
 
         $this->serviciu()->pune('%PDF', 'DIANA SOFT SRL (15208744)', 'D112', 'x.pdf');
 
@@ -367,6 +445,7 @@ class ArhivaClientTest extends TestCase
         ]);
 
         Http::fake([
+            '192.168.1.44:8099/arhiva/uneste-dosarul' => Http::response(['mutate' => 0, 'unit' => false], 200),
             '192.168.1.44:8099/arhiva' => Http::response(['cale' => 'DIANA SOFT SRL (15208744)/SPV/x.pdf'], 200),
         ]);
 
