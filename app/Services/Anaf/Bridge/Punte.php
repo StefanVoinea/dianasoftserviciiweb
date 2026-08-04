@@ -145,16 +145,27 @@ class Punte
     public function pune(AnafCertificat $certificat, Request $request, string $cale): BridgeComanda
     {
         $intrebare = $request->getQueryString();
+        $antete = $this->anteteleDeDus($request);
 
         $corp = $request->getContent();
+
+        /*
+         * Corpul multipart nu se poate lua cu getContent(): PHP il consuma in
+         * $_POST/$_FILES si lasa fluxul gol. Fara pasul acesta, documentul de
+         * arhivat pleca prin tunel fara continut, iar programul local raspundea
+         * „Cererea nu contine documentul de arhivat". Se reface din campuri si
+         * fisiere, cu granita proprie.
+         */
+        if ($corp === '' && stripos((string) $request->header('content-type'), 'multipart/form-data') !== false) {
+            $corp = $this->multipartRefacut($request, $antete);
+        }
+
         $fisier = null;
 
         if ($corp !== '') {
             $fisier = BridgeComanda::DOSAR . '/cmd_' . uniqid('', true) . '.bin';
             Storage::put($fisier, $corp);
         }
-
-        $antete = $this->anteteleDeDus($request);
 
         /*
          * Legitimarea se schimbă aici, pentru că cele două uși cer lucruri
@@ -175,6 +186,61 @@ class Punte
             'corp_fisier' => $fisier,
             'stare' => 'asteapta',
         ]);
+    }
+
+    /**
+     * Reface corpul multipart al cererii, ca sa poata fi dus prin tunel.
+     *
+     * Se scriu intai campurile de formular, apoi fisierele, sub o granita nou
+     * aleasa; antetul content-type primeste granita aceasta, altfel programul
+     * local ar cauta-o pe cea veche si n-ar gasi nimic.
+     */
+    protected function multipartRefacut(Request $request, array &$antete): string
+    {
+        $granita = 'punte' . bin2hex(random_bytes(16));
+        $corp = '';
+
+        foreach ($this->campuriPlate($request->request->all()) as $nume => $valoare) {
+            $corp .= '--' . $granita . "\r\n"
+                . 'Content-Disposition: form-data; name="' . $nume . '"' . "\r\n\r\n"
+                . $valoare . "\r\n";
+        }
+
+        foreach ($this->campuriPlate($request->files->all()) as $nume => $fisier) {
+            $numeFisier = str_replace(['"', "\r", "\n"], '', $fisier->getClientOriginalName() ?: 'document');
+
+            $corp .= '--' . $granita . "\r\n"
+                . 'Content-Disposition: form-data; name="' . $nume . '"; filename="' . $numeFisier . '"' . "\r\n"
+                . 'Content-Type: application/octet-stream' . "\r\n\r\n"
+                . file_get_contents($fisier->getRealPath()) . "\r\n";
+        }
+
+        $antete['content-type'] = 'multipart/form-data; boundary=' . $granita;
+
+        return $corp . '--' . $granita . '--' . "\r\n";
+    }
+
+    /**
+     * Campurile cererii, aduse la nume plate: PHP desface „fisiere[0]" intr-o
+     * matrice imbricata, iar la refacere numele trebuie sa arate ca la plecare.
+     *
+     * @return array<string, mixed>
+     */
+    protected function campuriPlate(array $valori, string $prefix = ''): array
+    {
+        $plate = [];
+
+        foreach ($valori as $cheie => $valoare) {
+            $nume = $prefix === '' ? (string) $cheie : $prefix . '[' . $cheie . ']';
+
+            if (is_array($valoare)) {
+                $plate += $this->campuriPlate($valoare, $nume);
+            } else {
+                $plate[$nume] = $valoare;
+            }
+        }
+
+        return $plate;
     }
 
     /**

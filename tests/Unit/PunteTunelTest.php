@@ -308,6 +308,54 @@ class PunteTunelTest extends TestCase
         $this->assertSame([], $this->app->make(CertificatService::class)->inroleazaDinAgent($lista, 'cod-nou'));
     }
 
+    /**
+     * Documentul dintr-o cerere multipart trece intreg prin tunel.
+     *
+     * getContent() e gol la multipart — PHP consuma corpul in $_POST/$_FILES —
+     * iar fara refacerea lui, arhivarea pleca fara document si programul local
+     * raspundea „Cererea nu contine documentul de arhivat".
+     */
+    public function test_cererea_multipart_isi_pastreaza_documentul_prin_tunel(): void
+    {
+        $caleTemporara = tempnam(sys_get_temp_dir(), 'pdf');
+        file_put_contents($caleTemporara, '%PDF-1.4 continut de proba');
+
+        $incarcat = new \Symfony\Component\HttpFoundation\File\UploadedFile(
+            $caleTemporara,
+            'D112_15208744_2026-06_semnata.pdf',
+            'application/pdf',
+            null,
+            true
+        );
+
+        $cerere = Request::create(
+            '/api/punte/1/arhiva',
+            'POST',
+            ['firma' => 'DIANA SOFT SRL (15208744)', 'dosar' => 'D112', 'nume' => 'doc.pdf'],
+            [],
+            ['fisier' => $incarcat],
+            ['CONTENT_TYPE' => 'multipart/form-data; boundary=granita-veche']
+        );
+
+        $comanda = $this->punte()->pune($this->certificat, $cerere, '/arhiva');
+
+        $this->assertNotNull($comanda->corp_fisier, 'corpul multipart trebuie refacut, nu pierdut');
+
+        $corp = Storage::get($comanda->corp_fisier);
+
+        $this->assertStringContainsString('%PDF-1.4 continut de proba', $corp);
+        $this->assertStringContainsString('name="fisier"; filename="D112_15208744_2026-06_semnata.pdf"', $corp);
+        $this->assertStringContainsString('name="firma"', $corp);
+        $this->assertStringContainsString('DIANA SOFT SRL (15208744)', $corp);
+
+        // Granita din antet e cea noua, chiar cea folosita in corp.
+        $this->assertMatchesRegularExpression('/boundary=(punte[0-9a-f]+)/', $comanda->antete['content-type'], 'antetul poarta granita noua');
+        preg_match('/boundary=(punte[0-9a-f]+)/', $comanda->antete['content-type'], $granita);
+        $this->assertStringContainsString('--' . $granita[1] . '--', $corp);
+
+        @unlink($caleTemporara);
+    }
+
     /** Jetonul de înrolare spune al cui client e kitul și nu poate fi ticluit. */
     public function test_jetonul_de_inrolare_spune_clientul(): void
     {
