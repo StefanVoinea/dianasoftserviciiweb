@@ -3,13 +3,17 @@
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
 /**
  * Instiintarea ca o declaratie pusa in dosarul urmarit nu a putut fi prelucrata.
+ *
+ * Pleaca prin coada: trimiterea sincrona tinea dosarul urmarit in loc cate o
+ * jumatate de minut la fiecare adresa cand serverul de email nu raspundea.
  */
-class EroareDeclaratieEmail extends Mailable
+class EroareDeclaratieEmail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 

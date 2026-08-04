@@ -3,13 +3,17 @@
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
 /**
  * Instiintarea ca a intrat in SPV un document de tipul urmarit.
+ *
+ * Pleaca prin coada: sincronizarea mesajelor nu are voie sa astepte dupa
+ * serverul de email.
  */
-class AlertaMesajSpvEmail extends Mailable
+class AlertaMesajSpvEmail extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 

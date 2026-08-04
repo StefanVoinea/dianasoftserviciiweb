@@ -338,7 +338,7 @@ XML;
                 && strpos($cerere->body(), 'unde=erori') !== false;
         });
 
-        Mail::assertSent(EroareDeclaratieEmail::class, function ($email) {
+        Mail::assertQueued(EroareDeclaratieEmail::class, function ($email) {
             return $email->hasTo('contabil@diana-soft.ro');
         });
     }
@@ -428,7 +428,7 @@ XML;
         $this->assertStringContainsString('nu pare o declarație ANAF', $insemnat->erori_validare);
         $this->assertNull($insemnat->cale_xml, 'nu rămâne nimic pe jumătate pe disc');
 
-        Mail::assertSent(EroareDeclaratieEmail::class);
+        Mail::assertQueued(EroareDeclaratieEmail::class);
     }
 
     /**
@@ -438,6 +438,9 @@ XML;
      */
     public function test_fara_om_legat_de_certificat_afla_administratorii(): void
     {
+        // Curatenie dupa o rulare picata: emailul e unic, iar restul ar bloca testul.
+        \App\Models\User::where('email', 'sefa.monitorizare@example.com')->forceDelete();
+
         $sef = \App\Models\User::create([
             'name' => 'Șefa firmei',
             'email' => 'sefa.monitorizare@example.com',
@@ -462,7 +465,7 @@ XML;
 
         $this->serviciu(null, null, $this->pdf(null))->pentruCertificat($this->certificat);
 
-        Mail::assertSent(EroareDeclaratieEmail::class, function ($email) use ($sef) {
+        Mail::assertQueued(EroareDeclaratieEmail::class, function ($email) use ($sef) {
             return $email->hasTo($sef->email);
         });
 
@@ -578,11 +581,11 @@ XML;
                 && strpos($cerere->body(), 'unde=erori') !== false;
         });
 
-        Mail::assertSent(EroareDeclaratieEmail::class, function ($email) {
+        Mail::assertQueued(EroareDeclaratieEmail::class, function ($email) {
             return $email->hasTo('contabil@diana-soft.ro');
         });
 
-        Mail::assertNotSent(EroareDeclaratieEmail::class, function ($email) {
+        Mail::assertNotQueued(EroareDeclaratieEmail::class, function ($email) {
             return $email->hasTo('altcineva@diana-soft.ro');
         });
     }
@@ -610,7 +613,7 @@ XML;
         $this->assertStringContainsString('Tokenul nu este deblocat', $raport['erori'][0]);
         $this->assertSame('eroare_semnare', AnafDeclaratie::first()->pas);
 
-        Mail::assertSent(EroareDeclaratieEmail::class);
+        Mail::assertQueued(EroareDeclaratieEmail::class);
     }
 
     /** Dosarul urmarit se stabileste in aplicatie, nu in bridge.env. */

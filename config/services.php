@@ -34,4 +34,14 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /*
+     * Zoho ZeptoMail — emailuri tranzactionale prin API HTTP (mail.zoho.eu ->
+     * ZeptoMail -> Mail Agents -> Send Mail Token). Cheia incepe cu
+     * "Zoho-enczapikey" in panoul lor; aici se pune DOAR partea de dupa.
+     */
+    'zeptomail' => [
+        'key' => env('ZEPTOMAIL_KEY'),
+        'url' => env('ZEPTOMAIL_URL', 'https://api.zeptomail.eu/v1.1/email'),
+    ],
+
 ];

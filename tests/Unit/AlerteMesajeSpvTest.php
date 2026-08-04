@@ -105,7 +105,7 @@ class AlerteMesajeSpvTest extends TestCase
 
         $this->assertSame(1, $this->anunta($this->mesaj()));
 
-        Mail::assertSent(AlertaMesajSpvEmail::class, function (AlertaMesajSpvEmail $email) {
+        Mail::assertQueued(AlertaMesajSpvEmail::class, function (AlertaMesajSpvEmail $email) {
             return $email->hasTo('contabil@example.com')
                 && $email->denumire === 'DIANA SOFT SRL';
         });
@@ -118,7 +118,7 @@ class AlerteMesajeSpvTest extends TestCase
 
         $this->assertSame(0, $this->anunta($this->mesaj(['tip' => 'RECIPISA'])));
 
-        Mail::assertNothingSent();
+        Mail::assertNothingOutgoing();
     }
 
     /** ANAF scrie tipurile si cu litere mari, si cu mici. */
@@ -166,7 +166,7 @@ class AlerteMesajeSpvTest extends TestCase
         $this->alerta(['activ' => false]);
 
         $this->assertSame(0, $this->anunta($this->mesaj()));
-        Mail::assertNothingSent();
+        Mail::assertNothingOutgoing();
     }
 
     /** Se tine socoteala cate au plecat si cand a fost ultima. */

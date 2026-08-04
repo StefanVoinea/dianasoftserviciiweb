@@ -57,6 +57,11 @@ return [
             'transport' => 'postmark',
         ],
 
+        // Zoho ZeptoMail, prin API HTTP: pentru serverele cu SMTP-ul blocat
+        'zeptomail' => [
+            'transport' => 'zeptomail',
+        ],
+
         'sendmail' => [
             'transport' => 'sendmail',
             'path' => '/usr/sbin/sendmail -bs',
