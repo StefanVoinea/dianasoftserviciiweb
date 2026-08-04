@@ -134,6 +134,7 @@
         size="lg"
         ok-only
         ok-title="Închide"
+        modal-class="modul-spv"
       >
         <b-alert
           v-if="eroareAlerte"

@@ -190,6 +190,7 @@
       :title="formular.id ? 'Utilizatorul ' + formular.email : 'Utilizator nou'"
       ok-title="Salvează"
       cancel-title="Renunță"
+      modal-class="modul-spv"
       @ok.prevent="salveaza"
     >
       <b-alert

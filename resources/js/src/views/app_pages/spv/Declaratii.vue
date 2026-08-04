@@ -681,6 +681,7 @@
       ok-only
       ok-title="Am înțeles"
       scrollable
+      modal-class="modul-spv"
     >
       <b-alert
         :show="explicatieEroare !== ''"

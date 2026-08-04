@@ -217,6 +217,7 @@
       title="Denumire entitate"
       ok-title="Salvează"
       cancel-title="Renunță"
+      modal-class="modul-spv"
       @ok="salveaza"
     >
       <p class="text-muted small">

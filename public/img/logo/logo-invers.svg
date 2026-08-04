@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 322 36" width="322" height="36" role="img" aria-label="DianaSoft → SPV Curier — Automatizare declarații, solicitări și mesaje ANAF">
+  <title>DianaSoft → SPV Curier — Automatizare declarații, solicitări și mesaje ANAF</title>
+  <g>
+    <path d="M2.25 4.25h29.5v29.5H2.25z" fill="none" stroke="#f6f5f1" stroke-width="2.5"></path>
+    <rect x="7" y="9" width="10" height="10" fill="#f6f5f1"></rect>
+    <rect x="17" y="19" width="10" height="10" fill="#f6f5f1"></rect>
+  </g>
+  <text x="45" y="21" font-family="&#39;IBM Plex Sans&#39;,&#39;Segoe UI&#39;,system-ui,sans-serif" font-size="21" font-weight="700" letter-spacing="-0.3" fill="#f6f5f1">DianaSoft<tspan font-weight="400" fill="#f6f5f1" opacity="0.6" dx="6">→</tspan><tspan dx="6">SPV Curier</tspan></text>
+  <text x="46" y="32" font-family="&#39;IBM Plex Sans&#39;,&#39;Segoe UI&#39;,system-ui,sans-serif" font-size="9.5" font-weight="500" letter-spacing="0.4" fill="#f6f5f1">Automatizare declarații, solicitări și mesaje ANAF</text>
+</svg>

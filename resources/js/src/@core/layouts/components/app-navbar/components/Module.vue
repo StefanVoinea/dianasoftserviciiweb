@@ -1,5 +1,31 @@
 <template>
   <ul class="nav navbar-nav module-antet">
+    <!-- Sigla-rădăcină: DianaSoft e casa, modulele de alături sunt produsele. -->
+    <li class="nav-item">
+      <b-link
+        class="nav-link d-flex align-items-center"
+        title="DianaSoft — Automatizări software și software la comandă"
+        @click="mergiAcasa"
+      >
+        <b-img
+          :src="radacina.lockup"
+          alt="DianaSoft — Automatizări software și software la comandă"
+          class="sigla-lockup d-none d-xl-block"
+        />
+        <b-img
+          :src="radacina.semn"
+          alt="DianaSoft"
+          class="sigla-radacina-semn d-xl-none"
+        />
+      </b-link>
+    </li>
+
+    <!-- Bara verticală desparte casa de produsele ei -->
+    <li
+      class="separator-radacina"
+      aria-hidden="true"
+    />
+
     <li
       v-for="modul in vizibile"
       :key="modul.ruta"
@@ -11,16 +37,25 @@
         :title="modul.descriere"
         @click="mergiLa(modul)"
       >
+        <!-- Sigla completă, unde modulul are una: ține loc și de semn, și de
+             nume. Pe ecrane înguste n-ar încăpea, așa că rămâne doar semnul. -->
+        <b-img
+          v-if="modul.lockup"
+          :src="modul.lockup"
+          :alt="modul.nume"
+          class="sigla-lockup d-none d-xl-block"
+        />
         <b-img
           v-if="modul.sigla"
           :src="modul.sigla"
           :alt="modul.nume"
           class="sigla-modul"
+          :class="{ 'd-xl-none': modul.lockup }"
         />
         <!-- Administrarea n-are siglă: nu e un modul vândut, e unealta noastră.
              Pictograma stă în același chenar, ca rândul să rămână drept. -->
         <span
-          v-else
+          v-if="!modul.sigla"
           class="sigla-modul d-inline-flex align-items-center justify-content-center"
         >
           <feather-icon
@@ -28,7 +63,10 @@
             size="16"
           />
         </span>
-        <span class="d-none d-xl-inline ml-50">{{ modul.nume }}</span>
+        <span
+          v-if="!modul.lockup"
+          class="d-none d-xl-inline ml-50"
+        >{{ modul.nume }}</span>
       </b-link>
     </li>
   </ul>
@@ -52,6 +90,13 @@ export default {
   components: { BLink, BImg },
   data() {
     return {
+      radacina: {
+        // eslint-disable-next-line global-require, import/no-unresolved
+        lockup: require('@/assets/images/sigle/dianasoft-orizontal.svg'),
+        // Sub 64px se foloseste semnul simplificat (regula setului de brand)
+        // eslint-disable-next-line global-require, import/no-unresolved
+        semn: require('@/assets/images/sigle/dianasoft-simbol.svg'),
+      },
       module: [
         {
           nume: 'SPV Curier',
@@ -59,6 +104,9 @@ export default {
           descriere: 'Declarații, mesaje și solicitări în Spațiul Privat Virtual',
           // eslint-disable-next-line global-require, import/no-unresolved
           sigla: require('@/assets/images/sigle/spv-curier-simbol.svg'),
+          // Sigla completă, arătată în locul semnului + numelui unde încape
+          // eslint-disable-next-line global-require, import/no-unresolved
+          lockup: require('@/assets/images/sigle/spv-curier-orizontal.svg'),
         },
         {
           nume: 'Dispecer e-Transport',
@@ -103,6 +151,11 @@ export default {
   methods: {
     esteActiv(modul) {
       return this.$route.name === modul.ruta
+    },
+    mergiAcasa() {
+      if (this.$route.name === 'home') return
+
+      this.$router.push({ name: 'home' }).catch(() => {})
     },
     /** Apăsat pe modulul în care ești deja, nu are rost să reîncarce pagina. */
     mergiLa(modul) {
@@ -153,6 +206,33 @@ export default {
 
 .module-antet .nav-link.activ .sigla-modul {
   border-color: #7367f0;
+}
+
+/*
+ * Sigla completă nu stă în chenar: poartă singură și semnul, și numele.
+ * 30px respectă minimul de brand (28px) și încape în bara de 3rem.
+ */
+.sigla-lockup {
+  height: 30px;
+  width: auto;
+  flex-shrink: 0;
+}
+
+/* Semnul-rădăcină pe ecrane înguste: simplificat, fără chenar */
+.sigla-radacina-semn {
+  height: 26px;
+  width: auto;
+  flex-shrink: 0;
+}
+
+/* Bara verticală dintre sigla-rădăcină și module */
+.separator-radacina {
+  width: 1px;
+  align-self: center;
+  height: 26px;
+  margin: 0 0.6rem;
+  background: #dcd9d0;
+  flex-shrink: 0;
 }
 
 /* Pictograma administrării, în chenarul siglelor */

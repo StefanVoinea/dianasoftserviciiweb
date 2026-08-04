@@ -1,4 +1,6 @@
 @component('mail::message', ['mesaj' => null, 'user' => null])
+<img src="{{ asset('img/logo/logo-2x.png') }}" alt="DianaSoft → SPV Curier" width="322" height="36" style="margin-bottom: 10px;">
+
 # {{ $tip }}
 
 A intrat în Spațiul Privat Virtual un document de tipul urmărit.

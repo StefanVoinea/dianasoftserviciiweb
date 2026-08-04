@@ -1,0 +1,16 @@
+/* Token-uri de brand SPV Curier */
+:root {
+  --spv-navy: #22406f;
+  --spv-ink: #17191d;
+  --spv-paper: #f6f5f1;
+  --spv-surface: #fffefb;
+  --spv-line: #dcd9d0;
+  --spv-muted: #8a8b86;
+  --spv-accent: #22406f;
+}
+
+.spv-logo { display: block; height: 36px; width: auto; color: var(--spv-navy); }
+.spv-logo--sm { height: 28px; }
+.spv-logo--lg { height: 48px; }
+/* pe fundal închis */
+.spv-logo--invers { color: var(--spv-paper); }

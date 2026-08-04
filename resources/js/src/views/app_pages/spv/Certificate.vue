@@ -395,6 +395,7 @@
       :title="'Calculatorul certificatului ' + (bridgeFormular.cn || '')"
       ok-title="Salvează"
       cancel-title="Renunță"
+      modal-class="modul-spv"
       @ok="salveazaBridge"
     >
       <p class="text-muted small">
@@ -537,6 +538,7 @@
       ok-title="Alege acest dosar"
       cancel-title="Renunță"
       :ok-disabled="!folderCurent"
+      modal-class="modul-spv"
       @ok="alegeFolder"
     >
       <b-alert
@@ -596,6 +598,7 @@
       size="lg"
       ok-only
       ok-title="Închide"
+      modal-class="modul-spv"
     >
       <p class="text-muted small">
         Persoanele din rețea care folosesc acest certificat. Adresa poate fi înscrisă chiar

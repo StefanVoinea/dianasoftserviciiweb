@@ -1,17 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="400" height="72" viewBox="0 0 400 72" role="img" aria-label="SPV Curier by Diana Soft">
-<title>SPV Curier by Diana Soft</title>
-<g fill="none" stroke="#378ADD" stroke-linecap="round" stroke-linejoin="round">
- <g stroke-width="2.50">
-  <path d="M 11.60 27.10 A 26.00 26.00 0 0 1 60.40 27.10"/>
-  <path d="M 54.59 22.83 L 60.40 27.10 L 62.11 20.09"/>
-  <path d="M 60.40 44.90 A 26.00 26.00 0 0 1 11.60 44.90"/>
-  <path d="M 17.41 49.17 L 11.60 44.90 L 9.89 51.91"/>
- </g>
- <g stroke-width="2.00">
-  <rect x="22.00" y="26.00" width="28.00" height="20.00" rx="3.00"/>
-  <path d="M 22.00 29.00 L 36.00 40.00 L 50.00 29.00"/>
- </g>
-</g>
-<text x="78" y="33" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="500" fill="#1F1F1D">SPV Curier</text>
-<text x="79" y="52" font-family="'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="12" font-weight="400" fill="#6B6A65">by Diana Soft</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 322 36" width="322" height="36" role="img" aria-label="DianaSoft → SPV Curier — Automatizare declarații, solicitări și mesaje ANAF">
+  <title>DianaSoft → SPV Curier — Automatizare declarații, solicitări și mesaje ANAF</title>
+  <g>
+    <path d="M2.25 4.25h29.5v29.5H2.25z" fill="none" stroke="#22406f" stroke-width="2.5"></path>
+    <rect x="7" y="9" width="10" height="10" fill="#22406f"></rect>
+    <rect x="17" y="19" width="10" height="10" fill="#22406f"></rect>
+  </g>
+  <text x="45" y="21" font-family="&#39;IBM Plex Sans&#39;,&#39;Segoe UI&#39;,system-ui,sans-serif" font-size="21" font-weight="700" letter-spacing="-0.3" fill="#22406f">DianaSoft<tspan font-weight="400" fill="#22406f" opacity="0.6" dx="6">→</tspan><tspan dx="6">SPV Curier</tspan></text>
+  <text x="46" y="32" font-family="&#39;IBM Plex Sans&#39;,&#39;Segoe UI&#39;,system-ui,sans-serif" font-size="9.5" font-weight="500" letter-spacing="0.4" fill="#22406f">Automatizare declarații, solicitări și mesaje ANAF</text>
 </svg>

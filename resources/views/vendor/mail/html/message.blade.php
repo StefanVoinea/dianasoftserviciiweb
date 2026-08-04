@@ -17,7 +17,7 @@
     @slot('footer')
     
         @component('mail::footer',['user'=>($user??null)])
-             E-mail transmis din aplicatia "Diana IFN Web"  dezvoltata de Diana Soft SRL
+             E-mail transmis din aplicatia "DianaSoft"  dezvoltata de Diana Soft SRL
             Telefon: 0744476969 E-mail: office@dianasoft.ro © {{ date('Y') }} All rights reserved.
            
     

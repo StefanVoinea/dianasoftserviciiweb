@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="DianaSoft">
+  <title>DianaSoft</title>
+  <g fill="none" stroke="#3B82F6" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 8.54 23.44 A 25 25 0 0 1 55.46 23.44"></path>
+    <path d="M 49.88 19.34 L 55.46 23.44 L 57.11 16.70"></path>
+    <path d="M 55.46 40.56 A 25 25 0 0 1 8.54 40.56"></path>
+    <path d="M 14.12 44.66 L 8.54 40.56 L 6.89 47.30"></path>
+  </g>
+  <rect x="16" y="16" width="10" height="10" fill="#3B82F6"></rect>
+  <rect x="27" y="27" width="10" height="10" fill="#3B82F6"></rect>
+  <rect x="38" y="38" width="10" height="10" fill="#3B82F6"></rect>
+</svg>

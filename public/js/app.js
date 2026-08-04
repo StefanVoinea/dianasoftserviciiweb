@@ -43,7 +43,7 @@
 /******/
 /******/ 	// script path function
 /******/ 	function jsonpScriptSrc(chunkId) {
-/******/ 		return __webpack_require__.p + "js/chunks/" + ({}[chunkId]||chunkId) + "." + {"0":"977ad2c875cb194f4e1b","1":"de5e8158462bdfb214a5","2":"08ad312c3250cba29b98","3":"60969060989f11f1d0e5","4":"87e627d316169372b14a","5":"c10409a84443ece5536a","6":"93e0ac9d6e318b20d9c7","7":"09c901e7acc8fc43fa00","8":"944066c0a26dcf56a7c9","9":"4174a35b1678e72b0269","10":"f89380d771283589f66b","11":"eb6adf8a578b1ee156b7","12":"94819f9595597f24f76c","13":"6bf8d74e2c0e508782a6","14":"7e2cb0b4b4b09d2015b8","15":"8ae1f53b5a8501e33463","16":"bcb215457c0f0b63eca5","17":"3873a69a945e2eb3cf82","18":"2c83507e138309cac0b7","19":"cad16bdaf2939aeaa31a","20":"c0477239b554f1bc3ea2","21":"2eb2630edb2214a89ce3","22":"1fabdc0537f4cfc1958d","23":"566c9107a4ee464b2876","24":"00938f92194801e7f7f6","25":"f59040c47c8a14b2fedd","26":"971316f5b91b57a7a93d","27":"88f8e07dfe1509bbf33d","28":"1a8dcdf275219675f6a6","29":"fb49c75fc7f59de0529d","30":"fe041a1cd525da927dc6","31":"2c7785cbc5dc3a209eb1","32":"1e9610f552ee4409cf67","33":"d3d1c99c9f7ec941e8cd","34":"9acf8ee74d85675595a8","35":"1972c404ae78c8305d1c","36":"d1d6df52091fd6bfe9a1","37":"0400b910cecb7657eb95","38":"e0d108dbbb30eba6ace7","39":"286ad05fb1732dd3b457","40":"954c02e90cd6481249d9","41":"2e436e0d33103aaf2baa","42":"a55fb0c2beff2ed00859","43":"bdf4914214f1e4970c5a","44":"913f4b75368207a1e263","45":"2a6a6a150a6be3394f0f","46":"18a2b8a8b7ef4c7e6bfa","47":"e295115fc455a383f65f","48":"b555d7b84fc95ff94ac3","49":"0cd152b1183ac5c565ab","50":"f42e5c22b8dcaf57ed48","51":"ea61092e9106b242ffaa","52":"a811227178285f1cd918","53":"896ecc691a329c5ed8e4","54":"92414c7e04777345297b","55":"934ad8ddb453697e89fe","56":"3ba136962c30c766f1b5","57":"875713658eff9d70d223","58":"5709282688347907c4ac","59":"d286488d1b5453d90824","60":"11e539dc140e31fb4ebb","61":"e8d910507b1f2a23d7c1","62":"301309169003e0433f26","63":"66f0e9ed018d74e1b9ab","64":"fc9c63d81a2360c9710d","65":"79f8ed0695fdc4855cde","66":"95ca0f6105758dc90f51","67":"ccf5b0772d0ab9e0302d","68":"7f28051d4d253170640c","69":"e34925ea64bf892a1828","70":"658f110a7e3623346878","71":"9f3fddffc4c2b4499d61","72":"a071f57ef9117e5ff581","73":"560ceadf995f5cef81be","74":"95a7ad389ed52c6a618f","75":"82434d051d307598e661","76":"b5278278b3ecec0607c1","77":"86942b882e202c7a984f","78":"700f203eb01350bc5276","79":"2d7908cd1fc41ddf85d8","80":"195a587a1f1c9d3dba83","81":"8f17b05aae9005b970ca","82":"cdbe657aae1d70e4a27c","83":"d85872d1fba7a6dd5c8e","84":"5b5a62e95cf987a67ea2","85":"721e859df3e2c90da484","86":"a20d6c84847d90f06939","87":"d3ec6dbaae0d651b76cb","88":"39c082082182ceea30d9","89":"088b2026f7b526598411","90":"ef321d5ab112a7ffad48","91":"0b1904ec59a15f9fd82e","92":"f64b5501a02c8191054c","93":"042d379b2a9a2e2de16a","94":"f1e07f675478a9564db5","95":"db912fa8c5f733704bb8","96":"066b38738dcb8adbe5ee","97":"3425a05d53f692dbb602","98":"f2c7412c77174b6cde70","99":"816b47c0e9f959da1292","100":"2face361bcbb78d332c4","101":"72a8e31cd40e4f607f22","102":"477e3bded550679bf9d1","103":"d25d732e2521ebd518f6","104":"3522d01915d7fdf74bec","105":"8dbf7916ac5402058bad","106":"91e73bbbf9709115335c","107":"c68cb43b32cabc2fecc2","108":"0d1289f4997bea7b35d9","109":"b95c897b20ec1adb1983","110":"a50969838b7a2d9829ae","111":"9d48cd38554680bd4504","112":"45884a245a0671b7156c","113":"e6f83e6b95a0d4e27740","114":"ebc94141b8d845218ff2","115":"4b077fb2c96622b6b26d","116":"245eaf3e1352c13e908b","117":"0050c22ccfab3eced1c8","118":"d76fd483b0ba9968e560","119":"a08b3f270f0144e383cc","120":"b114c62adbf6bbb4f576","121":"2f6beee1ec24c24d8e88","122":"4bc43253aa29b6e8c464","123":"cc2a581b3ad9514f3afe","124":"416835c2018f00eb9bcc","125":"0a8c664b033c4b6a75b9","126":"4b08452971f081e36411","127":"aea6de2c929bb1275565","128":"23868a728e9ef3d8b6c8","129":"0119c066b55034635e82","130":"692afd0c78b74d5ecef8","131":"257ebb12eaffefedba21","132":"4c79e86e9952d67fcf81","133":"c1ea13f318e9a8fa94aa","134":"9d65311e97534537f34b","135":"1d58690d7fa440ed7975","136":"f0864e99e1235ded65e1","137":"13423d090e8efff07837","138":"6a157a54d4eaba5a60ae","139":"ce5093278950ab795783","140":"c351f73cd474353a7a3b","141":"e49f0e551a9f1fe77e52","142":"2bd7786101a095a3c2f4","143":"75e9d189f537dd8738c3","144":"d8aea25efc1eea0da15a","145":"1c42d890fc083354fabe","146":"9620378601f65fe5dd96","147":"1e2e1361c460acd653c3","148":"60ebe02349b941209719","149":"db38788caa4ce1af9fc5","150":"fac57331ad1a17892a8f","151":"e94e1bed4a57391015a0","152":"a1356eb9fb887c89d1c9","153":"dc4c50eb305737479b12","154":"e7d118c24ab71cc11c4c","155":"3b28cdf60d60b5e53639","156":"ad3222cb4ac9701b5aa7","157":"816d1faa53edf5d6604f","158":"2271b3db4a840cd2f64f","159":"06701c309b606c401ed0","160":"6b8789650f75e8f6b96b","161":"fab23428fb1ef51f3db4","162":"7db702a5baff9db01dce","163":"25fdd7c1c92dee2d8a96","164":"b4aadd936a33ee87480a","165":"0d136130add51accd69a","166":"9dfc3e90bd811adaf314","167":"1b4cc33c8453f91b2cfe","168":"6ab210d07e49fee31128","169":"30901e7d30911b4f7df6","170":"0949ca72abb61332e856","171":"53ca0cc5558a1ac4066e","172":"1cfd964e6af518ee1391","173":"6a2ab88e840b83b4c152","174":"2946d74c6f71cf14852c","175":"f5256e53c6eb3fc3c142","176":"3c9cb2f77de13d8e4ef8","177":"b0f17c832c7c95496559","178":"77ee2e7205669e30d414","179":"a88757c3e8cb7bed439e","180":"f5168c203016680002ec","181":"8870821ea2f7dfd784f7","182":"c903c316d49407e90ffb","183":"9fc10a875d847348c21f","184":"0a7e8a2912035b949546","185":"ac72592aa2717f1bd69c","186":"6613d63031abe92e927b","187":"de6a48024092b87becd2","188":"cc467e936d36436d8cca","189":"25e653d2351806339157","190":"7c90ea48c4fb5c0b63b7"}[chunkId] + ".js"
+/******/ 		return __webpack_require__.p + "js/chunks/" + ({}[chunkId]||chunkId) + "." + {"0":"977ad2c875cb194f4e1b","1":"de5e8158462bdfb214a5","2":"08ad312c3250cba29b98","3":"60969060989f11f1d0e5","4":"87e627d316169372b14a","5":"c10409a84443ece5536a","6":"93e0ac9d6e318b20d9c7","7":"09c901e7acc8fc43fa00","8":"944066c0a26dcf56a7c9","9":"4174a35b1678e72b0269","10":"f89380d771283589f66b","11":"eb6adf8a578b1ee156b7","12":"94819f9595597f24f76c","13":"3f1777d22a3373a67c69","14":"7e2cb0b4b4b09d2015b8","15":"8ae1f53b5a8501e33463","16":"bcb215457c0f0b63eca5","17":"3873a69a945e2eb3cf82","18":"2c83507e138309cac0b7","19":"cad16bdaf2939aeaa31a","20":"c0477239b554f1bc3ea2","21":"2eb2630edb2214a89ce3","22":"1fabdc0537f4cfc1958d","23":"566c9107a4ee464b2876","24":"00938f92194801e7f7f6","25":"f59040c47c8a14b2fedd","26":"971316f5b91b57a7a93d","27":"88f8e07dfe1509bbf33d","28":"1a8dcdf275219675f6a6","29":"fb49c75fc7f59de0529d","30":"fe041a1cd525da927dc6","31":"2c7785cbc5dc3a209eb1","32":"1e9610f552ee4409cf67","33":"d3d1c99c9f7ec941e8cd","34":"9acf8ee74d85675595a8","35":"1972c404ae78c8305d1c","36":"d1d6df52091fd6bfe9a1","37":"0400b910cecb7657eb95","38":"e0d108dbbb30eba6ace7","39":"67bc4664f0af9c047357","40":"6950a464f084d15d57af","41":"0be9ee0abe4e834a484f","42":"80d3a7870514e7676a56","43":"bdf4914214f1e4970c5a","44":"913f4b75368207a1e263","45":"2a6a6a150a6be3394f0f","46":"18a2b8a8b7ef4c7e6bfa","47":"e295115fc455a383f65f","48":"b555d7b84fc95ff94ac3","49":"0cd152b1183ac5c565ab","50":"f42e5c22b8dcaf57ed48","51":"ea61092e9106b242ffaa","52":"a811227178285f1cd918","53":"896ecc691a329c5ed8e4","54":"92414c7e04777345297b","55":"934ad8ddb453697e89fe","56":"3ba136962c30c766f1b5","57":"875713658eff9d70d223","58":"5709282688347907c4ac","59":"d286488d1b5453d90824","60":"11e539dc140e31fb4ebb","61":"e8d910507b1f2a23d7c1","62":"301309169003e0433f26","63":"66f0e9ed018d74e1b9ab","64":"fc9c63d81a2360c9710d","65":"79f8ed0695fdc4855cde","66":"95ca0f6105758dc90f51","67":"ccf5b0772d0ab9e0302d","68":"7f28051d4d253170640c","69":"e34925ea64bf892a1828","70":"658f110a7e3623346878","71":"9f3fddffc4c2b4499d61","72":"a071f57ef9117e5ff581","73":"560ceadf995f5cef81be","74":"95a7ad389ed52c6a618f","75":"82434d051d307598e661","76":"b5278278b3ecec0607c1","77":"86942b882e202c7a984f","78":"700f203eb01350bc5276","79":"2d7908cd1fc41ddf85d8","80":"195a587a1f1c9d3dba83","81":"8f17b05aae9005b970ca","82":"cdbe657aae1d70e4a27c","83":"d85872d1fba7a6dd5c8e","84":"5b5a62e95cf987a67ea2","85":"721e859df3e2c90da484","86":"a20d6c84847d90f06939","87":"d3ec6dbaae0d651b76cb","88":"39c082082182ceea30d9","89":"088b2026f7b526598411","90":"ef321d5ab112a7ffad48","91":"0b1904ec59a15f9fd82e","92":"f64b5501a02c8191054c","93":"042d379b2a9a2e2de16a","94":"f1e07f675478a9564db5","95":"db912fa8c5f733704bb8","96":"066b38738dcb8adbe5ee","97":"3425a05d53f692dbb602","98":"f2c7412c77174b6cde70","99":"816b47c0e9f959da1292","100":"2face361bcbb78d332c4","101":"72a8e31cd40e4f607f22","102":"477e3bded550679bf9d1","103":"d25d732e2521ebd518f6","104":"3522d01915d7fdf74bec","105":"8dbf7916ac5402058bad","106":"91e73bbbf9709115335c","107":"c68cb43b32cabc2fecc2","108":"0d1289f4997bea7b35d9","109":"b95c897b20ec1adb1983","110":"a50969838b7a2d9829ae","111":"9d48cd38554680bd4504","112":"45884a245a0671b7156c","113":"e6f83e6b95a0d4e27740","114":"ebc94141b8d845218ff2","115":"4b077fb2c96622b6b26d","116":"245eaf3e1352c13e908b","117":"0050c22ccfab3eced1c8","118":"d76fd483b0ba9968e560","119":"a08b3f270f0144e383cc","120":"b114c62adbf6bbb4f576","121":"2f6beee1ec24c24d8e88","122":"4bc43253aa29b6e8c464","123":"cc2a581b3ad9514f3afe","124":"416835c2018f00eb9bcc","125":"0a8c664b033c4b6a75b9","126":"4b08452971f081e36411","127":"aea6de2c929bb1275565","128":"23868a728e9ef3d8b6c8","129":"0119c066b55034635e82","130":"692afd0c78b74d5ecef8","131":"257ebb12eaffefedba21","132":"4c79e86e9952d67fcf81","133":"c1ea13f318e9a8fa94aa","134":"9d65311e97534537f34b","135":"1d58690d7fa440ed7975","136":"f0864e99e1235ded65e1","137":"13423d090e8efff07837","138":"6a157a54d4eaba5a60ae","139":"ce5093278950ab795783","140":"c351f73cd474353a7a3b","141":"e49f0e551a9f1fe77e52","142":"2bd7786101a095a3c2f4","143":"75e9d189f537dd8738c3","144":"d8aea25efc1eea0da15a","145":"1c42d890fc083354fabe","146":"9620378601f65fe5dd96","147":"1e2e1361c460acd653c3","148":"60ebe02349b941209719","149":"db38788caa4ce1af9fc5","150":"fac57331ad1a17892a8f","151":"e94e1bed4a57391015a0","152":"a1356eb9fb887c89d1c9","153":"dc4c50eb305737479b12","154":"e7d118c24ab71cc11c4c","155":"3b28cdf60d60b5e53639","156":"54ac7a8181332f01572d","157":"3fc27011b9746b133eed","158":"efd48782052ff33d6077","159":"5c6629875dc94cd1262d","160":"4e7a65edbc86f0eaf44d","161":"78dc1b9cf15a72657a07","162":"f3272f7a8c7cd1858f87","163":"25fdd7c1c92dee2d8a96","164":"b4aadd936a33ee87480a","165":"0d136130add51accd69a","166":"9dfc3e90bd811adaf314","167":"1b4cc33c8453f91b2cfe","168":"6ab210d07e49fee31128","169":"30901e7d30911b4f7df6","170":"0949ca72abb61332e856","171":"53ca0cc5558a1ac4066e","172":"1cfd964e6af518ee1391","173":"6a2ab88e840b83b4c152","174":"2946d74c6f71cf14852c","175":"f5256e53c6eb3fc3c142","176":"3c9cb2f77de13d8e4ef8","177":"b0f17c832c7c95496559","178":"77ee2e7205669e30d414","179":"a88757c3e8cb7bed439e","180":"f5168c203016680002ec","181":"8870821ea2f7dfd784f7","182":"c903c316d49407e90ffb","183":"9fc10a875d847348c21f","184":"0a7e8a2912035b949546","185":"ac72592aa2717f1bd69c","186":"6613d63031abe92e927b","187":"de6a48024092b87becd2","188":"cc467e936d36436d8cca","189":"25e653d2351806339157","190":"7c90ea48c4fb5c0b63b7"}[chunkId] + ".js"
 /******/ 	}
 /******/
 /******/ 	// The require function
@@ -209332,7 +209332,7 @@ __webpack_require__.r(__webpack_exports__);
   path: '/charts-and-maps/charts/apex-chart',
   name: 'charts-apex-chart',
   component: function component() {
-    return Promise.all(/*! import() */[__webpack_require__.e(3), __webpack_require__.e(41)]).then(__webpack_require__.bind(null, /*! @/views/charts-and-maps/charts/apex-chart/ApexChart.vue */ "./resources/js/src/views/charts-and-maps/charts/apex-chart/ApexChart.vue"));
+    return Promise.all(/*! import() */[__webpack_require__.e(3), __webpack_require__.e(42)]).then(__webpack_require__.bind(null, /*! @/views/charts-and-maps/charts/apex-chart/ApexChart.vue */ "./resources/js/src/views/charts-and-maps/charts/apex-chart/ApexChart.vue"));
   },
   meta: {
     pageTitle: 'Apex Chart',
@@ -209475,7 +209475,7 @@ var _ref, _ref2, _ref3, _ref4, _ref5, _ref6, _ref7;
   path: '/',
   name: 'home',
   component: function component() {
-    return __webpack_require__.e(/*! import() */ 162).then(__webpack_require__.bind(null, /*! @/views/app_pages/Home.vue */ "./resources/js/src/views/app_pages/Home.vue"));
+    return __webpack_require__.e(/*! import() */ 156).then(__webpack_require__.bind(null, /*! @/views/app_pages/Home.vue */ "./resources/js/src/views/app_pages/Home.vue"));
   },
   meta: {
     rule: 'admin',
@@ -209516,7 +209516,7 @@ var _ref, _ref2, _ref3, _ref4, _ref5, _ref6, _ref7;
   path: '/spv',
   name: 'spv',
   component: function component() {
-    return Promise.all(/*! import() */[__webpack_require__.e(115), __webpack_require__.e(42)]).then(__webpack_require__.bind(null, /*! @/views/app_pages/Spv.vue */ "./resources/js/src/views/app_pages/Spv.vue"));
+    return Promise.all(/*! import() */[__webpack_require__.e(115), __webpack_require__.e(39)]).then(__webpack_require__.bind(null, /*! @/views/app_pages/Spv.vue */ "./resources/js/src/views/app_pages/Spv.vue"));
   },
   meta: {
     rule: 'editor'
@@ -209561,7 +209561,7 @@ var _ref, _ref2, _ref3, _ref4, _ref5, _ref6, _ref7;
   path: '/administrare',
   name: 'administrare',
   component: function component() {
-    return __webpack_require__.e(/*! import() */ 161).then(__webpack_require__.bind(null, /*! @/views/app_pages/Administrare.vue */ "./resources/js/src/views/app_pages/Administrare.vue"));
+    return __webpack_require__.e(/*! import() */ 162).then(__webpack_require__.bind(null, /*! @/views/app_pages/Administrare.vue */ "./resources/js/src/views/app_pages/Administrare.vue"));
   },
   meta: {
     rule: 'editor'
@@ -209571,7 +209571,7 @@ var _ref, _ref2, _ref3, _ref4, _ref5, _ref6, _ref7;
   path: '/portal-just',
   name: 'portal-just',
   component: function component() {
-    return __webpack_require__.e(/*! import() */ 156).then(__webpack_require__.bind(null, /*! @/views/app_pages/PortalJust.vue */ "./resources/js/src/views/app_pages/PortalJust.vue"));
+    return __webpack_require__.e(/*! import() */ 157).then(__webpack_require__.bind(null, /*! @/views/app_pages/PortalJust.vue */ "./resources/js/src/views/app_pages/PortalJust.vue"));
   },
   meta: {
     rule: 'editor'
@@ -209885,7 +209885,7 @@ __webpack_require__.r(__webpack_exports__);
   path: '/forms/form-element/textarea',
   name: 'forms-element-textarea',
   component: function component() {
-    return Promise.all(/*! import() */[__webpack_require__.e(1), __webpack_require__.e(0), __webpack_require__.e(40)]).then(__webpack_require__.bind(null, /*! @/views/forms/form-element/form-textarea/FormTextArea.vue */ "./resources/js/src/views/forms/form-element/form-textarea/FormTextArea.vue"));
+    return Promise.all(/*! import() */[__webpack_require__.e(1), __webpack_require__.e(0), __webpack_require__.e(41)]).then(__webpack_require__.bind(null, /*! @/views/forms/form-element/form-textarea/FormTextArea.vue */ "./resources/js/src/views/forms/form-element/form-textarea/FormTextArea.vue"));
   },
   meta: {
     pageTitle: 'Textarea',
@@ -210050,7 +210050,7 @@ __webpack_require__.r(__webpack_exports__);
   path: '/forms/form-element/date-time-picker',
   name: 'extensions-date-time-picker',
   component: function component() {
-    return Promise.all(/*! import() */[__webpack_require__.e(1), __webpack_require__.e(0), __webpack_require__.e(157)]).then(__webpack_require__.bind(null, /*! @/views/forms/form-element/date-time-picker/DateTimePicker.vue */ "./resources/js/src/views/forms/form-element/date-time-picker/DateTimePicker.vue"));
+    return Promise.all(/*! import() */[__webpack_require__.e(1), __webpack_require__.e(0), __webpack_require__.e(158)]).then(__webpack_require__.bind(null, /*! @/views/forms/form-element/date-time-picker/DateTimePicker.vue */ "./resources/js/src/views/forms/form-element/date-time-picker/DateTimePicker.vue"));
   },
   meta: {
     pageTitle: 'Date Time Picker',
@@ -210415,7 +210415,7 @@ __webpack_require__.r(__webpack_exports__);
   path: '/pages/knowledge-base',
   name: 'pages-knowledge-base',
   component: function component() {
-    return __webpack_require__.e(/*! import() */ 158).then(__webpack_require__.bind(null, /*! @/views/pages/Knowledge-base/KnowledgeBase.vue */ "./resources/js/src/views/pages/Knowledge-base/KnowledgeBase.vue"));
+    return __webpack_require__.e(/*! import() */ 159).then(__webpack_require__.bind(null, /*! @/views/pages/Knowledge-base/KnowledgeBase.vue */ "./resources/js/src/views/pages/Knowledge-base/KnowledgeBase.vue"));
   },
   meta: {
     pageTitle: 'Knowledge Base',
@@ -210430,7 +210430,7 @@ __webpack_require__.r(__webpack_exports__);
   path: '/pages/knowledge-base/:category',
   name: 'pages-knowledge-base-category',
   component: function component() {
-    return __webpack_require__.e(/*! import() */ 159).then(__webpack_require__.bind(null, /*! @/views/pages/Knowledge-base/KnowledgeBaseCategory.vue */ "./resources/js/src/views/pages/Knowledge-base/KnowledgeBaseCategory.vue"));
+    return __webpack_require__.e(/*! import() */ 160).then(__webpack_require__.bind(null, /*! @/views/pages/Knowledge-base/KnowledgeBaseCategory.vue */ "./resources/js/src/views/pages/Knowledge-base/KnowledgeBaseCategory.vue"));
   },
   meta: {
     pageTitle: 'Category',
@@ -210511,7 +210511,7 @@ __webpack_require__.r(__webpack_exports__);
   path: '/pages/blog/edit/:id',
   name: 'pages-blog-edit',
   component: function component() {
-    return Promise.all(/*! import() */[__webpack_require__.e(2), __webpack_require__.e(160)]).then(__webpack_require__.bind(null, /*! @/views/pages/blog/BlogEdit.vue */ "./resources/js/src/views/pages/blog/BlogEdit.vue"));
+    return Promise.all(/*! import() */[__webpack_require__.e(2), __webpack_require__.e(161)]).then(__webpack_require__.bind(null, /*! @/views/pages/blog/BlogEdit.vue */ "./resources/js/src/views/pages/blog/BlogEdit.vue"));
   },
   meta: {
     pageTitle: 'Blog Edit',
@@ -210767,7 +210767,7 @@ __webpack_require__.r(__webpack_exports__);
   path: '/components/calendar',
   name: 'components-calendar',
   component: function component() {
-    return Promise.all(/*! import() */[__webpack_require__.e(1), __webpack_require__.e(0), __webpack_require__.e(39)]).then(__webpack_require__.bind(null, /*! @/views/components/calendar/Calendar.vue */ "./resources/js/src/views/components/calendar/Calendar.vue"));
+    return Promise.all(/*! import() */[__webpack_require__.e(1), __webpack_require__.e(0), __webpack_require__.e(40)]).then(__webpack_require__.bind(null, /*! @/views/components/calendar/Calendar.vue */ "./resources/js/src/views/components/calendar/Calendar.vue"));
   },
   meta: {
     pageTitle: 'Calendar',

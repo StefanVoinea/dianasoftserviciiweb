@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="modul-spv">
     <b-card no-body>
       <b-tabs
         v-model="tabActiv"
@@ -154,3 +154,219 @@ export default {
   },
 }
 </script>
+
+<style lang="scss" scoped>
+/*
+ * Culoarea institutionala din sigla (#22406f) se vede si pe filele modulului:
+ * fila deschisa poarta albastrul SPV Curier, nu movul temei.
+ */
+$spv-navy: #22406f;
+
+::v-deep .nav-tabs {
+  .nav-link.active {
+    color: $spv-navy;
+
+    &:after {
+      background: linear-gradient(30deg, $spv-navy, rgba(34, 64, 111, 0.5)) !important;
+    }
+  }
+
+  .nav-link:hover {
+    color: $spv-navy;
+  }
+}
+</style>
+
+<style lang="scss">
+/*
+ * In modulul SPV Curier, varianta "info" (albastrul deschis al temei) poarta
+ * albastrul institutional din sigla, #22406f — butoane, ecusoane, instiintari,
+ * peste tot. Blocul nu e "scoped": paginile filelor sunt componente separate,
+ * iar regula trebuie sa le prinda pe toate; de aceea sta sub .modul-spv, ca
+ * restul aplicatiei sa ramana cum e.
+ */
+.modul-spv {
+  $spv-navy: #22406f;
+
+  .btn-info {
+    background-color: $spv-navy !important;
+    border-color: $spv-navy !important;
+
+    &:hover,
+    &:focus,
+    &:active {
+      background-color: darken($spv-navy, 5%) !important;
+      border-color: darken($spv-navy, 5%) !important;
+      box-shadow: 0 8px 25px -8px rgba(34, 64, 111, 0.6) !important;
+    }
+  }
+
+  .btn-outline-info {
+    color: $spv-navy !important;
+    border-color: $spv-navy !important;
+
+    &:hover:not(:disabled) {
+      background-color: rgba(34, 64, 111, 0.06) !important;
+      color: $spv-navy !important;
+    }
+
+    &:not(:disabled):active,
+    &.active {
+      background-color: $spv-navy !important;
+      color: #fff !important;
+    }
+  }
+
+  .btn-flat-info {
+    color: $spv-navy !important;
+
+    &:hover,
+    &:active,
+    &:focus {
+      background-color: rgba(34, 64, 111, 0.12) !important;
+      color: $spv-navy !important;
+    }
+  }
+
+  .badge-info {
+    background-color: $spv-navy !important;
+  }
+
+  .badge-light-info {
+    background-color: rgba(34, 64, 111, 0.12) !important;
+    color: $spv-navy !important;
+  }
+
+  .alert-info {
+    background: rgba(34, 64, 111, 0.12) !important;
+    color: $spv-navy !important;
+
+    .alert-heading,
+    .alert-body,
+    .alert-link {
+      color: $spv-navy !important;
+    }
+  }
+
+  .text-info {
+    color: $spv-navy !important;
+  }
+
+  .border-info {
+    border-color: $spv-navy !important;
+  }
+
+  .spinner-border.text-info,
+  .spinner-grow.text-info {
+    color: $spv-navy !important;
+  }
+
+  /*
+   * Si varianta "primary" (movul temei) poarta aici albastrul din sigla:
+   * butoane, ecusoane, paginare, bife si campuri in focus. Tot sub .modul-spv,
+   * ca celelalte module sa ramana pe culorile temei.
+   */
+  .btn-primary {
+    background-color: $spv-navy !important;
+    border-color: $spv-navy !important;
+
+    &:hover,
+    &:focus,
+    &:active {
+      background-color: darken($spv-navy, 5%) !important;
+      border-color: darken($spv-navy, 5%) !important;
+      box-shadow: 0 8px 25px -8px rgba(34, 64, 111, 0.6) !important;
+    }
+  }
+
+  .btn-outline-primary {
+    color: $spv-navy !important;
+    border-color: $spv-navy !important;
+
+    &:hover:not(:disabled) {
+      background-color: rgba(34, 64, 111, 0.06) !important;
+      color: $spv-navy !important;
+    }
+
+    &:not(:disabled):active,
+    &.active {
+      background-color: $spv-navy !important;
+      color: #fff !important;
+    }
+  }
+
+  .btn-flat-primary {
+    color: $spv-navy !important;
+
+    &:hover,
+    &:active,
+    &:focus {
+      background-color: rgba(34, 64, 111, 0.12) !important;
+      color: $spv-navy !important;
+    }
+  }
+
+  .badge-primary {
+    background-color: $spv-navy !important;
+  }
+
+  .badge-light-primary {
+    background-color: rgba(34, 64, 111, 0.12) !important;
+    color: $spv-navy !important;
+  }
+
+  .alert-primary {
+    background: rgba(34, 64, 111, 0.12) !important;
+    color: $spv-navy !important;
+
+    .alert-heading,
+    .alert-body,
+    .alert-link {
+      color: $spv-navy !important;
+    }
+  }
+
+  .text-primary {
+    color: $spv-navy !important;
+  }
+
+  .border-primary {
+    border-color: $spv-navy !important;
+  }
+
+  .spinner-border.text-primary,
+  .spinner-grow.text-primary {
+    color: $spv-navy !important;
+  }
+
+  // Pagina curenta din paginarea tabelelor
+  .pagination .page-item.active .page-link {
+    background-color: $spv-navy !important;
+    border-color: $spv-navy !important;
+    color: #fff !important;
+  }
+
+  .pagination .page-link:hover {
+    color: $spv-navy;
+  }
+
+  // Bifele, butoanele radio si comutatoarele aprinse
+  .custom-control-input:checked ~ .custom-control-label::before {
+    background-color: $spv-navy !important;
+    border-color: $spv-navy !important;
+  }
+
+  // Campul in care se scrie acum
+  .form-control:focus,
+  .custom-select:focus {
+    border-color: $spv-navy !important;
+  }
+
+  // Randul ales dintr-un meniu derulant
+  .dropdown-item.active,
+  .dropdown-item:active {
+    background-color: rgba(34, 64, 111, 0.12) !important;
+    color: $spv-navy !important;
+  }
+}
+</style>

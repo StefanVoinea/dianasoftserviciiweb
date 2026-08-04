@@ -44,14 +44,19 @@
       <div class="col-12 col-md-6 col-lg-4">
         <div class="card h-100">
           <div class="card-body">
-            <h4 class="mb-2">
-              SPV Curier
-            </h4>
+            <!-- Sigla tine loc de titlu: poarta numele si culoarea modulului. -->
+            <img
+              :src="siglaSpv"
+              alt="DianaSoft → SPV Curier"
+              class="mb-2 d-block"
+              style="height: 32px; width: auto; max-width: 100%;"
+            >
             <p class="text-muted mb-3">
               Deschide mesajele ANAF și verificările SPV direct din dashboard.
             </p>
             <button
-              class="btn btn-primary"
+              class="btn text-white"
+              style="background-color: #22406f; border-color: #22406f;"
               @click="goToSpv"
             >
               Acceseaza
@@ -137,6 +142,8 @@ export default {
       superAdmin: false,
       // Înștiințările necitite, arătate până sunt confirmate
       notificari: [],
+      // eslint-disable-next-line global-require, import/no-unresolved
+      siglaSpv: require('@/assets/images/sigle/spv-curier-orizontal.svg'),
     }
   },
   computed: {
