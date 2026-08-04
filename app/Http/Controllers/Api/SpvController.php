@@ -30,9 +30,15 @@ class SpvController extends Controller
                 foreach ($mesaje['mesaje'] as $item) {
                     $mesaj = $storage->saveMessage($item, $cif ?: null);
 
-                    // „Nou" inseamna abia intrat, nu „intors iar de ANAF": lista
-                    // vine cu toata fereastra de zile la fiecare citire.
-                    if ($mesaj->wasRecentlyCreated) {
+                    /*
+                     * „Nou" inseamna abia intrat, nu „intors iar de ANAF": lista
+                     * vine cu toata fereastra de zile la fiecare citire.
+                     *
+                     * Se numara doar ce se si arata aici: o recipisa abia venita
+                     * se vede in fila declaratiilor, iar un „un mesaj nou" fara
+                     * niciun rand nou in tabel ar parea o scapare.
+                     */
+                    if ($mesaj->wasRecentlyCreated && $this->filaCareAduce($mesaj) === null) {
                         $noi++;
                     }
 
@@ -112,6 +118,24 @@ class SpvController extends Controller
         $query = SpvMesaj::query()
             ->orderByDesc('data_creare')
             ->orderByDesc('id');
+
+        /*
+         * Recipisele si raspunsurile la solicitari nu se mai arata aici.
+         *
+         * Locul lor e fila din care se aduc, unde stau langa documentul la care
+         * raspund: recipisa langa declaratia depusa, raspunsul langa solicitarea
+         * ceruta. Aici n-ar fi decat inca un rand din care omul n-are ce afla.
+         *
+         * Se scot din interogare, nu la sfarsit, ca limita de randuri sa numere
+         * ce se vede cu adevarat. Mesajele fara tip raman: nu se stie ce sunt,
+         * deci nu se ascund.
+         */
+        foreach (array_keys(config('anaf.spv.tipuri_din_alte_file', [])) as $bucata) {
+            $query->where(function ($intrebare) use ($bucata) {
+                $intrebare->whereNull('tip')
+                    ->orWhere('tip', 'not like', '%' . $bucata . '%');
+            });
+        }
 
         if ($request->filled('cif')) {
             $query->where('cif', 'like', '%' . $request->query('cif') . '%');

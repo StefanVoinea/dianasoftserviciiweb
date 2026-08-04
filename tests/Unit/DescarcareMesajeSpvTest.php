@@ -83,21 +83,41 @@ class DescarcareMesajeSpvTest extends TestCase
         $this->assertNull($this->fila($this->mesaj('')));
     }
 
-    /** Tabelul spune de unde vine documentul, ca sa nu para nedescarcat. */
-    public function test_tabelul_arata_fila_din_care_vine_documentul(): void
+    /** @return \Illuminate\Support\Collection randurile din fila de mesaje */
+    protected function randurile()
     {
-        $this->mesaj('RECIPISA');
-        $this->mesaj('SOMATIE');
-
         $controller = $this->app->make(SpvController::class);
+
         $metoda = new \ReflectionMethod($controller, 'istoric');
         $metoda->setAccessible(true);
 
-        $randuri = collect($metoda->invoke($controller, new \Illuminate\Http\Request()))
-            ->whereIn('tip', ['RECIPISA', 'SOMATIE'])
-            ->keyBy('tip');
+        return collect($metoda->invoke($controller, new \Illuminate\Http\Request()));
+    }
 
-        $this->assertSame('Declarații fiscale', $randuri['RECIPISA']['fila_care_aduce']);
-        $this->assertNull($randuri['SOMATIE']['fila_care_aduce']);
+    /**
+     * Documentele care se aduc din alta fila nu se mai arata si aici: locul lor
+     * e langa documentul la care raspund, iar in lista asta ar fi doar zgomot.
+     */
+    public function test_recipisele_si_raspunsurile_nu_se_arata_in_fila_de_mesaje(): void
+    {
+        $this->mesaj('RECIPISA');
+        $this->mesaj('Recipisa depunere declaratie');
+        $this->mesaj('RASPUNS SOLICITARE');
+        $this->mesaj('SOMATIE');
+
+        $tipuri = $this->randurile()->pluck('tip');
+
+        $this->assertContains('SOMATIE', $tipuri);
+        $this->assertNotContains('RECIPISA', $tipuri);
+        $this->assertNotContains('Recipisa depunere declaratie', $tipuri);
+        $this->assertNotContains('RASPUNS SOLICITARE', $tipuri);
+    }
+
+    /** Fara tip nu se stie ce e mesajul, deci nu se ascunde. */
+    public function test_mesajul_fara_tip_ramane_in_lista(): void
+    {
+        $mesaj = $this->mesaj('');
+
+        $this->assertContains($mesaj->mesaj_id, $this->randurile()->pluck('id'));
     }
 }
