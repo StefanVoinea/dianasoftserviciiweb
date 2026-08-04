@@ -3,25 +3,29 @@
     <b-row class="auth-inner m-0">
 
       <!-- Brand logo-->
-      <b-link class="brand-logo">
-        <vuexy-logo />
+      <!-- <b-link class="brand-logo">
+         <b-img
+            fluid
+            rounded
+            :src="'@/assets/images/logo/logo.png'"
+            alt="DianaSoft"
+          />
         <h2 class="brand-text text-primary ml-1">
           {{this.app_name}}
         </h2>
-      </b-link>
+      </b-link> -->
       <!-- /Brand logo-->
 
       <!-- Left Text-->
       <b-col
-        lg="8"
-        class="d-none d-lg-flex align-items-center p-5"
+        lg="9"
+        class="d-none d-lg-flex align-items-center p-0"
       >
-        <div class="w-100 d-lg-flex align-items-center justify-content-center px-5">
+        <div class="locul-imaginii w-100 h-100 d-lg-flex align-items-center justify-content-center">
           <b-img
-            fluid
-            rounded
             :src="imgUrl"
-            alt="Login V2"
+            alt="DianaSoft"
+            class="imagine-login"
           />
         </div>
       </b-col>
@@ -29,7 +33,7 @@
 
       <!-- Login-->
       <b-col
-        lg="4"
+        lg="3"
         class="d-flex align-items-center auth-bg px-2 p-lg-5"
       >
         <b-col
@@ -156,6 +160,7 @@
                 type="submit"
                 variant="primary"
                 block
+                class="buton-intra"
                 :disabled="invalid"
               >
                 Sign in
@@ -269,7 +274,7 @@ export default {
       status: '',
       password: '',
       userEmail: '',
-      sideImg: require('@/assets/images/pages/dianasoft.jpg'),
+      sideImg: require('@/assets/images/pages/login-dianasoft.svg'),
 
       // validation rules
       required,
@@ -286,7 +291,7 @@ export default {
     imgUrl() {
       if (store.state.appConfig.layout.skin === 'dark') {
         // eslint-disable-next-line vue/no-side-effects-in-computed-properties
-        this.sideImg = require('@/assets/images/pages/dianasoft.jpg')
+        this.sideImg = require('@/assets/images/pages/login-dianasoft.svg')
         return this.sideImg
       }
       return this.sideImg
@@ -486,4 +491,64 @@ getCookiesLocal(){
 
 <style lang="scss">
 @import '~@core/scss/vue/pages/page-auth.scss';
+</style>
+
+<style lang="scss" scoped>
+// Culorile din desenul de alături, ca pagina să fie dintr-o bucată.
+$albastru-diana: #3b82f6;
+$fundal-diana: #0d1729;
+
+/*
+  Desenul ocupă tot locul care i se dă, cât se poate fără să se deformeze.
+  „contain" alege singur latura care se lovește prima de margine, iar fundalul
+  de sub el poartă chiar culoarea din desen — așa marginile rămase, oricât de
+  late ar fi ecranul, se pierd în el în loc să se vadă ca niște benzi albe.
+*/
+.locul-imaginii {
+  background-color: $fundal-diana;
+}
+
+.imagine-login {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/*
+  Butonul poartă albastrul din desen în toate stările lui.
+
+  „!important" nu e din lene: tema scrie chiar ea
+  „.btn-primary { background-color: #7367f0 !important }", iar unei reguli cu
+  „!important" nu i se poate răspunde decât la fel, oricât de precis ai ținti.
+
+  Starea „.disabled" e scrisă anume: formularul pornește gol, deci butonul se
+  vede întâi așa.
+*/
+.buton-intra {
+  &,
+  &.disabled,
+  &:disabled,
+  &:not(:disabled):not(.disabled) {
+    background-color: $albastru-diana !important;
+    border-color: $albastru-diana !important;
+  }
+
+  // Umbra de la trecerea cu mouse-ul poartă aceeași culoare, altfel ar lumina mov.
+  &:hover:not(:disabled):not(.disabled) {
+    background-color: darken($albastru-diana, 7%) !important;
+    border-color: darken($albastru-diana, 7%) !important;
+    box-shadow: 0 8px 25px -8px $albastru-diana;
+  }
+
+  &:focus,
+  &:active,
+  &:not(:disabled):not(.disabled):active,
+  &:not(:disabled):not(.disabled):focus {
+    background-color: darken($albastru-diana, 12%) !important;
+    border-color: darken($albastru-diana, 12%) !important;
+    box-shadow: none;
+  }
+}
 </style>

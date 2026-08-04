@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-label="DianaSoft — automatizări software și software la comandă; produsele SPV Curier, Dispecer e-Transport și Grefier alert">
+  <title>DianaSoft — automatizări software și software la comandă</title>
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.18"></stop>
+      <stop offset="100%" stop-color="#3B82F6" stop-opacity="0"></stop>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="1000" fill="#0d1729"></rect>
+  <g stroke="#ffffff" stroke-width="1" opacity="0.035" fill="none"><path d="M 0 0 V 1000"></path><path d="M 50 0 V 1000"></path><path d="M 100 0 V 1000"></path><path d="M 150 0 V 1000"></path><path d="M 200 0 V 1000"></path><path d="M 250 0 V 1000"></path><path d="M 300 0 V 1000"></path><path d="M 350 0 V 1000"></path><path d="M 400 0 V 1000"></path><path d="M 450 0 V 1000"></path><path d="M 500 0 V 1000"></path><path d="M 550 0 V 1000"></path><path d="M 600 0 V 1000"></path><path d="M 650 0 V 1000"></path><path d="M 700 0 V 1000"></path><path d="M 750 0 V 1000"></path><path d="M 800 0 V 1000"></path><path d="M 850 0 V 1000"></path><path d="M 900 0 V 1000"></path><path d="M 950 0 V 1000"></path><path d="M 1000 0 V 1000"></path><path d="M 1050 0 V 1000"></path><path d="M 1100 0 V 1000"></path><path d="M 1150 0 V 1000"></path><path d="M 1200 0 V 1000"></path><path d="M 1250 0 V 1000"></path><path d="M 1300 0 V 1000"></path><path d="M 1350 0 V 1000"></path><path d="M 1400 0 V 1000"></path><path d="M 1450 0 V 1000"></path><path d="M 1500 0 V 1000"></path><path d="M 1550 0 V 1000"></path><path d="M 1600 0 V 1000"></path><path d="M 0 0 H 1600"></path><path d="M 0 50 H 1600"></path><path d="M 0 100 H 1600"></path><path d="M 0 150 H 1600"></path><path d="M 0 200 H 1600"></path><path d="M 0 250 H 1600"></path><path d="M 0 300 H 1600"></path><path d="M 0 350 H 1600"></path><path d="M 0 400 H 1600"></path><path d="M 0 450 H 1600"></path><path d="M 0 500 H 1600"></path><path d="M 0 550 H 1600"></path><path d="M 0 600 H 1600"></path><path d="M 0 650 H 1600"></path><path d="M 0 700 H 1600"></path><path d="M 0 750 H 1600"></path><path d="M 0 800 H 1600"></path><path d="M 0 850 H 1600"></path><path d="M 0 900 H 1600"></path><path d="M 0 950 H 1600"></path><path d="M 0 1000 H 1600"></path></g>
+  <circle cx="1080" cy="500" r="400" fill="url(#glow)"></circle>
+  <g fill="#3B82F6"><rect x="1408" y="96" width="52" height="4.5" rx="2.25" opacity="0.26"></rect><rect x="1432" y="118" width="119" height="4.5" rx="2.25" opacity="0.13"></rect><rect x="1432" y="140" width="99" height="4.5" rx="2.25" opacity="0.13"></rect><rect x="1456" y="162" width="59" height="4.5" rx="2.25" opacity="0.13"></rect><rect x="1432" y="184" width="181" height="4.5" rx="2.25" opacity="0.13"></rect><rect x="1408" y="206" width="113" height="4.5" rx="2.25" opacity="0.26"></rect><rect x="1432" y="228" width="130" height="4.5" rx="2.25" opacity="0.13"></rect><rect x="1456" y="250" width="122" height="4.5" rx="2.25" opacity="0.13"></rect><rect x="1432" y="272" width="123" height="4.5" rx="2.25" opacity="0.13"></rect><rect x="1408" y="720" width="94" height="4.5" rx="2.25" opacity="0.26"></rect><rect x="1432" y="742" width="85" height="4.5" rx="2.25" opacity="0.13"></rect><rect x="1432" y="764" width="159" height="4.5" rx="2.25" opacity="0.13"></rect><rect x="1456" y="786" width="73" height="4.5" rx="2.25" opacity="0.13"></rect><rect x="1432" y="808" width="109" height="4.5" rx="2.25" opacity="0.13"></rect><rect x="1408" y="830" width="140" height="4.5" rx="2.25" opacity="0.26"></rect><rect x="1432" y="852" width="176" height="4.5" rx="2.25" opacity="0.13"></rect><rect x="1456" y="874" width="109" height="4.5" rx="2.25" opacity="0.13"></rect></g>
+  <text x="110" y="150" font-family="&#39;IBM Plex Mono&#39;,ui-monospace,monospace" font-size="15" letter-spacing="2.4" fill="#3B82F6">DIANASOFT</text>
+  <text x="110" y="268" font-family="&#39;IBM Plex Serif&#39;,Georgia,serif" font-size="60" fill="#f3f6fa">Automatizări software</text>
+  <text x="110" y="342" font-family="&#39;IBM Plex Serif&#39;,Georgia,serif" font-size="60" fill="#f3f6fa">și software la comandă.</text>
+  <text x="110" y="422" font-family="&#39;IBM Plex Sans&#39;,&#39;Segoe UI&#39;,system-ui,sans-serif" font-size="21" fill="#a9b9d0">Construim aplicații la comandă care preiau munca</text>
+  <text x="110" y="454" font-family="&#39;IBM Plex Sans&#39;,&#39;Segoe UI&#39;,system-ui,sans-serif" font-size="21" fill="#a9b9d0">repetitivă pentru eficientizarea activității.</text>
+  <path d="M 110 540 H 610" stroke="#ffffff" stroke-width="1" opacity="0.12"></path>
+  <text x="110" y="580" font-family="&#39;IBM Plex Mono&#39;,ui-monospace,monospace" font-size="13" letter-spacing="1.8" fill="#7f90a8">PRODUSE ÎN EXPLOATARE</text>
+  <g>
+    <rect x="110" y="636" width="52" height="52" rx="8" fill="#3B82F6" opacity="0.10"></rect>
+    <g transform="translate(136 662) scale(0.9375) translate(-16 -16)" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="1.6" y="1.6" width="28.8" height="28.8" rx="3" stroke="#3B82F6"></rect><rect x="9" y="9" width="6.5" height="6.5" fill="#3B82F6" stroke="none"></rect><rect x="16.5" y="16.5" width="6.5" height="6.5" fill="#3B82F6" stroke="none"></rect></g>
+    <text x="182" y="658" font-family="&#39;IBM Plex Sans&#39;,&#39;Segoe UI&#39;,system-ui,sans-serif" font-size="21" font-weight="600" fill="#eef2f8">SPV Curier</text>
+    <text x="182" y="680" font-family="&#39;IBM Plex Sans&#39;,&#39;Segoe UI&#39;,system-ui,sans-serif" font-size="14.5" fill="#9fb0c9">Declarații, solicitări și mesaje ANAF SPV</text>
+  </g>
+  <g>
+    <rect x="110" y="728" width="52" height="52" rx="8" fill="#3B82F6" opacity="0.10"></rect>
+    <g transform="translate(136 754) scale(0.9375) translate(-16 -16)" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><g stroke="#3B82F6"><path d="M 3.35 28.65 L 11.40 3.35"></path><path d="M 28.65 28.65 L 20.60 3.35"></path><path d="M 16 25.20 L 16 19.45"></path><path d="M 16 14.85 L 16 9.10"></path></g></g>
+    <text x="182" y="750" font-family="&#39;IBM Plex Sans&#39;,&#39;Segoe UI&#39;,system-ui,sans-serif" font-size="21" font-weight="600" fill="#eef2f8">Dispecer e-Transport</text>
+    <text x="182" y="772" font-family="&#39;IBM Plex Sans&#39;,&#39;Segoe UI&#39;,system-ui,sans-serif" font-size="14.5" fill="#9fb0c9">Declarare și evidența UIT-urilor</text>
+  </g>
+  <g>
+    <rect x="110" y="820" width="52" height="52" rx="8" fill="#3B82F6" opacity="0.10"></rect>
+    <g transform="translate(136 846) scale(0.9375) translate(-16 -16)" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><g stroke="#3B82F6"><path d="M 16 4.50 L 16 26.35"></path><path d="M 7.95 26.35 L 24.05 26.35"></path><path d="M 1.05 7.95 L 30.95 7.95"></path><path d="M 1.05 7.95 L 1.05 12.55"></path><path d="M 30.95 7.95 L 30.95 12.55"></path><path d="M -4.70 12.55 Q 1.05 22.90 6.80 12.55"></path><path d="M 25.20 12.55 Q 30.95 22.90 36.70 12.55"></path></g></g>
+    <text x="182" y="842" font-family="&#39;IBM Plex Sans&#39;,&#39;Segoe UI&#39;,system-ui,sans-serif" font-size="21" font-weight="600" fill="#eef2f8">Grefier alert</text>
+    <text x="182" y="864" font-family="&#39;IBM Plex Sans&#39;,&#39;Segoe UI&#39;,system-ui,sans-serif" font-size="14.5" fill="#9fb0c9">Termene și soluții din dosarele de instanță</text>
+  </g>
+  <g fill="none" stroke="#3B82F6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.9">
+    <path d="M 828.5 408.2 A 268 268 0 0 1 1331.5 408.2"></path>
+    <path d="M 1306.4 389.8 L 1331.5 408.2 L 1338.9 377.9"></path>
+    <path d="M 1331.5 591.8 A 268 268 0 0 1 828.5 591.8"></path>
+    <path d="M 853.6 610.2 L 828.5 591.8 L 821.1 622.1"></path>
+  </g>
+  <g fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.24">
+    <path d="M 768.5 386.3 A 332 332 0 0 1 1391.5 386.3"></path>
+    <path d="M 1360.4 363.5 L 1391.5 386.3 L 1400.8 348.7"></path>
+    <path d="M 1391.5 613.7 A 332 332 0 0 1 768.5 613.7"></path>
+    <path d="M 799.6 636.5 L 768.5 613.7 L 759.2 651.3"></path>
+  </g>
+  <g>
+    <rect x="892" y="312" width="100" height="100" rx="10" fill="#ffffff" opacity="0.05"></rect>
+    <rect x="892" y="312" width="100" height="100" rx="10" fill="none" stroke="#3B82F6" stroke-width="1.2" opacity="0.4"></rect>
+    <g transform="translate(942 362) scale(1.875) translate(-16 -16)" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1.6" y="1.6" width="28.8" height="28.8" rx="3" stroke="#3B82F6"></rect><rect x="9" y="9" width="6.5" height="6.5" fill="#3B82F6" stroke="none"></rect><rect x="16.5" y="16.5" width="6.5" height="6.5" fill="#3B82F6" stroke="none"></rect></g>
+  </g>
+  <g>
+    <rect x="1030" y="450" width="100" height="100" rx="10" fill="#ffffff" opacity="0.05"></rect>
+    <rect x="1030" y="450" width="100" height="100" rx="10" fill="none" stroke="#3B82F6" stroke-width="1.2" opacity="0.4"></rect>
+    <g transform="translate(1080 500) scale(1.875) translate(-16 -16)" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><g stroke="#3B82F6"><path d="M 3.35 28.65 L 11.40 3.35"></path><path d="M 28.65 28.65 L 20.60 3.35"></path><path d="M 16 25.20 L 16 19.45"></path><path d="M 16 14.85 L 16 9.10"></path></g></g>
+  </g>
+  <g>
+    <rect x="1168" y="588" width="100" height="100" rx="10" fill="#ffffff" opacity="0.05"></rect>
+    <rect x="1168" y="588" width="100" height="100" rx="10" fill="none" stroke="#3B82F6" stroke-width="1.2" opacity="0.4"></rect>
+    <g transform="translate(1218 638) scale(1.875) translate(-16 -16)" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><g stroke="#3B82F6"><path d="M 16 4.50 L 16 26.35"></path><path d="M 7.95 26.35 L 24.05 26.35"></path><path d="M 1.05 7.95 L 30.95 7.95"></path><path d="M 1.05 7.95 L 1.05 12.55"></path><path d="M 30.95 7.95 L 30.95 12.55"></path><path d="M -4.70 12.55 Q 1.05 22.90 6.80 12.55"></path><path d="M 25.20 12.55 Q 30.95 22.90 36.70 12.55"></path></g></g>
+  </g>
+</svg>
