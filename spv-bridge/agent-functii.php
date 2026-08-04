@@ -207,9 +207,19 @@ function agent_inroleaza($config)
 
     @unlink($fisier);
 
-    agent_scrie($config, $raspuns['status'] === 200
-        ? 'Certificatele de pe acest calculator au fost anunțate aplicației.'
-        : 'Înrolarea nu a reușit (' . $raspuns['status'] . '): ' . mb_substr($raspuns['corp'], 0, 200));
+    if ($raspuns['status'] === 200) {
+        agent_scrie($config, 'Certificatele de pe acest calculator au fost anunțate aplicației.');
+
+        return;
+    }
+
+    // Serverul spune de obicei si de ce anume; motivul lui e mai bun decat JSON-ul brut.
+    $date = json_decode($raspuns['corp'], true);
+    $motiv = is_array($date) && !empty($date['detalii'])
+        ? $date['detalii']
+        : mb_substr($raspuns['corp'], 0, 200);
+
+    agent_scrie($config, 'Înrolarea nu a reușit (' . $raspuns['status'] . '): ' . $motiv);
 }
 
 /** Duce comanda la programul local de lângă agent și adună răspunsul lui. */

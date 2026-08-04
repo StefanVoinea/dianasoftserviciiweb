@@ -318,4 +318,46 @@ class PunteTunelTest extends TestCase
         $this->assertNull($licente->clientulDinJeton('i1.ticluit.semnatura'));
         $this->assertNull($licente->clientulDinJeton(''));
     }
+
+    /**
+     * Fara token conectat, magazinul Windows tot trimite certificate — dar
+     * auto-semnate, ale unor programe. Inrolarea nu are voie sa raspunda
+     * „bine" cand n-a inrolat nimic: agentul ar crede ca s-a legat, iar pe
+     * urma s-ar mira ca serverul nu-i recunoaste codul.
+     */
+    public function test_inrolarea_fara_certificat_calificat_spune_ca_tokenul_lipseste(): void
+    {
+        $licente = $this->app->make(Licente::class);
+        $licente->pregatesteCheile();
+
+        $cerere = Request::create('/api/punte/agent/inrolare', 'POST', [
+            'certificate' => [[
+                'thumbprint' => strtoupper(bin2hex(random_bytes(20))),
+                'cn' => 'PROGRAM OARECARE',
+                'subiect' => 'CN=PROGRAM OARECARE',
+                'emitent' => 'CN=PROGRAM OARECARE',
+            ]],
+        ]);
+        $cerere->headers->set('X-Inrolare', $licente->jetonInrolare(self::COMPANIE));
+        $cerere->headers->set('Authorization', 'Bearer cod-fara-token');
+
+        $raspuns = (new \App\Http\Controllers\Api\PunteController($this->punte()))
+            ->inrolare($cerere, $licente, $this->app->make(CertificatService::class));
+
+        $this->assertSame(422, $raspuns->getStatusCode());
+        $this->assertStringContainsString('tokenul nu este conectat', $raspuns->getContent());
+
+        // Esecul se vede si in jurnalul clientului, nu doar in fereastra agentului.
+        $insemnare = \App\Models\AnafJurnal::query()->toateCompaniile()
+            ->where('company_id', self::COMPANIE)
+            ->where('actiune', 'certificat_inrolare')
+            ->orderByDesc('id')
+            ->first();
+
+        $this->assertNotNull($insemnare, 'eșecul înrolării trebuie consemnat în jurnal');
+        $this->assertFalse((bool) $insemnare->reusit);
+        $this->assertStringContainsString('tokenul nu era conectat', $insemnare->descriere);
+
+        \App\Models\AnafJurnal::query()->toateCompaniile()->where('company_id', self::COMPANIE)->delete();
+    }
 }

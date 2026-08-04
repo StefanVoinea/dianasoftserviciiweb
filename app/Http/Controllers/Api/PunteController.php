@@ -162,11 +162,40 @@ class PunteController extends Controller
             return $certificate->inroleazaDinAgent($lista, $cod);
         });
 
-        Jurnal::scrie(
-            'certificat_inrolare',
-            'Un calculator s-a înrolat singur, prin tunel, cu ' . count($inrolate) . ' certificat(e)',
-            ['certificate' => collect($inrolate)->pluck('cn')->all()]
-        );
+        /*
+         * Lista poate fi nevida si totusi fara niciun certificat calificat:
+         * magazinul Windows are mereu certificate auto-semnate ale unor
+         * programe, dar semnatura calificata sta pe token — iar tokenul nu era
+         * conectat. Un 200 aici ar lasa agentul sa creada ca s-a inrolat si sa
+         * se mire pe urma ca serverul nu-i recunoaste codul; se spune limpede,
+         * si lui, si in jurnalul aplicatiei.
+         */
+        if ($inrolate === []) {
+            ContextCompanie::pentru($client, function () use ($lista) {
+                Jurnal::esec(
+                    'certificat_inrolare',
+                    'Un calculator a încercat să se înroleze prin tunel, dar nu s-a găsit'
+                        . ' niciun certificat calificat pe el — cel mai probabil tokenul nu era conectat',
+                    ['certificate_trimise' => count($lista)]
+                );
+            });
+
+            return response()->json([
+                'eroare' => 'Niciun certificat calificat.',
+                'detalii' => 'Pe calculator nu s-a găsit niciun certificat de semnătură'
+                    . ' — cel mai probabil tokenul nu este conectat. Conectați tokenul;'
+                    . ' agentul încearcă singur din nou.',
+            ], 422);
+        }
+
+        // Jurnalul se scrie in dreptul clientului, ca el sa-l vada in aplicatie.
+        ContextCompanie::pentru($client, function () use ($inrolate) {
+            Jurnal::scrie(
+                'certificat_inrolare',
+                'Un calculator s-a înrolat singur, prin tunel, cu ' . count($inrolate) . ' certificat(e)',
+                ['certificate' => collect($inrolate)->pluck('cn')->all()]
+            );
+        });
 
         return response()->json([
             'inrolate' => collect($inrolate)->map(function ($certificat) {
