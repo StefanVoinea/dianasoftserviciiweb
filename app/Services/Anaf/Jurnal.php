@@ -155,7 +155,8 @@ class Jurnal
     {
         try {
             return app(\App\Services\Anaf\Spv\CertificatService::class)->idCurent();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // Insemnarea nu are voie sa darame lucrarea pe care o consemneaza.
             return null;
         }
     }

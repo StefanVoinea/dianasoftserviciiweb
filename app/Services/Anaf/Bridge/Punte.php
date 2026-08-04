@@ -112,6 +112,35 @@ class Punte
         return $this->certificateleAgentului($request)->first();
     }
 
+    /**
+     * De ce nu i se potrivește codul agentului care bate la ușă.
+     *
+     * Sunt două pricini care arată la fel din afară — codul nu e legat de
+     * niciun certificat, sau certificatul lui nu e pe legătura „prin tunel" —
+     * dar se îndreaptă din locuri diferite. Motivul se spune pe șleau, ca omul
+     * să nu ghicească.
+     */
+    public function deCeNuAgentul(Request $request): string
+    {
+        $cod = (string) $request->bearerToken();
+
+        if ($cod === '') {
+            return 'Cererea nu poartă niciun cod de acces.';
+        }
+
+        $aleCodului = AnafCertificat::query()->toateCompaniile()
+            ->where('bridge_token', $cod)
+            ->get();
+
+        if ($aleCodului->isEmpty()) {
+            return 'Codul de acces nu este legat de niciun certificat din aplicație.'
+                . ' Porniți agentul o dată cu tokenul conectat, ca să se înroleze singur.';
+        }
+
+        return 'Certificatul „' . $aleCodului->first()->cn . '” nu este pe legătura „prin tunel”.'
+            . ' Comutați-l din aplicație: SPV → Certificate digitale → Calculator → Prin tunel.';
+    }
+
     /** Pune în coadă cererea venită de la aplicație. */
     public function pune(AnafCertificat $certificat, Request $request, string $cale): BridgeComanda
     {

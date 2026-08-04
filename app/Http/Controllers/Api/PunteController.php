@@ -108,7 +108,12 @@ class PunteController extends Controller
         $certificate = $this->punte->certificateleAgentului($request);
 
         if ($certificate->isEmpty()) {
-            return response()->json(['eroare' => 'Cod de acces invalid.'], 401);
+            // Motivul exact se spune agentului: el il scrie in jurnalul lui,
+            // iar omul care se uita acolo afla ce are de indreptat.
+            return response()->json([
+                'eroare' => 'Cod de acces invalid.',
+                'detalii' => $this->punte->deCeNuAgentul($request),
+            ], 401);
         }
 
         $comanda = $this->punte->urmatoarea($certificate);

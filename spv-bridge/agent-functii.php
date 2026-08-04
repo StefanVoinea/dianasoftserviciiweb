@@ -139,8 +139,14 @@ function agent_intreaba($config)
          * Serverul nu ne recunoaste codul de acces. De obicei inseamna ca
          * inrolarea nu s-a facut inca: certificatele de pe tokenul de aici nu
          * sunt legate de acest kit. Se spune limpede, ca sa nu para o pana de
-         * retea.
+         * retea — iar daca serverul spune si de ce anume, se scrie in jurnal.
          */
+        $date = json_decode($rezultat['corp'], true);
+
+        if (is_array($date) && !empty($date['detalii'])) {
+            agent_scrie($config, 'Serverul: ' . $date['detalii']);
+        }
+
         return -1;
     }
 

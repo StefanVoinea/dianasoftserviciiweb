@@ -195,7 +195,20 @@ class CertificatService
      */
     protected function alUtilizatorului(): ?AnafCertificat
     {
-        $user = Auth::guard('api')->user() ?: Auth::user();
+        /*
+         * Nu orice cerere poarta un token al aplicatiei: agentul de la client
+         * vine cu codul lui de instalare, iar Passport, incercand sa-l citeasca
+         * drept JWT, se opreste cu „The JWT string must have two dots" si
+         * darama toata cererea. Un JWT are trei parti despartite prin doua
+         * puncte; ce nu arata asa nu are rost sa ajunga la Passport, iar orice
+         * alta poticnire a autentificarii inseamna doar „nimeni conectat".
+         */
+        try {
+            $user = $this->pareTokenPassport() ? Auth::guard('api')->user() : null;
+            $user = $user ?: Auth::user();
+        } catch (\Throwable $e) {
+            return null;
+        }
 
         if (!$user) {
             return null;
@@ -215,6 +228,18 @@ class CertificatService
             ->get();
 
         return $certificate->first();
+    }
+
+    /** Un token Passport e un JWT: trei parti despartite prin doua puncte. */
+    protected function pareTokenPassport(): bool
+    {
+        if (!app()->bound('request')) {
+            return false;
+        }
+
+        $token = (string) request()->bearerToken();
+
+        return $token !== '' && substr_count($token, '.') === 2;
     }
 
     /** Certificatul din .env, inregistrat la prima folosire. */
