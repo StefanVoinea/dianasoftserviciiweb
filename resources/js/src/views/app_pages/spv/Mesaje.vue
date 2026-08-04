@@ -676,6 +676,18 @@ export default {
 
       if (desprefisiere) parti.push(desprefisiere)
 
+      /*
+       * Solicitările cărora li s-a găsit răspunsul, dar care nu erau în listă:
+       * cereri făcute de pe site-ul ANAF sau înainte de a folosi aplicația. Se
+       * spune aici, pentru că rândurile lor apar în altă filă și omul n-ar avea
+       * de unde să afle că s-a întâmplat ceva.
+       */
+      if (payload.solicitari_gasite) {
+        parti.push(payload.solicitari_gasite === 1
+          ? 'o solicitare găsită, trecută în „Solicitări ANAF”'
+          : `${payload.solicitari_gasite} solicitări găsite, trecute în „Solicitări ANAF”`)
+      }
+
       if (parti.length) return `ANAF a răspuns: ${parti.join(', ')}.`
 
       const intoarse = payload.intoarse || 0
