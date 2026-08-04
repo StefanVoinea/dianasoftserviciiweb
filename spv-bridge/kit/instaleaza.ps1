@@ -121,7 +121,11 @@ if ($continutEnv -match '(?m)^\s*PUNTE_SERVER\s*=\s*\S+') {
         Unregister-ScheduledTask -TaskName $numeAgent -Confirm:$false
     }
 
-    $actiuneAgent = New-ScheduledTaskAction -Execute $PhpPath -Argument "$argumentePhp`agent.php" -WorkingDirectory $folder
+    <#
+        ${...}, nu `a: in ghilimele duble, `a este caracterul de control BEL
+        (0x07), iar Task Scheduler refuza argumentul cu "Illegal xml character".
+    #>
+    $actiuneAgent = New-ScheduledTaskAction -Execute $PhpPath -Argument "${argumentePhp}agent.php" -WorkingDirectory $folder
 
     Register-ScheduledTask -TaskName $numeAgent -Action $actiuneAgent -Trigger $declansator `
         -Principal $principal -Settings $setari `
