@@ -62,6 +62,104 @@ class SolicitareService
     }
 
     /**
+     * Inscrie in lista solicitarile ale caror raspunsuri se afla in SPV.
+     *
+     * Nu tot ce sta in SPV a fost cerut din aplicatie: cererile facute de pe
+     * site-ul ANAF, sau inainte de a fi folosita aplicatia, isi au raspunsul
+     * acolo fara ca aici sa existe randul lor. Iar cum raspunsurile nu se mai
+     * arata in fila de mesaje, ele n-ar fi de vazut nicaieri.
+     *
+     * Solicitarea nou inscrisa ramane „in asteptare": documentul se aduce la
+     * urmatoarea preluare, ca oricare alta, si atunci se si interpreteaza.
+     *
+     * @param array $mesaje mesajele intoarse de ANAF, asa cum vin
+     * @param ?int  $userId cine a citit mesajele — el ajunge stapanul randului,
+     *                      altfel un utilizator obisnuit nu l-ar vedea deloc
+     *
+     * @return int cate solicitari s-au adaugat
+     */
+    public function inregistreazaCeleGasite(array $mesaje, ?int $userId = null): int
+    {
+        $adaugate = 0;
+
+        foreach ($mesaje as $mesaj) {
+            $idSolicitare = trim((string) ($mesaj['id_solicitare'] ?? ''));
+
+            // Numai raspunsurile la solicitari poarta numarul cererii.
+            if ($idSolicitare === '' || mb_stripos((string) ($mesaj['tip'] ?? ''), 'RASPUNS SOLICITARE') === false) {
+                continue;
+            }
+
+            $existenta = SpvSolicitare::query()->totiUtilizatorii()
+                ->where('id_solicitare', $idSolicitare)
+                ->exists();
+
+            if ($existenta) {
+                continue;
+            }
+
+            $cerut = $this->ceS_aCerut($mesaj['detalii'] ?? null);
+
+            SpvSolicitare::create([
+                'cif' => $cerut['cif'] ?: ($mesaj['cif'] ?? ''),
+                'den_firma' => optional(AnafSocietate::where('cif', $cerut['cif'] ?: ($mesaj['cif'] ?? ''))->first())->denumire,
+                'tip_document' => $cerut['tip'],
+                'id_solicitare' => $idSolicitare,
+                // Cand a fost ceruta nu se stie: cererea n-a plecat de aici.
+                'data_solicitarii' => null,
+                'detalii' => $mesaj['detalii'] ?? null,
+                'stare' => 'trimisa',
+                'certificat_id' => $this->certificate->idCurent(),
+                'user_id' => $userId,
+            ]);
+
+            $adaugate++;
+        }
+
+        return $adaugate;
+    }
+
+    /**
+     * Ce s-a cerut, citit din textul raspunsului.
+     *
+     * ANAF nu scrie textul acesta la fel de fiecare data:
+     *
+     *   „duplicat VECTOR FISCAL pentru CUI 15208744"
+     *   „Obligatii de plata pentru CNP 1720913216197"
+     *   „Document Fisa Rol pentru CIF=15208744 (cod arondare ...)"
+     *
+     * Se ia bucata dinaintea codului, iar felul se aduce — cand se poate — la
+     * scrierea din nomenclatorul nostru, ca documentul sa se aseze in arhiva la
+     * fel ca cele cerute din aplicatie. Se incearca intai textul intreg: pot
+     * exista feluri care chiar incep cu „Duplicat".
+     *
+     * @return array{tip: string, cif: string}
+     */
+    protected function ceS_aCerut(?string $detalii): array
+    {
+        $tipar = '/^\s*(.+?)\s+pentru\s+(?:CUI|CIF|CNP)\s*[:=\s]*([0-9A-Za-z]+)/iu';
+
+        if (!preg_match($tipar, (string) $detalii, $bucati)) {
+            return ['tip' => 'Document SPV', 'cif' => ''];
+        }
+
+        $intreg = trim($bucati[1]);
+
+        // Cuvintele de prisos puse de ANAF inaintea felului documentului.
+        $curatat = trim(preg_replace('/^(?:duplicat|document)\s+/iu', '', $intreg));
+
+        foreach ([$intreg, $curatat] as $candidat) {
+            foreach (array_keys(config('anaf.spv.tipuri_documente', [])) as $cunoscut) {
+                if (mb_strtolower($cunoscut) === mb_strtolower($candidat)) {
+                    return ['tip' => $cunoscut, 'cif' => $bucati[2]];
+                }
+            }
+        }
+
+        return ['tip' => $curatat ?: $intreg, 'cif' => $bucati[2]];
+    }
+
+    /**
      * Cauta in mesajele SPV raspunsurile la solicitarile in asteptare, le descarca
      * si le interpreteaza.
      *

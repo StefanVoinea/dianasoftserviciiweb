@@ -8,6 +8,7 @@ use App\Services\Anaf\Spv\SpvClient;
 use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\SocietatiService;
+use App\Services\Anaf\Spv\SolicitareService;
 use App\Services\Anaf\Spv\SpvException;
 use App\Services\Anaf\Spv\SpvStorage;
 use Illuminate\Http\Request;
@@ -46,6 +47,17 @@ class SpvController extends Controller
                 }
             }
 
+            /*
+             * Raspunsurile gasite in SPV isi capata randul in fila de
+             * solicitari, chiar daca cererea n-a plecat din aplicatie: de pe
+             * site-ul ANAF, sau inainte de a fi folosita aplicatia. Cum ele nu
+             * se mai arata aici, altfel n-ar fi de vazut nicaieri.
+             */
+            $solicitariGasite = app(SolicitareService::class)->inregistreazaCeleGasite(
+                $mesaje['mesaje'] ?? [],
+                optional($request->user())->id
+            );
+
             $descarcare = $request->has('descarca')
                 ? $request->boolean('descarca')
                 : config('anaf.spv.descarcare_automata');
@@ -57,13 +69,14 @@ class SpvController extends Controller
             Jurnal::scrie(
                 'mesaje_citire',
                 sprintf(
-                    'A citit mesajele SPV pe %d zile%s: %d mesaje noi, %d fișiere descărcate',
+                    'A citit mesajele SPV pe %d zile%s: %d mesaje noi, %d fișiere descărcate%s',
                     $zile,
                     $cif ? ' pentru CIF ' . $cif : '',
                     $noi,
-                    $rezultatDescarcare['descarcate']
+                    $rezultatDescarcare['descarcate'],
+                    $solicitariGasite ? ', ' . $solicitariGasite . ' solicitări găsite' : ''
                 ),
-                $rezultatDescarcare,
+                $rezultatDescarcare + ['solicitari_gasite' => $solicitariGasite],
                 $cif ?: null
             );
 
@@ -77,6 +90,9 @@ class SpvController extends Controller
                     // Cate au fost intoarse de ANAF si cate dintre ele erau noi
                     'intoarse' => count($salvate),
                     'noi' => $noi,
+                    // Solicitari carora li s-a gasit raspunsul, dar care nu erau
+                    // in lista: se vad de acum in fila „Solicitări ANAF".
+                    'solicitari_gasite' => $solicitariGasite,
                 ],
                 'descarcare' => $rezultatDescarcare,
             ]);
