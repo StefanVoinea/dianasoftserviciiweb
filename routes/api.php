@@ -163,6 +163,8 @@ Route::middleware(['auth:api', 'companie.anaf', 'modul:spv'])->group(function ()
     Route::get('/anaf-certificate/{certificat}/imprimante', 'Api\CertificateController@imprimante');
     // Reînnoirea licenței programului local, cerută de om, nu așteptând noaptea
     Route::post('/anaf-certificate/{certificat}/licenta', 'Api\CertificateController@reinnoiesteLicenta');
+    // Scoaterea din uz a certificatului cu care clientul nu lucrează în SPV
+    Route::post('/anaf-certificate/{certificat}/activare', 'Api\CertificateController@comutaActiv');
     Route::put('/anaf-certificate/{certificat}', 'Api\CertificateController@update');
     Route::post('/anaf-certificate/abonare', 'Api\CertificateController@abonare');
     Route::delete('/anaf-certificate/abonare/{abonat}', 'Api\CertificateController@dezabonare');

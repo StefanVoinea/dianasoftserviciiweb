@@ -42,7 +42,8 @@ class MonitorizeazaDeclaratii extends Command
                  * le-a venit randul, ca sa nu fie intrebat fiecare calculator
                  * mai des decat a cerut omul.
                  */
-                $certificate = AnafCertificat::where('monitorizare_activa', true)
+                $certificate = AnafCertificat::where('activ', true)
+                    ->where('monitorizare_activa', true)
                     ->whereNotNull('monitorizare_cale')
                     ->get()
                     ->filter(function (AnafCertificat $certificat) {

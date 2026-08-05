@@ -84,6 +84,23 @@
             />
             Descarcă kitul de instalare a programului de acces la certificatul digital
           </b-button>
+
+          <!-- Legătura care „a mers și s-a oprit" are aproape întotdeauna
+               aceeași pricină, iar ea se dezleagă pe calculatorul clientului:
+               ajutorul stă aici, lângă kit, unde se uită omul când instalează. -->
+          <b-button
+            variant="flat-secondary"
+            size="sm"
+            class="mt-1"
+            @click="ajutorVizibil = true"
+          >
+            <feather-icon
+              icon="HelpCircleIcon"
+              size="14"
+              class="mr-25"
+            />
+            Nu comunică? Firewall și antivirus
+          </b-button>
         </b-card>
       </b-col>
     </b-row>
@@ -114,6 +131,7 @@
         :items="certificate"
         :fields="campuri"
         :busy="listaInCurs"
+        :tbody-tr-class="clasaRand"
         responsive
         striped
         small
@@ -215,6 +233,14 @@
                   class="mr-25"
                 />licență până la {{ rand.item.licenta_pana_la }}
               </div>
+              <!-- Scos din uz: se spune primul, fiindcă schimbă înțelesul a tot
+                   ce scrie alături — calculator, dosar urmărit, licență. -->
+              <b-badge
+                v-if="!rand.item.activ"
+                variant="secondary"
+              >
+                scos din uz
+              </b-badge>
               <b-badge
                 v-if="rand.item.implicit"
                 variant="primary"
@@ -222,7 +248,7 @@
                 implicit
               </b-badge>
               <b-badge
-                v-if="certificatActiv === rand.item.id"
+                v-if="certificatActiv === rand.item.id && rand.item.activ"
                 variant="success"
               >
                 activ acum
@@ -237,7 +263,7 @@
               size="sm"
               variant="outline-secondary"
               class="btn-icon ml-2"
-              :disabled="licentaInCurs === rand.item.id"
+              :disabled="licentaInCurs === rand.item.id || !rand.item.activ"
               title="Reînnoiește acum licența programului local"
               @click="reinnoiesteLicenta(rand.item)"
             >
@@ -256,11 +282,34 @@
               size="sm"
               variant="outline-success"
               class="btn-icon ml-2"
-              :disabled="certificatActiv === rand.item.id"
+              :disabled="certificatActiv === rand.item.id || !rand.item.activ"
               title="Folosește acest certificat pentru operațiile mele"
               @click="alegeActiv(rand.item)"
             >
               <feather-icon icon="CheckCircleIcon" />
+            </b-button>
+
+            <!-- Certificatul cu care clientul nu lucrează în relația cu SPV:
+                 rămâne în listă, dar aplicația nu-l mai ia în seamă. -->
+            <b-button
+              v-b-tooltip.hover.top.window.v-light
+              size="sm"
+              :variant="rand.item.activ ? 'outline-danger' : 'outline-primary'"
+              class="btn-icon ml-2"
+              :disabled="activareInCurs === rand.item.id"
+              :title="rand.item.activ
+                ? 'Scoate certificatul din uz — aplicația îl va ignora'
+                : 'Repune certificatul în uz'"
+              @click="comutaActiv(rand.item)"
+            >
+              <b-spinner
+                v-if="activareInCurs === rand.item.id"
+                small
+              />
+              <feather-icon
+                v-else
+                :icon="rand.item.activ ? 'PowerIcon' : 'RefreshCwIcon'"
+              />
             </b-button>
           </div>
         </template>
@@ -701,6 +750,103 @@
         </template>
       </b-table>
     </b-modal>
+
+    <!-- Ce trebuie deblocat pe calculatorul clientului ca legătura să meargă -->
+    <b-modal
+      v-model="ajutorVizibil"
+      size="lg"
+      ok-only
+      ok-title="Am înțeles"
+      scrollable
+      modal-class="modul-spv"
+    >
+      <template #modal-title>
+        <feather-icon
+          icon="ShieldIcon"
+          size="18"
+          class="text-primary mr-50"
+        />
+        Firewall și antivirus — ce trebuie deblocat
+      </template>
+
+      <p class="mb-2">
+        Legătura care a mers și apoi s-a oprit nu e o pană a aplicației: e, aproape
+        întotdeauna, filtrarea traficului criptat din antivirus, aprinsă singură la o
+        actualizare sau la reînnoirea abonamentului. Toate setările de mai jos se fac pe
+        calculatorul unde stă tokenul.
+      </p>
+
+      <b-alert
+        show
+        variant="warning"
+      >
+        <div class="alert-body">
+          <strong>Regula de aur.</strong> Programul local nu trimite parole la ANAF: se
+          legitimează cu certificatul de pe token, într-o legătură în care și clientul își
+          arată certificatul. Antivirusul care scanează HTTPS desface legătura și o reface
+          cu certificatul lui — dar cheia de pe token n-o are, deci legitimarea se rupe.
+          Adresele de mai jos trebuie <strong>scoase de sub scanarea HTTPS</strong>
+          („filtrare SSL/TLS”, „scanare conexiuni criptate”, „Scan SSL”), nu doar permise.
+        </div>
+      </b-alert>
+
+      <h6 class="mt-2">
+        1. Ce trebuie să poată ieși, pe portul 443
+      </h6>
+      <ul class="mb-2 pl-3">
+        <li><code>app.dianasoft.ro</code> — agentul întreabă serverul ce are de lucru</li>
+        <li><code>webserviced.anaf.ro</code> — mesajele și documentele din SPV</li>
+        <li><code>decl.anaf.mfinante.gov.ro</code> — depunerea declarațiilor</li>
+        <li><code>webserviceapl.anaf.ro</code> — e-Transport, dacă se folosește</li>
+      </ul>
+      <p class="small text-muted mb-2">
+        Pe legătura „prin tunel” nu se deschide niciun port de intrare și nu se umblă la
+        router. Portul <code>8099</code> se deschide numai dacă certificatul e configurat
+        „direct”, și numai către adresa serverului aplicației.
+      </p>
+
+      <h6>2. Ce se scoate de sub scanare</h6>
+      <ul class="mb-2 pl-3">
+        <li>dosarul de instalare, cu tot ce e sub el — de obicei <code>C:\AccesTokenANAF</code></li>
+        <li>procesele <code>php.exe</code> (din dosarul kitului) și <code>C:\Windows\System32\curl.exe</code></li>
+        <li><code>powershell.exe</code>, <code>PDFtoPrinter.exe</code> și <code>itextsharp.dll</code> — citirea certificatelor, semnarea, tipărirea</li>
+      </ul>
+      <p class="small text-muted mb-2">
+        La ESET, în plus: <em>Configurare avansată (F5) → Protecții → SSL/TLS</em>, cele patru
+        adrese la „excluse din filtrare”; iar dacă HIPS e pe mod interactiv, o regulă prin care
+        <code>php.exe</code> are voie să pornească alte programe.
+      </p>
+
+      <h6>3. Imprimantele</h6>
+      <p class="small mb-2">
+        Tipărirea se face chiar pe calculatorul cu tokenul, deci nu cere nicio regulă de
+        firewall — decât dacă imprimanta e în rețea (ieșire pe <code>9100</code> RAW,
+        <code>445</code> partajată de pe un server, <code>631</code> IPP, <code>515</code> LPR).
+        Două pricini obișnuite: <code>PDFtoPrinter.exe</code> pus în carantină ca „aplicație
+        nedorită”, sau imprimanta instalată în alt cont Windows decât cel sub care rulează
+        programul — atunci nici nu apare în listă.
+      </p>
+
+      <h6>4. Verificarea, în ordinea aceasta</h6>
+      <p class="small mb-1">
+        Pe calculatorul cu tokenul, în PowerShell:
+      </p>
+      <pre class="verificari-ajutor mb-2">Get-ScheduledTask "Acces token ANAF*"
+curl.exe -sS -o NUL -w "%{http_code}`n" http://127.0.0.1:8099/certificate
+Get-Content C:\AccesTokenANAF\agent.log -Tail 30
+Test-NetConnection app.dianasoft.ro -Port 443</pre>
+      <ul class="small mb-2 pl-3">
+        <li>a doua comandă trebuie să răspundă <code>401</code> — programul cere codul de acces, deci trăiește;</li>
+        <li>în jurnal, șirul „<em>Serverul nu răspunde; reîncerc peste 5s… 10s… 20s</em>” e semnul clasic al ieșirii blocate sau desfăcute de antivirus;</li>
+        <li>„<em>Serverul nu-mi recunoaște codul de acces</em>” nu e firewall: apăsați „Citește token-urile conectate”.</li>
+      </ul>
+
+      <p class="small text-muted mb-0">
+        Pașii întregi, pe fiecare antivirus în parte (ESET, Defender, Bitdefender, Kaspersky,
+        Avast/AVG, Norton, McAfee), sunt în ghidul <em>Firewall și antivirus pentru programul
+          de acces la token</em>, de cerut de la DianaSoft.
+      </p>
+    </b-modal>
   </div>
 </template>
 
@@ -735,6 +881,10 @@ export default {
       kitInCurs: false,
       // Certificatul pentru care se trimite acum licența
       licentaInCurs: null,
+      // Certificatul care se scoate din uz sau se repune chiar acum
+      activareInCurs: null,
+      // Ajutorul pentru firewall și antivirus, de pe calculatorul clientului
+      ajutorVizibil: false,
       bridgeNou: { bridge_url: '', bridge_token: '' },
       bridgeVizibil: false,
       bridgeFormular: {},
@@ -802,6 +952,10 @@ export default {
       if (certificat.expirat) return 'danger'
       if (certificat.zile_ramase !== null && certificat.zile_ramase <= this.zileAvertizare) return 'warning'
       return 'success'
+    },
+    /** Rândul certificatului scos din uz se stinge, fără să dispară din listă. */
+    clasaRand(certificat) {
+      return certificat && !certificat.activ ? 'rand-scos-din-uz' : ''
     },
     incarcaLista() {
       this.listaInCurs = true
@@ -985,6 +1139,37 @@ export default {
           this.licentaInCurs = null
         })
     },
+    /**
+     * Scoate certificatul din uz, sau îl repune.
+     *
+     * Dacă era chiar cel ales pentru operațiile mele, alegerea se șterge pe loc:
+     * altfel cererile ar pleca mai departe cu el în antet, iar serverul, care nu
+     * mai lucrează cu el, le-ar rezolva pe altul, fără să se vadă de ce.
+     */
+    comutaActiv(certificat) {
+      this.eroare = ''
+      this.info = ''
+      this.activareInCurs = certificat.id
+
+      this.$http.post(`/anaf-certificate/${certificat.id}/activare`)
+        .then(({ data }) => {
+          this.info = data.message
+
+          if (!data.data.activ && this.certificatActiv === certificat.id) {
+            this.certificatActiv = null
+            delete this.$http.defaults.headers.common['X-Certificat-Id']
+            window.localStorage.removeItem('anaf_certificat_activ')
+          }
+
+          this.incarcaLista()
+        })
+        .catch(err => {
+          this.eroare = this.mesajEroare(err, 'Starea certificatului nu a putut fi schimbată')
+        })
+        .finally(() => {
+          this.activareInCurs = null
+        })
+    },
     deschideUtilizatori(certificat) {
       this.certificatCurent = certificat
       this.utilizatorNou = { email: '', nume: '', avertizare: false }
@@ -1066,5 +1251,25 @@ export default {
 .lista-foldere {
   max-height: 15rem;
   overflow-y: auto;
+}
+
+/*
+ * Certificatul scos din uz: randul se stinge, ca sa se vada dintr-o privire ca
+ * aplicatia nu lucreaza cu el, dar ramane citibil — datele lui se cauta si dupa
+ * scoatere. Randurile le scrie b-table, adica alt component, de aceea ::v-deep.
+ */
+::v-deep .rand-scos-din-uz {
+  opacity: 0.55;
+}
+
+/* Comenzile de verificare: de citit si de copiat asa cum sunt scrise. */
+.verificari-ajutor {
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid rgba(115, 103, 240, 0.5);
+  background: rgba(115, 103, 240, 0.06);
+  border-radius: 0.2rem;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>

@@ -523,7 +523,10 @@ export default {
     },
     optiuniCertificate() {
       return [{ value: null, text: 'orice certificat' }]
-        .concat(this.certificate.map(certificat => ({ value: certificat.id, text: certificat.cn })))
+        .concat(this.certificate.map(certificat => ({
+          value: certificat.id,
+          text: certificat.activ === false ? `${certificat.cn} (scos din uz)` : certificat.cn,
+        })))
     },
     /** Firmele se restrâng la certificatul ales, dacă e vreunul. */
     optiuniFirme() {

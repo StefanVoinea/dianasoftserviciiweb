@@ -31,7 +31,9 @@ class AlerteMesajeController extends Controller
             'success' => true,
             'data' => $alerte,
             'certificate' => AnafCertificat::orderBy('cn')->get()->map(function (AnafCertificat $certificat) {
-                return ['id' => $certificat->id, 'cn' => $certificat->cn];
+                // Cele scoase din uz raman in lista, insemnate: pe ele pot sta
+                // alerte facute mai demult, iar altfel ar aparea fara nume.
+                return ['id' => $certificat->id, 'cn' => $certificat->cn, 'activ' => (bool) $certificat->activ];
             }),
             'societati' => AnafSocietate::orderBy('denumire')->get()->map(function (AnafSocietate $societate) {
                 return [

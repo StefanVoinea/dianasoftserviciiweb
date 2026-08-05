@@ -84,7 +84,12 @@ class MonitorizareFolder
     {
         $rezultat = ['gasite' => 0, 'semnate' => 0, 'esuate' => 0, 'erori' => []];
 
-        if (!$certificat->monitorizare_activa || !$certificat->monitorizare_cale) {
+        /*
+         * Certificatul scos din uz e ignorat cu totul, chiar daca dosarul lui
+         * ramane bifat: bifa se pastreaza pentru ziua cand va fi repus, dar
+         * pana atunci nimeni nu umbla in calculatorul lui.
+         */
+        if (!$certificat->activ || !$certificat->monitorizare_activa || !$certificat->monitorizare_cale) {
             return $rezultat;
         }
 

@@ -244,6 +244,12 @@
           :value="certificat.id"
         >
           {{ certificat.cn }}
+          <!-- Cel scos din uz rămâne bifabil — bifa se păstrează pentru ziua în
+               care va fi repus — dar se spune că acum nu aduce niciun mesaj. -->
+          <span
+            v-if="certificat.activ === false"
+            class="text-muted"
+          >— scos din uz</span>
         </b-form-checkbox>
       </b-form-checkbox-group>
       <small class="text-muted d-block mb-2">

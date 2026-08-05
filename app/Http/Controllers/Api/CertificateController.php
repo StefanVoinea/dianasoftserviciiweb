@@ -417,6 +417,49 @@ class CertificateController extends Controller
         ]);
     }
 
+    /**
+     * Scoate certificatul din uz, sau il repune.
+     *
+     * Pe tokenele clientului stau si certificate cu care el nu lucreaza in
+     * relatia cu SPV: ale altei firme, ori ramase de la cineva plecat. Scos din
+     * uz, certificatul ramane in lista cu tot ce s-a strans pe el — entitati,
+     * utilizatori, declaratii — dar aplicatia nu-l mai foloseste: nu se mai
+     * alege pentru operatii (nici cerut anume, nici prin utilizator, nici ca
+     * implicit), nu i se mai umbla in dosarul urmarit, nu i se mai reinnoieste
+     * licenta calculatorului si nu se mai avertizeaza expirarea lui.
+     */
+    public function comutaActiv(AnafCertificat $certificat)
+    {
+        $certificat->activ = !$certificat->activ;
+
+        /*
+         * Cel scos din uz nu mai poate fi si cel implicit: implicit inseamna
+         * „cu asta se lucreaza cand omul n-are altul atribuit", iar cautarea
+         * celui implicit cere oricum sa fie in uz — ar ramane doar o bifa care
+         * nu se vede nicaieri, dar impiedica alt certificat sa-i ia locul.
+         */
+        if (!$certificat->activ) {
+            $certificat->implicit = false;
+        }
+
+        $certificat->save();
+
+        Jurnal::scrie(
+            'certificat_activare',
+            ($certificat->activ ? 'A repus în uz certificatul „' : 'A scos din uz certificatul „')
+                . $certificat->cn . '”',
+            ['certificat_id' => $certificat->id]
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => $certificat->fresh(),
+            'message' => $certificat->activ
+                ? 'Certificatul „' . $certificat->cn . '” este din nou în uz.'
+                : 'Certificatul „' . $certificat->cn . '” a fost scos din uz; aplicația îl va ignora.',
+        ]);
+    }
+
     public function abonare(Request $request)
     {
         $date = $request->validate([
