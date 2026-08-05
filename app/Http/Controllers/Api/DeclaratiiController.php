@@ -938,8 +938,8 @@ class DeclaratiiController extends Controller
      *
      * Un SAF-T respins poate avea sute de mii de caractere de erori. Trimise
      * intregi, pentru fiecare rand din tabel, ar face raspunsul de zeci de MB
-     * si ar bloca pagina. Textul intreg ramane in baza de date si se vede la
-     * „Ce înseamnă eroarea".
+     * si ar bloca pagina. Textul intreg ramane in baza de date si se vede in
+     * SPV Wizard.
      */
     /**
      * Cât s-a găsit la validare, spus în două cuvinte pentru jurnal.
@@ -971,7 +971,7 @@ class DeclaratiiController extends Controller
         $taiat = mb_substr($eroare, 0, self::EROARE_IN_TABEL);
 
         return rtrim($taiat) . "\n… lista continuă (" . count($randuri)
-            . ' rânduri în total). Apăsați „Ce înseamnă eroarea" pentru explicații.';
+            . ' rânduri în total). Apăsați „SPV Wizard" pentru explicații.';
     }
 
     protected function prezinta(AnafDeclaratie $declaratie): array

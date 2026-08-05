@@ -5,7 +5,8 @@ namespace App\Services\Anaf\Declaratii;
 use App\Models\AnafDeclaratie;
 
 /**
- * Traduce erorile DUKIntegrator in explicatii pe intelesul oricui.
+ * Motorul SPV Wizard: traduce erorile DUKIntegrator in explicatii pe intelesul
+ * oricui. In interfata, asistentul poarta numele „SPV Wizard".
  *
  * Sabloanele de mesaje sunt luate din chiar validatorul ANAF: DecValidation.jar
  * (motorul comun al tuturor declaratiilor) le pastreaza cu marcaje @0@, @1@ etc.

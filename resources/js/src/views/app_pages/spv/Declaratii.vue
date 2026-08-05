@@ -526,11 +526,11 @@
               size="sm"
               variant="flat-primary"
               class="btn-icon p-0 ml-1 flex-shrink-0"
-              title="Explică eroarea pe înțelesul tuturor"
+              title="SPV Wizard — explică eroarea pe înțelesul tuturor"
               @click="explicaEroarea(rand.item)"
             >
               <feather-icon
-                icon="HelpCircleIcon"
+                icon="ZapIcon"
                 size="16"
               />
             </b-button>
@@ -673,16 +673,25 @@
       </div>
     </b-card>
 
-    <!-- Erorile validatorului ANAF, traduse pe intelesul oricui -->
+    <!-- SPV Wizard: erorile validatorului ANAF, traduse pe intelesul oricui -->
     <b-modal
       v-model="explicatieVizibila"
-      title="Ce înseamnă eroarea"
       size="lg"
       ok-only
       ok-title="Am înțeles"
       scrollable
       modal-class="modul-spv"
     >
+      <template #modal-title>
+        <feather-icon
+          icon="ZapIcon"
+          size="18"
+          class="text-primary mr-50"
+        />
+        SPV Wizard
+        <span class="small text-muted ml-50">ce înseamnă eroarea</span>
+      </template>
+
       <b-alert
         :show="explicatieEroare !== ''"
         variant="danger"
@@ -1951,5 +1960,14 @@ export default {
   font-size: 1rem;
   font-weight: 500;
   line-height: 1.4;
+}
+
+/* Combinatia de taste, pe fundal albastru: se vede ca e de apasat, nu de citit. */
+.indicatie-fisier kbd {
+  background: #1565c0;
+  color: #fff;
+  font-weight: 600;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.2rem;
 }
 </style>
