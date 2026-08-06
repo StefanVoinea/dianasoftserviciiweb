@@ -40,9 +40,21 @@ agent_scrie($config, 'Pornit. Întreb ' . $config['server'] . ' dacă are ceva d
 agent_inroleaza($config);
 
 $pauzaLaEroare = 5;
+$motiv = '';
+// De când ține pana de acum, și de când n-a mai fost nimic de lucru
+$deCandNuMerge = 0;
+$spusCeEDeFacut = false;
+$ultimaVorba = time();
+
+/*
+ * Din cât în cât se scrie în jurnal că agentul e viu, chiar dacă n-are ce face.
+ * Fără rândul acesta, o zi liniștită și un agent oprit arată la fel: jurnalul
+ * tace în amândouă cazurile, iar cine îl citește nu poate spune care e care.
+ */
+$dinCatInCat = 1800;
 
 while (true) {
-    $comanda = agent_intreaba($config);
+    $comanda = agent_intreaba($config, $motiv);
 
     if ($comanda === -1) {
         /*
@@ -62,20 +74,65 @@ while (true) {
          * Serverul nu răspunde — internet căzut, întreținere, orice. Se așteaptă
          * din ce în ce mai mult, până la un minut, ca să nu batem în ușă la
          * fiecare secundă, dar să revenim repede când se ridică.
+         *
+         * Pricina se scrie o dată cu mesajul: „nu răspunde" singur nu spune
+         * nimănui unde să se uite, iar cine citește jurnalul peste o săptămână
+         * n-are de unde să afle dacă a fost internetul, firewall-ul sau
+         * antivirusul.
          */
-        agent_scrie($config, 'Serverul nu răspunde; reîncerc peste ' . $pauzaLaEroare . 's.');
+        if (!$deCandNuMerge) {
+            $deCandNuMerge = time();
+        }
+
+        $deCat = time() - $deCandNuMerge;
+
+        agent_scrie($config, 'Serverul nu răspunde: ' . ($motiv ?: 'pricină necunoscută')
+            . '. Reîncerc peste ' . $pauzaLaEroare . 's'
+            . ($deCat >= 60 ? ' (ține de ' . round($deCat / 60) . ' min).' : '.'));
+
+        /*
+         * Când pana ține de-a binelea, se spune o dată și ce e de căutat. Se
+         * spune o singură dată pe pană: repetat la fiecare încercare, ar îneca
+         * jurnalul tocmai când el trebuie citit.
+         */
+        if (!$spusCeEDeFacut && $deCat >= 180) {
+            agent_scrie($config, 'De verificat, în ordine: legătura la internet; ieșirea pe 443 către '
+                . $config['server'] . ' în firewall; iar în antivirus, ca adresa aceasta să fie scoasă'
+                . ' de sub scanarea HTTPS — desfăcută de antivirus, legătura cade fără altă explicație.');
+            $spusCeEDeFacut = true;
+        }
+
         sleep($pauzaLaEroare);
         $pauzaLaEroare = min($pauzaLaEroare * 2, 60);
 
         continue;
     }
 
+    if ($deCandNuMerge) {
+        agent_scrie($config, 'Legătura s-a ridicat, după ' . max(1, round((time() - $deCandNuMerge) / 60)) . ' min.');
+        $deCandNuMerge = 0;
+        $spusCeEDeFacut = false;
+        $ultimaVorba = time();
+    }
+
     $pauzaLaEroare = 5;
 
     if ($comanda === null) {
-        // Pânda s-a împlinit fără nicio comandă: se întreabă din nou, îndată.
+        /*
+         * Pânda s-a împlinit fără nicio comandă — starea cea mai obișnuită. Se
+         * întreabă din nou, îndată; din jumătate în jumătate de oră se scrie
+         * totuși un rând, ca tăcerea să nu semene cu un agent oprit.
+         */
+        if (time() - $ultimaVorba >= $dinCatInCat) {
+            agent_scrie($config, 'Pândesc mai departe; legătura cu serverul e bună, dar n-a fost nimic de lucru'
+                . ' în ultimele ' . round((time() - $ultimaVorba) / 60) . ' min.');
+            $ultimaVorba = time();
+        }
+
         continue;
     }
+
+    $ultimaVorba = time();
 
     agent_scrie($config, 'Comanda ' . $comanda['id'] . ': ' . $comanda['metoda'] . ' ' . $comanda['cale']);
 

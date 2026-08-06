@@ -124,9 +124,10 @@ function agent_pentru_config($valoare)
  * „Ai ceva pentru mine?"
  *
  * Întoarce comanda, null dacă pânda s-a împlinit fără nimic, sau false dacă
- * serverul n-a răspuns deloc.
+ * serverul n-a răspuns deloc. În $motiv rămâne, la eșec, pricina spusă pe
+ * înțeles — ea ajunge în jurnal, ca omul să nu ghicească ce s-a stricat.
  */
-function agent_intreaba($config)
+function agent_intreaba($config, &$motiv = null)
 {
     $rezultat = agent_curl($config, array(
         'metoda' => 'POST',
@@ -150,17 +151,110 @@ function agent_intreaba($config)
         return -1;
     }
 
-    if ($rezultat['cod'] !== 0 || $rezultat['status'] !== 200) {
+    return agent_desluseste_panda($rezultat, $motiv);
+}
+
+/**
+ * Ce a iesit din panda: comanda, null (nimic de lucru) sau false (pana).
+ *
+ * Sta deoparte de apelul propriu-zis ca sa poata fi probata: aici se hotaraste
+ * daca un raspuns e o zi obisnuita de lucru sau o defectiune, iar deosebirea
+ * asta a fost multa vreme gresita (vezi array_key_exists mai jos).
+ *
+ * @param array $rezultat cod, status si corp, asa cum le da agent_curl
+ */
+function agent_desluseste_panda($rezultat, &$motiv = null)
+{
+    $motiv = '';
+
+    if ($rezultat['cod'] !== 0) {
+        $motiv = agent_talcul_curl($rezultat['cod']);
+
+        return false;
+    }
+
+    if ($rezultat['status'] !== 200) {
+        $motiv = agent_talcul_statusului($rezultat['status']);
+
         return false;
     }
 
     $date = json_decode($rezultat['corp'], true);
 
-    if (!is_array($date) || !isset($date['comanda'])) {
+    if (!is_array($date) || !array_key_exists('comanda', $date)) {
+        /*
+         * Un raspuns care nu seamana cu al aplicatiei vine, aproape mereu, de la
+         * altcineva de pe drum: pagina de oprire a antivirusului, a proxy-ului
+         * din firma sau a portalului de retea. Se arata inceputul lui, ca omul
+         * sa recunoasca cine i-a raspuns in locul serverului.
+         */
+        $motiv = 'răspunsul nu vine de la aplicație, ci de la altcineva de pe drum'
+            . ' (antivirus, proxy sau portal de rețea): „' . agent_inceputul($rezultat['corp']) . '"';
+
         return false;
     }
 
+    /*
+     * Aici era buba: pânda împlinită fără nimic de lucru întoarce „comanda":
+     * null, iar isset() spune „nu există" tocmai pentru valoarea null. Cazul cel
+     * mai obișnuit din viața agentului — nimic de făcut — se socotea deci pană
+     * de rețea: jurnalul se umplea de „Serverul nu răspunde", iar așteptarea
+     * creștea până la un minut, în care comenzile chiar sosite stăteau la coadă.
+     */
     return $date['comanda'] ? $date['comanda'] : null;
+}
+
+/** Cu ce s-a oprit curl — doar tâlcurile care se întâlnesc aievea. */
+function agent_talcul_curl($cod)
+{
+    $talcuri = array(
+        5 => 'proxy-ul scris în setările calculatorului nu poate fi găsit',
+        6 => 'numele serverului nu poate fi dezlegat — DNS oprit sau fără internet',
+        7 => 'legătura nu se poate deschide — port închis de firewall sau internet căzut',
+        28 => 'a trecut vremea fără niciun răspuns — legătura e ținută în loc pe drum',
+        35 => 'strângerea de mână TLS a eșuat — cel mai des, traficul e desfăcut de antivirus',
+        52 => 'serverul a închis legătura fără să răspundă',
+        56 => 'legătura s-a rupt în timpul primirii',
+        60 => 'certificatul serverului nu este de încredere — semn limpede că traficul e desfăcut'
+            . ' de antivirus sau de proxy',
+    );
+
+    return isset($talcuri[$cod])
+        ? $talcuri[$cod] . ' [curl ' . $cod . ']'
+        : 'curl s-a oprit cu codul ' . $cod;
+}
+
+/** Ce înseamnă codul cu care a răspuns cineva în locul unui 200. */
+function agent_talcul_statusului($status)
+{
+    if ($status === 0) {
+        return 'nu s-a primit niciun răspuns';
+    }
+
+    $talcuri = array(
+        403 => 'cererea a fost oprită — de obicei de un antivirus sau de un proxy din firmă',
+        407 => 'proxy-ul din firmă cere autentificare',
+        429 => 'serverul cere să se bată mai rar la ușă',
+        502 => 'serverul aplicației nu răspunde în spatele proxy-ului',
+        503 => 'serverul aplicației este oprit sau în întreținere',
+        504 => 'răspunsul n-a apucat să vină până la capăt',
+    );
+
+    return isset($talcuri[$status])
+        ? $talcuri[$status] . ' [HTTP ' . $status . ']'
+        : 'serverul a răspuns cu codul HTTP ' . $status;
+}
+
+/** Începutul unui răspuns străin, adus la o formă care încape într-un rând. */
+function agent_inceputul($corp)
+{
+    $curat = trim(preg_replace('/\s+/', ' ', (string) $corp));
+
+    if ($curat === '') {
+        return '(răspuns gol)';
+    }
+
+    return strlen($curat) > 70 ? substr($curat, 0, 70) . '…' : $curat;
 }
 
 /**

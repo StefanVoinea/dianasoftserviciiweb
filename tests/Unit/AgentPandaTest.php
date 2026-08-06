@@ -1,0 +1,115 @@
+<?php
+
+namespace Tests\Unit;
+
+use Tests\TestCase;
+
+/**
+ * Ce deosebeste agentul: ziua obisnuita de lucru de pana adevarata.
+ *
+ * Agentul tine linia deschisa catre server si intreaba „ai ceva pentru mine?".
+ * De cele mai multe ori raspunsul e „nu" — asta nu inseamna ca s-a stricat
+ * ceva. Multa vreme insemna: raspunsul „comanda": null trecea drept pana de
+ * retea, jurnalul se umplea de „Serverul nu raspunde", iar asteptarea crestea
+ * pana la un minut, in care comenzile chiar sosite stateau la coada.
+ */
+class AgentPandaTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        require_once base_path('spv-bridge/agent-functii.php');
+    }
+
+    /** @return array<string, mixed> raspunsul asa cum il da agent_curl */
+    protected function raspuns(int $cod, int $status, string $corp): array
+    {
+        return ['cod' => $cod, 'status' => $status, 'corp' => $corp];
+    }
+
+    /** Panda implinita fara nimic de lucru: cazul cel mai obisnuit din viata agentului. */
+    public function test_panda_goala_nu_este_pana()
+    {
+        $motiv = 'ceva';
+
+        $rezultat = agent_desluseste_panda($this->raspuns(0, 200, '{"comanda":null}'), $motiv);
+
+        $this->assertNull($rezultat, 'Pânda goală trebuie să fie null, nu false.');
+        $this->assertSame('', $motiv);
+    }
+
+    /** Comanda se intoarce intreaga, ca sa poata fi dusa la indeplinire. */
+    public function test_comanda_se_intoarce_intreaga()
+    {
+        $motiv = '';
+        $corp = '{"comanda":{"id":7,"metoda":"GET","cale":"/monitorizare"}}';
+
+        $comanda = agent_desluseste_panda($this->raspuns(0, 200, $corp), $motiv);
+
+        $this->assertSame(7, $comanda['id']);
+        $this->assertSame('/monitorizare', $comanda['cale']);
+    }
+
+    /** Cand curl nu poate deschide legatura, se spune si unde sa se uite omul. */
+    public function test_legatura_neblocata_spune_de_firewall()
+    {
+        $motiv = '';
+
+        $rezultat = agent_desluseste_panda($this->raspuns(7, 0, ''), $motiv);
+
+        $this->assertFalse($rezultat);
+        $this->assertStringContainsString('firewall', $motiv);
+        $this->assertStringContainsString('curl 7', $motiv);
+    }
+
+    /**
+     * Certificatul neincrezut e semnul traficului desfacut de antivirus — acolo
+     * cade si legitimarea cu certificatul de pe token.
+     */
+    public function test_certificatul_neincrezut_arata_spre_antivirus()
+    {
+        $motiv = '';
+
+        $rezultat = agent_desluseste_panda($this->raspuns(60, 0, ''), $motiv);
+
+        $this->assertFalse($rezultat);
+        $this->assertStringContainsString('desfăcut', $motiv);
+    }
+
+    /** Un raspuns care nu seamana cu al aplicatiei vine de la altcineva de pe drum. */
+    public function test_raspunsul_strain_se_recunoaste()
+    {
+        $motiv = '';
+        $pagina = '<html><body>Acces blocat de politica de securitate</body></html>';
+
+        $rezultat = agent_desluseste_panda($this->raspuns(0, 200, $pagina), $motiv);
+
+        $this->assertFalse($rezultat);
+        $this->assertStringContainsString('proxy', $motiv);
+        $this->assertStringContainsString('Acces blocat', $motiv);
+    }
+
+    /** Codurile HTTP intalnite aievea isi au talcul lor, nu doar numarul. */
+    public function test_codul_http_are_talc()
+    {
+        $motiv = '';
+
+        $rezultat = agent_desluseste_panda($this->raspuns(0, 503, 'Service Unavailable'), $motiv);
+
+        $this->assertFalse($rezultat);
+        $this->assertStringContainsString('oprit sau în întreținere', $motiv);
+        $this->assertStringContainsString('503', $motiv);
+    }
+
+    /** Randul din jurnal ramane citibil chiar daca raspunsul strain e o pagina intreaga. */
+    public function test_inceputul_raspunsului_incape_intr_un_rand()
+    {
+        $lung = str_repeat('abcdefghij ', 40);
+
+        // 70 de caractere plus semnul de taiere; se numara in caractere, ca „…"
+        // ocupa trei octeti.
+        $this->assertLessThanOrEqual(71, mb_strlen(agent_inceputul($lung)));
+        $this->assertSame('(răspuns gol)', agent_inceputul("  \n\t "));
+    }
+}
