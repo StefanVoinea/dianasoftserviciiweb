@@ -344,9 +344,43 @@
       <b-form-checkbox
         v-if="utilizator.id"
         v-model="utilizator.blocat"
+        class="mb-2"
       >
         Blocat (nu se mai poate autentifica; sesiunile deschise se închid)
       </b-form-checkbox>
+
+      <hr>
+
+      <!-- Modulele hotărăsc ce vede omul în meniu. Fără niciunul, ar intra
+           într-o aplicație goală, așa că bifele pornesc de la abonament. -->
+      <label>Module la care are acces</label>
+      <b-form-checkbox-group
+        v-model="utilizator.module"
+        stacked
+        class="mb-1"
+      >
+        <b-form-checkbox
+          v-for="modul in moduleAplicatie"
+          :key="modul.id"
+          :value="modul.id"
+        >
+          <feather-icon
+            v-if="modul.icon"
+            :icon="modul.icon"
+            size="14"
+            class="mr-25"
+          />
+          {{ modul.nume }}
+          <span
+            v-if="!modulDinAbonament(modul)"
+            class="small text-muted"
+          >— în afara abonamentului</span>
+        </b-form-checkbox>
+      </b-form-checkbox-group>
+      <small class="text-muted d-block">
+        Bifele acestea fac meniul contului. Ce se află sub un modul merge după el:
+        cine primește modulul primește și paginile din el.
+      </small>
     </b-modal>
 
     <!-- Înștiințare către utilizatori: în aplicație și/sau pe email -->
@@ -693,6 +727,8 @@ export default {
       utilizatorVizibil: false,
       utilizator: {},
       clientCurent: {},
+      // Modulele aplicației, de bifat pentru fiecare cont
+      moduleAplicatie: [],
 
       abonamentVizibil: false,
       abonament: {},
@@ -744,6 +780,7 @@ export default {
       this.$http.get('/administrare/clienti')
         .then(({ data }) => {
           this.clienti = data.data
+          this.moduleAplicatie = data.module || []
         })
         .catch(err => {
           this.eroare = this.mesajEroare(err, 'Lista clienților nu a putut fi încărcată')
@@ -790,11 +827,37 @@ export default {
           this.eroareFormular = this.mesajEroare(err, 'Clientul nu a putut fi creat')
         })
     },
+    /**
+     * Modulele cu care pornește un cont nou: cele plătite de client.
+     *
+     * Un cont fără niciun modul intră într-o aplicație fără meniu și n-are ce
+     * face acolo, așa că se bifează din start ce ține de abonament. Alegerea
+     * rămâne a omului — bifele se pot schimba înainte de salvare.
+     */
+    moduleImplicite(client) {
+      if (!client || !client.abonament) return []
+
+      return this.moduleAplicatie
+        .filter(modul => this.modulDinAbonament(modul, client))
+        .map(modul => modul.id)
+    },
+    /** Ține modulul de abonamentul clientului, sau se dă pe deasupra lui? */
+    modulDinAbonament(modul, client) {
+      const dupaAbonament = {
+        spv: 'modul_spv',
+        'etransport-anaf': 'modul_etransport',
+        'vector-fiscal': 'modul_spv',
+      }
+
+      const { abonament } = client || this.clientCurent || {}
+
+      return Boolean(abonament && abonament[dupaAbonament[modul.slug]])
+    },
     deschideUtilizator(client, user) {
       this.eroareFormular = ''
       this.clientCurent = client
       this.utilizator = user
-        ? { ...user, parola: '' }
+        ? { ...user, parola: '', module: (user.module || []).slice() }
         : {
           nume: '',
           email: '',
@@ -803,6 +866,7 @@ export default {
           administrator: false,
           blocat: false,
           ip_permise: '',
+          module: this.moduleImplicite(client),
         }
       this.utilizatorVizibil = true
     },

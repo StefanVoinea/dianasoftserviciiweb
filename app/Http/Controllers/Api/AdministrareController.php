@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AbonamentClient;
 use App\Models\Company;
+use App\Models\DianaSoftMenuOption;
 use App\Models\User;
 use App\Services\AccesIp;
 use App\Services\Anaf\Format;
@@ -34,7 +35,18 @@ class AdministrareController extends Controller
             return $this->prezinta($client, $abonamente->get($client->id));
         });
 
-        return response()->json(['success' => true, 'data' => $clienti]);
+        return response()->json([
+            'success' => true,
+            'data' => $clienti,
+            'module' => $this->moduleleAplicatiei()->map(function (DianaSoftMenuOption $modul) {
+                return [
+                    'id' => $modul->id,
+                    'nume' => $modul->name,
+                    'slug' => $modul->slug,
+                    'icon' => $modul->icon,
+                ];
+            })->values(),
+        ]);
     }
 
     /** Client nou, cu primul lui cont de administrator. */
@@ -48,6 +60,8 @@ class AdministrareController extends Controller
             'parola' => 'required|string|min:8|max:191',
             'telefon' => 'nullable|string|max:45',
             'proba_zile' => 'nullable|integer|min:0|max:365',
+            'module' => 'nullable|array',
+            'module.*' => 'integer|exists:dianasoftmenuoptions,id',
         ]);
 
         $client = DB::transaction(function () use ($date) {
@@ -80,6 +94,17 @@ class AdministrareController extends Controller
                 'poate_semna' => true,
                 'poate_depune' => true,
             ]);
+
+            /*
+             * Fara module, contul intra intr-o aplicatie fara meniu si nu are ce
+             * face acolo. Cand nu s-a ales nimic anume, administratorul primeste
+             * modulul SPV — acelasi cu care porneste si abonamentul de mai jos.
+             */
+            $this->potriveasteModulele(
+                $user,
+                $client,
+                $date['module'] ?? $this->moduleleAplicatiei()->where('slug', 'spv')->pluck('id')->all()
+            );
 
             $zile = $date['proba_zile'] ?? 30;
 
@@ -114,6 +139,9 @@ class AdministrareController extends Controller
             'parola' => 'required|string|min:8|max:191',
             'telefon' => 'nullable|string|max:45',
             'administrator' => 'nullable|boolean',
+            // Modulele la care are acces: intrările din meniu pe care le va vedea
+            'module' => 'nullable|array',
+            'module.*' => 'integer|exists:dianasoftmenuoptions,id',
         ]);
 
         $user = User::create([
@@ -138,9 +166,12 @@ class AdministrareController extends Controller
             'poate_depune' => $administrator,
         ]);
 
+        $module = $this->potriveasteModulele($user, $client, $date['module'] ?? []);
+
         Jurnal::scrie(
             'administrare_utilizator',
-            'A creat contul ' . $user->email . ' pentru clientul „' . $client->denumire . '”',
+            'A creat contul ' . $user->email . ' pentru clientul „' . $client->denumire . '”'
+                . ($module === [] ? ', fără niciun modul' : ', cu acces la: ' . implode(', ', $module)),
             ['company_id' => $client->id, 'user_id' => $user->id]
         );
 
@@ -165,6 +196,8 @@ class AdministrareController extends Controller
             'administrator' => 'nullable|boolean',
             'company_id' => 'nullable|exists:companies,id',
             'ip_permise' => 'nullable|string|max:2000',
+            'module' => 'nullable|array',
+            'module.*' => 'integer|exists:dianasoftmenuoptions,id',
         ]);
 
         // Nici administratorul aplicatiei nu are voie sa se inchida singur afara.
@@ -217,14 +250,28 @@ class AdministrareController extends Controller
                 ->update(['administrator' => (bool) $date['administrator']]);
         }
 
+        /*
+         * Modulele sunt si ele per client — acelasi om poate lucra la doua firme,
+         * cu meniuri deosebite — deci se schimba doar cand se stie in care.
+         */
+        $client = array_key_exists('module', $date) && !empty($date['company_id'])
+            ? Company::find($date['company_id'])
+            : null;
+
+        $module = $client ? $this->potriveasteModulele($utilizator, $client, $date['module'] ?: []) : null;
+
         Jurnal::scrie(
             'administrare_utilizator',
             'A modificat contul ' . $utilizator->email
-                . (array_key_exists('blocat', $date) ? ($date['blocat'] ? ' — blocat' : ' — deblocat') : ''),
+                . (array_key_exists('blocat', $date) ? ($date['blocat'] ? ' — blocat' : ' — deblocat') : '')
+                . ($module === null ? '' : ' — module: ' . ($module === [] ? 'niciunul' : implode(', ', $module))),
             ['user_id' => $utilizator->id]
         );
 
-        return response()->json(['success' => true, 'data' => $this->prezintaUtilizator($utilizator->fresh())]);
+        return response()->json([
+            'success' => true,
+            'data' => $this->prezintaUtilizator($utilizator->fresh(), $client),
+        ]);
     }
 
     /** Il scoate din aplicatie acum: tokenurile lui nu mai sunt bune. */
@@ -303,6 +350,133 @@ class AdministrareController extends Controller
         ]);
     }
 
+    /**
+     * Modulele pe care le poate primi un cont.
+     *
+     * Sunt intrarile de prim rang din meniu — SPV, e-Transport, Vector fiscal si
+     * celelalte. Ce sta sub ele nu se alege bucata cu bucata: cine primeste un
+     * modul primeste si ce se afla in el.
+     *
+     * @return \Illuminate\Support\Collection<int, DianaSoftMenuOption>
+     */
+    protected function moduleleAplicatiei()
+    {
+        return DianaSoftMenuOption::where('parent', '\\')
+            ->orderBy('position1')
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * Scrie modulele contului in firma clientului si intoarce numele celor date.
+     *
+     * Meniul se citeste din legatura om–optiune, cu „isactive" si „company_id":
+     * acelasi om poate lucra la doua firme, cu meniuri deosebite. Se scriu toate
+     * optiunile, nu doar cele alese — cele nealese raman pe „nu", ca ecranul de
+     * utilizatori sa le poata bifa mai tarziu fara sa lipseasca randul.
+     *
+     * @param  array<int, int|string>  $alese  id-urile modulelor bifate
+     * @return array<int, string> numele modulelor de prim rang date acum
+     */
+    protected function potriveasteModulele(User $user, Company $client, array $alese): array
+    {
+        $toate = DianaSoftMenuOption::all();
+        $cerute = array_map('intval', $alese);
+        $active = $this->cuTotCeEDedesubt($toate, $cerute);
+
+        DB::table('dianasoftmenuoption_user')
+            ->where('user_id', $user->id)
+            ->where('company_id', $client->id)
+            ->delete();
+
+        $randuri = [];
+
+        foreach ($toate as $optiune) {
+            $randuri[] = [
+                'user_id' => $user->id,
+                'dianasoftmenuoption_id' => $optiune->id,
+                'company_id' => $client->id,
+                'isactive' => in_array((int) $optiune->id, $active, true),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        }
+
+        if ($randuri !== []) {
+            DB::table('dianasoftmenuoption_user')->insert($randuri);
+        }
+
+        return $toate->whereIn('id', $cerute)->pluck('name')->all();
+    }
+
+    /**
+     * Modulele alese, cu tot ce se afla sub ele.
+     *
+     * Legatura de parinte se tine pe nume, nu pe id („Loguri" sta sub „Util"),
+     * asa ca se coboara din nume in nume. Fara asta, cine primeste „Util" ar
+     * vedea o intrare de meniu goala.
+     *
+     * @param  array<int, int>  $alese
+     * @return array<int, int>
+     */
+    protected function cuTotCeEDedesubt($toate, array $alese): array
+    {
+        $copiii = [];
+
+        foreach ($toate as $optiune) {
+            $copiii[(string) $optiune->parent][] = $optiune;
+        }
+
+        $active = [];
+        $deCercetat = $toate->whereIn('id', $alese)->values()->all();
+
+        while ($deCercetat !== []) {
+            $optiune = array_pop($deCercetat);
+
+            if (in_array((int) $optiune->id, $active, true)) {
+                continue;
+            }
+
+            $active[] = (int) $optiune->id;
+
+            foreach (isset($copiii[(string) $optiune->name]) ? $copiii[(string) $optiune->name] : [] as $copil) {
+                $deCercetat[] = $copil;
+            }
+        }
+
+        return $active;
+    }
+
+    /**
+     * Modulele de prim rang pe care contul le are acum in firma clientului.
+     *
+     * Se dau doar cele de prim rang: ele se bifeaza in fereastra, iar ce se afla
+     * sub ele merge dupa parinte.
+     *
+     * @return array<int, int>
+     */
+    protected function moduleleContului(User $user, Company $client): array
+    {
+        $active = DB::table('dianasoftmenuoption_user')
+            ->where('user_id', $user->id)
+            ->where('company_id', $client->id)
+            ->where('isactive', true)
+            ->pluck('dianasoftmenuoption_id')
+            ->map(function ($id) {
+                return (int) $id;
+            })
+            ->all();
+
+        return $this->moduleleAplicatiei()
+            ->whereIn('id', $active)
+            ->pluck('id')
+            ->map(function ($id) {
+                return (int) $id;
+            })
+            ->values()
+            ->all();
+    }
+
     /** Scoate toate tokenurile utilizatorului si intoarce cate au fost. */
     protected function stingeTokenurile(User $utilizator): int
     {
@@ -365,6 +539,7 @@ class AdministrareController extends Controller
             'blocat' => $user->blocat === 'Da',
             'administrator' => $administrator,
             'ip_permise' => $user->ip_permise,
+            'module' => $client ? $this->moduleleContului($user, $client) : [],
             'creat_la' => Format::dataOra($user->created_at),
         ];
     }
