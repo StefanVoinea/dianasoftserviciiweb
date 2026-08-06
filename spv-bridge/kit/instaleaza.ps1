@@ -9,7 +9,16 @@ param(
     [string]$Adresa = '127.0.0.1',
     [int]$Port = 8099,
     [string]$PhpPath = '',
-    [string]$NumeSarcina = 'Acces token ANAF'
+    [string]$NumeSarcina = 'Acces token ANAF',
+    <#
+        Câte instanțe ale programului lucrează deodată.
+
+        Serverul din PHP servește o singură cerere pe rând, așa că o descărcare
+        lungă din SPV ținea pe loc și dosarul urmărit, și orice altă operație.
+        Cu mai multe instanțe, pe porturi vecine, lucrările merg despărțite.
+        Una singură (-Instante 1) înseamnă purtarea de dinainte.
+    #>
+    [int]$Instante = 3
 )
 
 $ErrorActionPreference = 'Stop'
@@ -117,6 +126,61 @@ Register-ScheduledTask -TaskName $NumeSarcina -Action $actiune -Trigger $declans
     -Principal $principal -Settings $setari -Description 'Dă aplicației acces la certificatul digital de pe tokenul conectat la acest calculator (SPV și depunere declarații ANAF).' | Out-Null
 
 Scrie "Sarcina '$NumeSarcina' a fost creată (pornire la logon)." 'Green'
+
+<#
+    4a. Instanțele care lucrează deodată.
+
+    Fiecare stă pe portul ei, vecin cu cel de bază, și e chemată de agent când
+    cea dinainte e ocupată. Porturile se scriu în configurare.env, ca agentul să
+    știe pe cine poate chema; fără rândul acela, el lucrează ca înainte, pe una
+    singură.
+#>
+$porturi = @($Port)
+
+for ($i = 1; $i -lt [Math]::Max(1, $Instante); $i++) {
+    $portLucrator = $Port + $i
+    $numeLucrator = "$NumeSarcina - lucrator $portLucrator"
+
+    $existentLucrator = Get-ScheduledTask -TaskName $numeLucrator -ErrorAction SilentlyContinue
+    if ($existentLucrator) {
+        Unregister-ScheduledTask -TaskName $numeLucrator -Confirm:$false -ErrorAction SilentlyContinue
+    }
+
+    $actiuneLucrator = New-ScheduledTaskAction -Execute $PhpPath `
+        -Argument "$argumentePhp-S $Adresa`:$portLucrator server.php" -WorkingDirectory $folder
+
+    try {
+        Register-ScheduledTask -TaskName $numeLucrator -Action $actiuneLucrator -Trigger $declansator `
+            -Principal $principal -Settings $setari `
+            -Description 'Încă o instanță a programului de acces la token, ca lucrările să nu se aștepte una pe alta.' `
+            -ErrorAction Stop | Out-Null
+
+        Start-ScheduledTask -TaskName $numeLucrator -ErrorAction SilentlyContinue
+        $porturi += $portLucrator
+        Scrie "Instanță pe portul $portLucrator." 'Green'
+    } catch {
+        Scrie "Instanța de pe portul ${portLucrator} nu a putut fi creată: $($_.Exception.Message)" 'Yellow'
+    }
+}
+
+<#
+    Porturile ajung în configurare.env: agentul citește de acolo pe câte
+    instanțe poate împărți lucrul. Rândul se înlocuiește dacă exista deja, ca o
+    reinstalare cu alt număr de instanțe să nu lase în urmă porturi moarte.
+#>
+$randPorturi = 'PUNTE_LOCAL_PORTURI=' + ($porturi -join ',')
+$continutVechi = Get-Content $caleEnv -Raw
+
+if ($continutVechi -match '(?m)^\s*PUNTE_LOCAL_PORTURI\s*=.*$') {
+    $continutNou = [regex]::Replace($continutVechi, '(?m)^\s*PUNTE_LOCAL_PORTURI\s*=.*$', $randPorturi)
+} else {
+    $continutNou = $continutVechi.TrimEnd() + "`r`n`r`n" +
+        "# Instantele programului local care pot lucra deodata (scrise de instalare).`r`n" +
+        $randPorturi + "`r`n"
+}
+
+Set-Content -Path $caleEnv -Value $continutNou -Encoding UTF8
+Scrie "Lucrarile se impart pe porturile: $($porturi -join ', ')." 'Green'
 
 # 4b. Agentul care aduce lucrul de la server
 #

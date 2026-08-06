@@ -26,15 +26,159 @@ function agent_configurare($dosar)
         }
     }
 
+    $local = isset($env['PUNTE_LOCAL']) ? rtrim($env['PUNTE_LOCAL'], '/') : 'http://127.0.0.1:8099';
+
     return array(
         'server' => isset($env['PUNTE_SERVER']) ? rtrim($env['PUNTE_SERVER'], '/') : '',
         'token' => isset($env['SPV_BRIDGE_TOKEN']) ? $env['SPV_BRIDGE_TOKEN'] : '',
         'inrolare' => isset($env['PUNTE_INROLARE']) ? $env['PUNTE_INROLARE'] : '',
-        'local' => isset($env['PUNTE_LOCAL']) ? rtrim($env['PUNTE_LOCAL'], '/') : 'http://127.0.0.1:8099',
+        'local' => $local,
+        /*
+         * Instantele programului local care pot lucra deodata. Instalarea
+         * porneste mai multe, pe porturi vecine, si le scrie aici; lipsa lor
+         * inseamna o instalare mai veche, cu una singura — merge si asa, doar
+         * ca lucrarile se asaza la rand.
+         */
+        'locale' => agent_adresele_locale($local, isset($env['PUNTE_LOCAL_PORTURI']) ? $env['PUNTE_LOCAL_PORTURI'] : ''),
         'curl' => getenv('SystemRoot') . '\\System32\\curl.exe',
         'jurnal' => $dosar . '/agent.log',
         'dosar' => $dosar,
     );
+}
+
+/**
+ * Adresele instantelor programului local, din portul de baza si lista de porturi.
+ *
+ * Fiecare instanta serveste o singura cerere pe rand — asa e serverul din PHP —
+ * deci numarul lor e chiar numarul lucrarilor care pot merge deodata.
+ *
+ * @return array<int, string>
+ */
+function agent_adresele_locale($local, $porturi)
+{
+    $adrese = array($local);
+
+    if (trim((string) $porturi) === '') {
+        return $adrese;
+    }
+
+    $bucati = preg_split('/[\s,;]+/', trim($porturi));
+
+    foreach ($bucati as $port) {
+        $port = (int) $port;
+
+        if ($port <= 0) {
+            continue;
+        }
+
+        // Se pastreaza gazda din PUNTE_LOCAL si se schimba doar portul.
+        $adresa = preg_replace('#:\d+$#', '', $local) . ':' . $port;
+
+        if (!in_array($adresa, $adrese, true)) {
+            $adrese[] = $adresa;
+        }
+    }
+
+    return $adrese;
+}
+
+/**
+ * Lucrarile care merg chiar acum, dupa semnele lasate langa program.
+ *
+ * Semnul il face parintele inainte de a porni copilul si il sterge copilul cand
+ * a terminat. Cele ramase de la un copil cazut se sterg dupa un rastimp, ca sa
+ * nu tina locul ocupat pentru totdeauna.
+ *
+ * @return array<string, int> adresa locala => cate lucrari are pe ea
+ */
+function agent_lucrari_active($config, $rabdare = 900)
+{
+    $active = array();
+
+    foreach ((array) glob($config['dosar'] . '/agent_lucru_*.tmp') as $semn) {
+        $facut = @filemtime($semn);
+
+        if ($facut === false || (time() - $facut) > $rabdare) {
+            @unlink($semn);
+
+            continue;
+        }
+
+        $adresa = trim((string) @file_get_contents($semn));
+
+        if ($adresa === '') {
+            continue;
+        }
+
+        $active[$adresa] = isset($active[$adresa]) ? $active[$adresa] + 1 : 1;
+    }
+
+    return $active;
+}
+
+/**
+ * Prima instanta locala fara lucrare. Null cand toate sunt ocupate.
+ */
+function agent_adresa_libera($config)
+{
+    $active = agent_lucrari_active($config);
+
+    foreach ($config['locale'] as $adresa) {
+        if (!isset($active[$adresa])) {
+            return $adresa;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Porneste comanda intr-un proces al ei si se intoarce indata.
+ *
+ * Fara asta, o descarcare lunga din SPV tinea agentul pe loc, iar dosarul
+ * urmarit — sau orice alta cerere — astepta dupa ea pana ii expira rabdarea la
+ * server. Fiecare lucrare isi are acum procesul si instanta ei locala.
+ *
+ * @return bool a pornit?
+ */
+function agent_porneste_lucrul($config, $comanda, $adresa)
+{
+    $semn = $config['dosar'] . '/agent_lucru_' . $comanda['id'] . '.tmp';
+    $date = $config['dosar'] . '/agent_lucrare_' . $comanda['id'] . '.json';
+
+    @file_put_contents($semn, $adresa);
+    @file_put_contents($date, json_encode(array(
+        'comanda' => $comanda,
+        'local' => $adresa,
+        'baza' => $config['local'],
+        'semn' => $semn,
+    )));
+
+    $php = defined('PHP_BINARY') && PHP_BINARY !== '' ? PHP_BINARY : 'php';
+    $ini = php_ini_loaded_file();
+
+    $linie = escapeshellarg($php)
+        . ($ini ? ' -c ' . escapeshellarg($ini) : '')
+        . ' ' . escapeshellarg($config['dosar'] . '/agent-lucreaza.php')
+        . ' ' . escapeshellarg($date);
+
+    /*
+     * „start /B" da drumul procesului si se intoarce pe loc; fara el, popen ar
+     * astepta tocmai ce vrem sa nu asteptam. Fereastra nu se arata: agentul
+     * insusi ruleaza fara ea.
+     */
+    $maner = @popen('start "" /B ' . $linie, 'r');
+
+    if ($maner === false) {
+        @unlink($semn);
+        @unlink($date);
+
+        return false;
+    }
+
+    pclose($maner);
+
+    return true;
 }
 
 function agent_scrie($config, $mesaj)
@@ -256,7 +400,7 @@ function agent_talcul_statusului($status)
     $talcuri = array(
         403 => 'cererea a fost oprită — de obicei de un antivirus sau de un proxy din firmă',
         407 => 'proxy-ul din firmă cere autentificare',
-        429 => 'serverul cere să se bată mai rar la ușă',
+        429 => 'aplicația cere să se bată mai rar la ușă (prea multe cereri într-un minut)',
         502 => 'serverul aplicației nu răspunde în spatele proxy-ului',
         503 => 'serverul aplicației este oprit sau în întreținere',
         504 => 'răspunsul n-a apucat să vină până la capăt',
@@ -395,7 +539,9 @@ function agent_executa($config, $comanda)
 
         agent_scrie($config, $motiv);
 
-        return array('eroare' => $motiv);
+        // Codul merge mai departe: dupa el se stie daca instanta locala doar
+        // lipseste (7) si mai are rost o incercare pe cea de baza.
+        return array('eroare' => $motiv, 'cod' => $rezultat['cod']);
     }
 
     return array(

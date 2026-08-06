@@ -14,7 +14,7 @@ class KitBridge
 {
     /** Fisierele bridge-ului, luate din instalarea curenta. */
     protected const FISIERE_BRIDGE = [
-        'server.php', 'curl-talcuri.php', 'agent.php', 'agent-functii.php',
+        'server.php', 'curl-talcuri.php', 'agent.php', 'agent-functii.php', 'agent-lucreaza.php',
         'cert-info.ps1', 'sign-pdf.ps1', 'merge-pdf.ps1',
         'imprimante.ps1', 'print-pdf.ps1', 'itextsharp.dll',
     ];

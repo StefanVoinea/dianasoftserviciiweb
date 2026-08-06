@@ -53,7 +53,26 @@ $ultimaVorba = time();
  */
 $dinCatInCat = 1800;
 
+agent_scrie($config, 'Lucrez pe ' . count($config['locale']) . ' instanță(e) a programului local: '
+    . implode(', ', $config['locale']) . '.');
+
 while (true) {
+    /*
+     * Nu se ia comanda decât când e cine s-o ducă la capăt.
+     *
+     * Fiecare instanță a programului local servește o singură cerere pe rând,
+     * așa că numărul lor e chiar numărul lucrărilor care pot merge deodată.
+     * Luată fără loc liber, comanda ar sta în mâna agentului în loc să aștepte
+     * la server, unde o poate lua altcineva.
+     */
+    $adresa = agent_adresa_libera($config);
+
+    if ($adresa === null) {
+        usleep(300000);
+
+        continue;
+    }
+
     $comanda = agent_intreaba($config, $motiv);
 
     if ($comanda === -1) {
@@ -86,7 +105,13 @@ while (true) {
 
         $deCat = time() - $deCandNuMerge;
 
-        agent_scrie($config, 'Serverul nu răspunde: ' . ($motiv ?: 'pricină necunoscută')
+        /*
+         * Se spune si care server: aici e vorba de aplicatie, nu de ANAF. Fara
+         * numele lui, „serverul nu raspunde" trimitea cautarea in partea
+         * gresita — omul se ducea sa vada ce-i cu ANAF.
+         */
+        agent_scrie($config, 'Aplicația (' . $config['server'] . ') nu răspunde: '
+            . ($motiv ?: 'pricină necunoscută')
             . '. Reîncerc peste ' . $pauzaLaEroare . 's'
             . ($deCat >= 60 ? ' (ține de ' . round($deCat / 60) . ' min).' : '.'));
 
@@ -134,9 +159,19 @@ while (true) {
 
     $ultimaVorba = time();
 
-    agent_scrie($config, 'Comanda ' . $comanda['id'] . ': ' . $comanda['metoda'] . ' ' . $comanda['cale']);
+    agent_scrie($config, 'Comanda ' . $comanda['id'] . ': ' . $comanda['metoda'] . ' ' . $comanda['cale']
+        . ' -> ' . $adresa);
 
-    $raspuns = agent_executa($config, $comanda);
+    /*
+     * Lucrarea pleacă într-un proces al ei, iar agentul se întoarce pe loc la
+     * pândă. Dacă procesul nu poate fi pornit, se face aici, ca înainte: mai
+     * bine încet decât deloc.
+     */
+    if (!agent_porneste_lucrul($config, $comanda, $adresa)) {
+        agent_scrie($config, 'Nu am putut porni un proces pentru comanda ' . $comanda['id']
+            . '; o duc eu la capăt, iar celelalte așteaptă.');
 
-    agent_trimite_rezultatul($config, $comanda['id'], $raspuns);
+        $config['local'] = $adresa;
+        agent_trimite_rezultatul($config, $comanda['id'], agent_executa($config, $comanda));
+    }
 }

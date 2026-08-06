@@ -16,6 +16,13 @@ if ($sarcina) {
     Write-Host "Nu există nicio sarcină cu numele '$NumeSarcina'." -ForegroundColor Yellow
 }
 
+# Instantele care lucrau in paralel, pe porturile vecine
+foreach ($lucrator in @(Get-ScheduledTask -TaskName "$NumeSarcina - lucrator*" -ErrorAction SilentlyContinue)) {
+    Stop-ScheduledTask -TaskName $lucrator.TaskName -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName $lucrator.TaskName -Confirm:$false -ErrorAction SilentlyContinue
+    Write-Host "Sarcina '$($lucrator.TaskName)' a fost eliminată." -ForegroundColor Green
+}
+
 # Agentul care aducea lucrul de la server, daca a fost instalat
 $numeAgent = "$NumeSarcina - agent"
 $sarcinaAgent = Get-ScheduledTask -TaskName $numeAgent -ErrorAction SilentlyContinue
@@ -26,9 +33,10 @@ if ($sarcinaAgent) {
     Write-Host "Sarcina '$numeAgent' a fost eliminată." -ForegroundColor Green
 }
 
-# Procesele PHP rămase — programul de pe port și agentul
+# Procesele PHP rămase — programul de pe port, instanțele vecine și agentul
 Get-CimInstance Win32_Process -Filter "Name = 'php.exe'" | Where-Object {
-    $_.CommandLine -like "*-S*:$Port*" -or $_.CommandLine -like '*agent.php*'
+    $_.CommandLine -like "*-S*:$Port*" -or $_.CommandLine -like '*agent.php*' -or
+    $_.CommandLine -like '*agent-lucreaza.php*' -or $_.CommandLine -like '*server.php*'
 } | ForEach-Object {
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
     Write-Host "Proces oprit: $($_.ProcessId)" -ForegroundColor Green

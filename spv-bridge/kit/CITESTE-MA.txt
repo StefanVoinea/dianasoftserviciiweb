@@ -55,6 +55,23 @@ Scriptul creează o sarcină programată numită „Acces token ANAF”, care po
 programul automat la fiecare autentificare a acestui utilizator, fără fereastră,
 și îl repornește dacă se oprește.
 
+LUCRĂRI CARE NU SE AȘTEAPTĂ UNA PE ALTA
+---------------------------------------
+Programul servește o singură cerere pe rând. O descărcare mai lungă din SPV ținea
+astfel pe loc și dosarul urmărit, și orice altă operație — până când aceleia îi
+expira răbdarea. De aceea instalarea pornește trei instanțe, pe porturi vecine
+({{PORT}}, {{PORT}}+1, {{PORT}}+2), iar programul de legătură dă fiecare lucrare
+uneia libere. Porturile ajung în configurare.env, la PUNTE_LOCAL_PORTURI.
+
+Se poate schimba numărul lor:
+
+      .\instaleaza.ps1 -Instante 1     (ca înainte: una singură)
+      .\instaleaza.ps1 -Instante 5
+
+Instanțele ascultă numai în calculator (127.0.0.1) și sunt folosite de programul
+care aduce lucrul de la aplicație. Pe legătura „directă” aplicația vorbește tot
+cu portul de bază.
+
 DE CE SARCINĂ PROGRAMATĂ ȘI NU SERVICIU WINDOWS
 ------------------------------------------------
 Un serviciu Windows rulează sub contul LocalSystem, care NU are acces la
@@ -131,6 +148,7 @@ FIȘIERE
   itextsharp.dll      bibliotecă folosită la semnare
   agent.php           aduce de la aplicație lucrul pentru tokenul de aici
   agent-functii.php   uneltele lui
+  agent-lucreaza.php  duce la capăt o lucrare, în procesul ei
   cheie-publica.pem   cu ea se verifică licența și comenzile primite
   diagnoza.bat        verificarea a tot ce trebuie să meargă (dublu clic)
   instaleaza.bat      instalarea pornirii automate (dublu clic)
