@@ -85,7 +85,7 @@
  * alături, ca text, și dispare pe ecrane înguste — sigla rămâne.
  */
 import { BLink, BImg } from 'bootstrap-vue'
-import { contextul } from '@/libs/module'
+import { contextul, contextStiut } from '@/libs/module'
 
 export default {
   components: { BLink, BImg },
@@ -133,24 +133,35 @@ export default {
         descriere: 'Firme, conturi, module, tarife și perioade de probă',
         pictograma: 'UsersIcon',
       },
-      esteAdministrator: false,
+      /*
+       * Si dreptul de administrare se ia de la ce se stia ultima data: altfel,
+       * o singura cerere picata ii stergea omului sigla de administrare pentru
+       * toata sederea in pagina.
+       */
+      esteAdministrator: Boolean(contextStiut().super_admin),
       /*
        * Modulele pe care le vede contul acesta — cumpărate de firmă și date lui
-       * de administratorul ei. Până răspunde serverul, antetul stă gol: mai bine
-       * o clipă fără sigle decât o siglă pe care omul n-are voie s-o apese.
+       * de administratorul ei. Se pornește de la ce se știa de data trecută, ca
+       * antetul să nu clipească la fiecare încărcare; „null" înseamnă că încă nu
+       * se știe nimic.
        */
-      alese: [],
+      alese: moduleStiute(),
     }
   },
   computed: {
     /**
      * Modulele date contului, plus administrarea la cine are dreptul.
      *
-     * Ascunderea de aici e doar înlesnire: cererile către un modul nedat sunt
-     * oprite oricum de server, oricine le-ar trimite.
+     * Cât timp nu se știe ce module are omul — prima intrare în aplicație, sau
+     * un server care n-a răspuns — se arată toate. Ascunderea de aici e doar
+     * înlesnire: cererile către un modul nedat sunt oprite oricum de server,
+     * oricine le-ar trimite. Un antet golit dintr-o pană de rețea ar fi însă o
+     * pagubă adevărată — omul ar crede că i-a dispărut aplicația.
      */
     vizibile() {
-      const alelui = this.module.filter(modul => this.alese.indexOf(modul.cheie) !== -1)
+      const alelui = this.alese === null
+        ? this.module
+        : this.module.filter(modul => this.alese.indexOf(modul.cheie) !== -1)
 
       return this.esteAdministrator ? [...alelui, this.administrare] : alelui
     },
@@ -164,11 +175,20 @@ export default {
     contextul()
       .then(context => {
         this.esteAdministrator = Boolean(context.super_admin)
-        this.alese = context.module || []
+
+        /*
+         * Un server mai vechi nu trimite deloc câmpul „module". Atunci nu se
+         * ascunde nimic: lipsa lui nu e o interdicție, e o necunoscută.
+         */
+        this.alese = Array.isArray(context.module) ? context.module : null
       })
       .catch(() => {
-        this.esteAdministrator = false
-        this.alese = []
+        /*
+         * Nu se sterge nimic la pana: raman valorile de la ultima incarcare, iar
+         * daca nici acelea nu sunt, modulele raman „necunoscute" — adica se
+         * arata toate. Serverul opreste oricum ce nu e voie.
+         */
+        this.alese = null
       })
   },
   methods: {

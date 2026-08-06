@@ -85,8 +85,10 @@ router.beforeEach((to, _, next) => {
       return next()
     }
 
+    // Necunoscut (server vechi sau pana de retea) inseamna „lasa-l sa treaca":
+    // pagina se deschide, iar cererile ei sunt oprite oricum de server.
     return proaspete.then(module => (
-      module.indexOf(to.meta.modul) === -1 ? next({ name: 'home' }) : next()
+      module && module.indexOf(to.meta.modul) === -1 ? next({ name: 'home' }) : next()
     ))
   }
 

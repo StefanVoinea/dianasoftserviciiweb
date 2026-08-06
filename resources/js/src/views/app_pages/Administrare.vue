@@ -149,6 +149,22 @@
               blocat
             </b-badge>
 
+            <!-- Modulele la care ajunge omul acesta. Se văd aici, în tabel,
+                 fiindcă altfel ar trebui deschisă fereastra fiecărui cont ca să
+                 se afle cine cu ce lucrează. -->
+            <b-badge
+              v-for="nume in numeleModulelor(user.module)"
+              :key="nume"
+              variant="light-info"
+              class="ml-50"
+            >
+              {{ nume }}
+            </b-badge>
+            <span
+              v-if="!numeleModulelor(user.module).length"
+              class="ml-50 text-muted"
+            >fără module</span>
+
             <b-button
               size="sm"
               variant="flat-secondary"
@@ -743,7 +759,8 @@ export default {
         { key: 'client', label: 'Client' },
         { key: 'stare', label: 'Stare' },
         { key: 'tarif', label: 'Tarif' },
-        { key: 'module', label: 'Module' },
+        // Se spune limpede al cui e fiecare rand: firma cumpara, omul primeste
+        { key: 'module', label: 'Module cumpărate' },
         { key: 'utilizatori', label: 'Conturi' },
         { key: 'actiuni', label: '' },
       ],
@@ -785,12 +802,27 @@ export default {
           this.listaInCurs = false
         })
     },
+    /**
+     * Modulele cumpărate de firmă, cu numele lor de produs.
+     *
+     * Numele vin de la server, din catalogul modulelor: altfel ar fi scrise în
+     * două locuri, iar tabelul ar spune „SPV" acolo unde fereastra de cont
+     * spune „SPV Curier".
+     */
     moduleActive(client) {
       if (!client.abonament) return []
 
-      const nume = { modul_spv: 'SPV', modul_etransport: 'e-Transport', modul_portal_just: 'Portal Just' }
+      return this.moduleAplicatie
+        .filter(modul => client.abonament[`modul_${modul.cheie}`])
+        .map(modul => modul.nume)
+    },
+    /** Numele modulelor date unui cont, din cheile lor. */
+    numeleModulelor(chei) {
+      if (!chei || !chei.length) return []
 
-      return Object.keys(nume).filter(cheie => client.abonament[cheie]).map(cheie => nume[cheie])
+      return this.moduleAplicatie
+        .filter(modul => chei.indexOf(modul.cheie) !== -1)
+        .map(modul => modul.nume)
     },
     variantaStare(client) {
       if (!client.abonament) return 'light-secondary'
