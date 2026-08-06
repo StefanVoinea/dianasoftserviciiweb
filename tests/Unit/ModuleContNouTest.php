@@ -3,29 +3,30 @@
 namespace Tests\Unit;
 
 use App\Http\Controllers\Api\AdministrareController;
+use App\Models\AbonamentClient;
 use App\Models\Company;
 use App\Models\DianaSoftMenuOption;
 use App\Models\User;
+use App\Support\Modul;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * Modulele contului, alese la crearea lui din „Administrare clienti".
+ * Modulele contului: SPV Curier, Dispecer e-Transport si Grefier alert.
  *
- * Meniul omului se citeste din legatura lui cu optiunile de meniu, per firma.
- * Fara randurile acelea, contul nou intra intr-o aplicatie fara niciun meniu si
- * n-are ce face acolo — de aceea modulele se aleg chiar cand se face contul.
+ * Accesul tine de doua lucruri deodata — abonamentul firmei si darea catre om.
+ * Ce nu i s-a dat, omul nu vede: nici in antet, nici la o cerere trimisa de-a
+ * dreptul catre server.
  */
 class ModuleContNouTest extends TestCase
 {
     protected $client;
-
-    /** Modulul de proba si pagina care sta sub el. */
-    protected $modul;
-    protected $pagina;
-
+    protected $abonament;
     protected $conturi = [];
+
+    /** Optiunile de meniu create de test, ca sa fie sterse doar ele. */
+    protected $meniuriFacuteAici = [];
 
     protected function setUp(): void
     {
@@ -33,30 +34,33 @@ class ModuleContNouTest extends TestCase
 
         $this->client = Company::create(['denumire' => 'MODULE PROBA SRL', 'cui' => '99000444']);
 
-        $this->modul = DianaSoftMenuOption::create([
-            'name' => 'Modul de probă',
-            'url' => '/modul-proba',
-            'slug' => 'modul-proba',
-            'icon' => 'BoxIcon',
-            'parent' => '\\',
-            'dropdown' => 0,
-            'position1' => 5000,
-            'position2' => 0,
-            'isdisabled' => false,
+        $this->abonament = AbonamentClient::create([
+            'company_id' => $this->client->id,
+            'proba_zile' => 30,
+            'proba_pana_la' => now()->addDays(30)->toDateString(),
+            'modul_spv' => true,
+            'modul_etransport' => true,
+            'modul_portal_just' => true,
         ]);
 
-        $this->pagina = DianaSoftMenuOption::create([
-            'name' => 'Pagina din modul',
-            'url' => '/modul-proba/pagina',
-            'slug' => 'modul-proba-pagina',
-            'icon' => 'FileIcon',
-            // Legatura de parinte se tine pe numele parintelui, nu pe id.
-            'parent' => 'Modul de probă',
-            'dropdown' => 0,
-            'position1' => 5001,
-            'position2' => 0,
-            'isdisabled' => false,
-        ]);
+        // Intrarile de meniu ale modulelor exista in aplicatie; daca lipsesc de
+        // pe serverul de proba, se fac aici si se sterg la sfarsit.
+        foreach (['spv', 'vector-fiscal', 'etransport-anaf'] as $slug) {
+            if (DianaSoftMenuOption::where('slug', $slug)->exists()) {
+                continue;
+            }
+
+            $this->meniuriFacuteAici[] = DianaSoftMenuOption::create([
+                'name' => 'Proba ' . $slug,
+                'url' => '/' . $slug,
+                'slug' => $slug,
+                'parent' => '\\',
+                'dropdown' => 0,
+                'position1' => 9000,
+                'position2' => 0,
+                'isdisabled' => false,
+            ]);
+        }
     }
 
     protected function tearDown(): void
@@ -67,8 +71,11 @@ class ModuleContNouTest extends TestCase
             $cont->delete();
         }
 
-        $this->pagina->delete();
-        $this->modul->delete();
+        foreach ($this->meniuriFacuteAici as $meniu) {
+            $meniu->delete();
+        }
+
+        $this->abonament->delete();
         $this->client->delete();
 
         parent::tearDown();
@@ -91,98 +98,105 @@ class ModuleContNouTest extends TestCase
         return $raspuns;
     }
 
-    protected function esteActiv(int $userId, int $optiuneId): bool
+    protected function meniuActiv(int $userId, string $slug): bool
     {
-        return (bool) DB::table('dianasoftmenuoption_user')
+        $optiune = DianaSoftMenuOption::where('slug', $slug)->first();
+
+        return $optiune && (bool) DB::table('dianasoftmenuoption_user')
             ->where('user_id', $userId)
             ->where('company_id', $this->client->id)
-            ->where('dianasoftmenuoption_id', $optiuneId)
+            ->where('dianasoftmenuoption_id', $optiune->id)
             ->value('isactive');
     }
 
-    /** Modulul bifat se scrie in meniul contului si se intoarce inapoi. */
-    public function test_modulul_ales_ajunge_in_meniul_contului()
+    /** Se dau doar modulele bifate, nu si celelalte. */
+    public function test_contul_primeste_doar_modulele_bifate()
     {
-        $cont = $this->creeaza(['module' => [$this->modul->id]]);
+        $cont = $this->creeaza(['module' => ['spv']]);
 
-        $this->assertContains($this->modul->id, $cont['module']);
-        $this->assertTrue($this->esteActiv($cont['id'], $this->modul->id));
+        $this->assertSame(['spv'], $cont['module']);
+        $this->assertSame(['spv'], Modul::vazuteDe($cont['id'], $this->client->id));
     }
 
-    /**
-     * Ce sta sub modul merge dupa el: altfel omul ar primi o intrare de meniu
-     * goala, fara paginile din ea.
-     */
-    public function test_paginile_din_modul_merg_dupa_modul()
+    /** Ce ține de modul — paginile lui din meniu — merge după el. */
+    public function test_meniul_modulului_merge_dupa_modul()
     {
-        $cont = $this->creeaza(['module' => [$this->modul->id]]);
+        $cont = $this->creeaza(['module' => ['spv']]);
 
-        $this->assertTrue($this->esteActiv($cont['id'], $this->pagina->id));
-
-        // In fereastra se bifeaza doar modulele de prim rang, nu si paginile lor.
-        $this->assertNotContains($this->pagina->id, $cont['module']);
+        $this->assertTrue($this->meniuActiv($cont['id'], 'spv'));
+        $this->assertTrue($this->meniuActiv($cont['id'], 'vector-fiscal'));
+        $this->assertFalse($this->meniuActiv($cont['id'], 'etransport-anaf'));
     }
 
-    /** Ce nu s-a bifat ramane inchis, dar randul se scrie: se poate bifa mai tarziu. */
-    public function test_modulul_nebifat_ramane_inchis_dar_are_rand()
+    /** Fara nicio bifa, contul nu vede niciun modul. */
+    public function test_contul_fara_module_nu_vede_niciunul()
     {
         $cont = $this->creeaza(['module' => []]);
 
         $this->assertSame([], $cont['module']);
-        $this->assertFalse($this->esteActiv($cont['id'], $this->modul->id));
-
-        $randuri = DB::table('dianasoftmenuoption_user')
-            ->where('user_id', $cont['id'])
-            ->where('company_id', $this->client->id)
-            ->count();
-
-        $this->assertSame(DianaSoftMenuOption::count(), $randuri);
+        $this->assertSame([], Modul::vazuteDe($cont['id'], $this->client->id));
+        $this->assertFalse($this->meniuActiv($cont['id'], 'spv'));
     }
 
     /** Modulele se schimba si dupa aceea, din aceeasi fereastra. */
     public function test_modulele_se_pot_schimba_pe_urma()
     {
-        $cont = $this->creeaza(['module' => [$this->modul->id]]);
+        $cont = $this->creeaza(['module' => ['spv']]);
         $utilizator = User::find($cont['id']);
 
         $dupa = (new AdministrareController())->actualizeazaUtilizator(
-            new Request(['company_id' => $this->client->id, 'module' => []]),
+            new Request(['company_id' => $this->client->id, 'module' => ['etransport', 'portal_just']]),
             $utilizator
         )->getData(true)['data'];
 
-        $this->assertSame([], $dupa['module']);
-        $this->assertFalse($this->esteActiv($utilizator->id, $this->modul->id));
-        $this->assertFalse($this->esteActiv($utilizator->id, $this->pagina->id));
+        $this->assertSame(['etransport', 'portal_just'], $dupa['module']);
+        $this->assertFalse($this->meniuActiv($utilizator->id, 'spv'));
+        $this->assertTrue($this->meniuActiv($utilizator->id, 'etransport-anaf'));
     }
 
-    /** Meniul e per firma: modulele scrise aici nu ating alta firma a aceluiasi om. */
+    /**
+     * Darea nu trece peste abonament: modulul necumparat de firma nu se vede,
+     * chiar bifat fiind. Altfel s-ar putea da din greseala ceva neplatit.
+     */
+    public function test_modulul_din_afara_abonamentului_tot_nu_se_vede()
+    {
+        $cont = $this->creeaza(['module' => ['spv', 'portal_just']]);
+
+        $this->abonament->update(['modul_portal_just' => false]);
+
+        $this->assertSame(['spv'], Modul::vazuteDe($cont['id'], $this->client->id));
+    }
+
+    /**
+     * Conturile de dinaintea bifelor n-au nimic scris: ele raman cu tot ce
+     * cuprinde abonamentul, ca sa nu se trezeasca nimeni fara acces peste noapte.
+     */
+    public function test_contul_vechi_ramane_cu_tot_abonamentul()
+    {
+        $cont = $this->creeaza(['module' => ['spv']]);
+
+        // „Nescris" — cum arata legatura facuta inainte de coloana aceasta.
+        Modul::scrie($cont['id'], $this->client->id, null);
+
+        $this->assertSame(
+            ['spv', 'etransport', 'portal_just'],
+            Modul::vazuteDe($cont['id'], $this->client->id)
+        );
+    }
+
+    /** Modulele sunt ale firmei: la alta firma, acelasi om poate avea altele. */
     public function test_modulele_sunt_ale_firmei_nu_ale_omului()
     {
-        $cont = $this->creeaza(['module' => [$this->modul->id]]);
+        $cont = $this->creeaza(['module' => ['spv']]);
 
         $altaFirma = Company::create(['denumire' => 'ALTĂ FIRMĂ SRL', 'cui' => '99000555']);
+        $altaFirma->users()->attach($cont['id'], ['administrator' => false]);
+        Modul::scrie($cont['id'], $altaFirma->id, ['etransport']);
 
-        DB::table('dianasoftmenuoption_user')->insert([
-            'user_id' => $cont['id'],
-            'dianasoftmenuoption_id' => $this->modul->id,
-            'company_id' => $altaFirma->id,
-            'isactive' => true,
-        ]);
+        $this->assertSame(['spv'], Modul::aleContului($cont['id'], $this->client->id));
+        $this->assertSame(['etransport'], Modul::aleContului($cont['id'], $altaFirma->id));
 
-        (new AdministrareController())->actualizeazaUtilizator(
-            new Request(['company_id' => $this->client->id, 'module' => []]),
-            User::find($cont['id'])
-        );
-
-        $laCealalta = DB::table('dianasoftmenuoption_user')
-            ->where('user_id', $cont['id'])
-            ->where('company_id', $altaFirma->id)
-            ->where('dianasoftmenuoption_id', $this->modul->id)
-            ->value('isactive');
-
-        $this->assertTrue((bool) $laCealalta, 'Modulele altei firme n-au ce căuta în ștergerea aceasta.');
-
-        DB::table('dianasoftmenuoption_user')->where('company_id', $altaFirma->id)->delete();
+        DB::table('company_user')->where('company_id', $altaFirma->id)->delete();
         $altaFirma->delete();
     }
 }

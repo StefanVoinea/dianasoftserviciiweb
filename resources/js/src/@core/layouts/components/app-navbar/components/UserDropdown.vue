@@ -65,6 +65,7 @@ import {
 } from 'bootstrap-vue'
 import store from '@/store'
 import { initialAbility } from '@/libs/acl/config'
+import { uitaModulele } from '@/libs/module'
 import useJwt from '@/auth/jwt/useJwt'
 import { avatarText } from '@core/utils/filter'
 
@@ -89,6 +90,12 @@ export default {
   methods: {
     logout() {
       localStorage.clear()
+      /*
+       * Modulele stau si in memoria paginii, nu doar in localStorage: fara
+       * randul acesta, cine se conecteaza dupa aceea fara sa reincarce pagina
+       * ar mosteni modulele celui dinainte.
+       */
+      uitaModulele()
       // Remove userData from localStorage
       // ? You just removed token from localStorage. If you like, you can also make API call to backend to blacklist used token
      // localStorage.removeItem(useJwt.jwtConfig.storageTokenKeyName)

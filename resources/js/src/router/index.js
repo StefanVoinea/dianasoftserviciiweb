@@ -3,6 +3,7 @@ import VueRouter from 'vue-router'
 
 // Routes
 import { canNavigate } from '@/libs/acl/routeProtection'
+import { moduleleMele, moduleStiute } from '@/libs/module'
 import { isUserLoggedIn, getUserData, getHomeRouteForLoggedInUser } from '@/auth/utils'
 import apps from './routes/apps'
 // import dashboard from './routes/dashboard'
@@ -59,8 +60,34 @@ router.beforeEach((to, _, next) => {
   // Redirect if logged in
   if (to.meta.redirectIfLoggedIn && isLoggedIn) {
     const userData = getUserData()
-    
+
     next(getHomeRouteForLoggedInUser(userData ? userData.role : null))
+  }
+
+  /*
+   * Paginile unui modul nedat nu se deschid deloc: fara asta, omul care scrie
+   * adresa de mana ajungea intr-o pagina goala, care doar primea 403-uri de la
+   * server. Oprirea adevarata ramane tot acolo, la server.
+   *
+   * Se hotaraste pe loc daca modulele sunt stiute de la o incarcare anterioara;
+   * altfel se asteapta raspunsul serverului, o singura data pe pagina.
+   */
+  if (to.meta.modul && isLoggedIn) {
+    const stiute = moduleStiute()
+
+    // Cerută oricum, ca lista să se împrospăteze după ce administratorul dă sau
+    // ia un modul; la prima încărcare, tot ea dă și răspunsul.
+    const proaspete = moduleleMele()
+
+    if (stiute) {
+      if (stiute.indexOf(to.meta.modul) === -1) return next({ name: 'home' })
+
+      return next()
+    }
+
+    return proaspete.then(module => (
+      module.indexOf(to.meta.modul) === -1 ? next({ name: 'home' }) : next()
+    ))
   }
 
   return next()

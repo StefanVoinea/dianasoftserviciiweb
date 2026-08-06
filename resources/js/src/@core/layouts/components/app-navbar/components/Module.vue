@@ -85,6 +85,7 @@
  * alături, ca text, și dispare pe ecrane înguste — sigla rămâne.
  */
 import { BLink, BImg } from 'bootstrap-vue'
+import { contextul } from '@/libs/module'
 
 export default {
   components: { BLink, BImg },
@@ -99,6 +100,7 @@ export default {
       },
       module: [
         {
+          cheie: 'spv',
           nume: 'SPV Curier',
           ruta: 'spv',
           descriere: 'Declarații, mesaje și solicitări în Spațiul Privat Virtual',
@@ -109,6 +111,7 @@ export default {
           lockup: require('@/assets/images/sigle/spv-curier-orizontal.svg'),
         },
         {
+          cheie: 'etransport',
           nume: 'Dispecer e-Transport',
           ruta: 'etransport',
           descriere: 'Declararea transporturilor și urmărirea UIT-urilor',
@@ -116,6 +119,7 @@ export default {
           sigla: require('@/assets/images/sigle/dispecer-simbol.svg'),
         },
         {
+          cheie: 'portal_just',
           nume: 'Grefier alert',
           ruta: 'portal-just',
           descriere: 'Dosare, termene și monitorizare în Portal Just',
@@ -130,22 +134,41 @@ export default {
         pictograma: 'UsersIcon',
       },
       esteAdministrator: false,
+      /*
+       * Modulele pe care le vede contul acesta — cumpărate de firmă și date lui
+       * de administratorul ei. Până răspunde serverul, antetul stă gol: mai bine
+       * o clipă fără sigle decât o siglă pe care omul n-are voie s-o apese.
+       */
+      alese: [],
     }
   },
   computed: {
-    /** Administrarea apare doar la contul care are dreptul. */
+    /**
+     * Modulele date contului, plus administrarea la cine are dreptul.
+     *
+     * Ascunderea de aici e doar înlesnire: cererile către un modul nedat sunt
+     * oprite oricum de server, oricine le-ar trimite.
+     */
     vizibile() {
-      return this.esteAdministrator ? [...this.module, this.administrare] : this.module
+      const alelui = this.module.filter(modul => this.alese.indexOf(modul.cheie) !== -1)
+
+      return this.esteAdministrator ? [...alelui, this.administrare] : alelui
     },
   },
   created() {
-    // Serverul spune cine e; dreptul de administrare nu se ține în browser.
-    this.$http.get('/context')
-      .then(({ data }) => {
-        this.esteAdministrator = Boolean(data.data.super_admin)
+    /*
+     * Serverul spune cine e; drepturile nu se țin în browser. Se folosește
+     * același răspuns pe care îl cere și paznicul rutelor — o singură cerere
+     * pe încărcare de pagină, nu una pentru fiecare care întreabă.
+     */
+    contextul()
+      .then(context => {
+        this.esteAdministrator = Boolean(context.super_admin)
+        this.alese = context.module || []
       })
       .catch(() => {
         this.esteAdministrator = false
+        this.alese = []
       })
   },
   methods: {

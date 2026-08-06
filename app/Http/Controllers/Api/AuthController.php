@@ -10,6 +10,7 @@ use App\Services\AccesIp;
 use App\Services\Anaf\Jurnal;
 use App\Support\ContextCompanie;
 use App\Support\ContextUtilizator;
+use App\Support\Modul;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -116,6 +117,12 @@ class AuthController extends Controller
                 'poate_depune' => ContextUtilizator::poateDepune(),
                 'abonament' => $this->abonamentul(ContextCompanie::curenta()),
                 /*
+                 * Modulele pe care omul chiar le vede: si cumparate de firma, si
+                 * date lui. Antetul se face dupa lista asta, nu dupa abonament —
+                 * doi oameni ai aceleiasi firme pot lucra la module deosebite.
+                 */
+                'module' => $this->moduleleOmului(),
+                /*
                  * Adresa pe care o vede serverul acum. E si unealta de verificare:
                  * daca aici apare adresa unui proxy in loc de a omului, filtrarea
                  * pe IP ar bloca pe toata lumea, iar asta se vede din prima.
@@ -123,6 +130,25 @@ class AuthController extends Controller
                 'ip_curent' => AccesIp::adresaCererii($request),
             ],
         ]);
+    }
+
+    /**
+     * Modulele pe care le vede contul conectat.
+     *
+     * Administratorul aplicatiei le vede pe toate: el intra oriunde, ca sa poata
+     * verifica ce i se intampla unui client.
+     *
+     * @return array<int, string>
+     */
+    protected function moduleleOmului(): array
+    {
+        if (ContextUtilizator::esteSuperAdministrator()) {
+            return Modul::chei();
+        }
+
+        $omul = ContextUtilizator::curent();
+
+        return $omul ? Modul::vazuteDe($omul->id, ContextCompanie::curenta()) : [];
     }
 
     /** Abonamentul clientului selectat acum, pe intelesul interfetei. */

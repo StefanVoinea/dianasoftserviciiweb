@@ -7,6 +7,7 @@ use App\Models\AbonamentClient;
 use App\Models\Company;
 use App\Models\DianaSoftMenuOption;
 use App\Models\User;
+use App\Support\Modul;
 use App\Services\AccesIp;
 use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
@@ -38,14 +39,7 @@ class AdministrareController extends Controller
         return response()->json([
             'success' => true,
             'data' => $clienti,
-            'module' => $this->moduleleAplicatiei()->map(function (DianaSoftMenuOption $modul) {
-                return [
-                    'id' => $modul->id,
-                    'nume' => $modul->name,
-                    'slug' => $modul->slug,
-                    'icon' => $modul->icon,
-                ];
-            })->values(),
+            'module' => Modul::lista(),
         ]);
     }
 
@@ -61,7 +55,7 @@ class AdministrareController extends Controller
             'telefon' => 'nullable|string|max:45',
             'proba_zile' => 'nullable|integer|min:0|max:365',
             'module' => 'nullable|array',
-            'module.*' => 'integer|exists:dianasoftmenuoptions,id',
+            'module.*' => 'string|in:' . implode(',', Modul::chei()),
         ]);
 
         $client = DB::transaction(function () use ($date) {
@@ -96,15 +90,12 @@ class AdministrareController extends Controller
             ]);
 
             /*
-             * Fara module, contul intra intr-o aplicatie fara meniu si nu are ce
+             * Fara module, contul intra intr-o aplicatie fara nimic si n-are ce
              * face acolo. Cand nu s-a ales nimic anume, administratorul primeste
-             * modulul SPV — acelasi cu care porneste si abonamentul de mai jos.
+             * SPV Curier — acelasi modul cu care porneste si abonamentul de mai
+             * jos.
              */
-            $this->potriveasteModulele(
-                $user,
-                $client,
-                $date['module'] ?? $this->moduleleAplicatiei()->where('slug', 'spv')->pluck('id')->all()
-            );
+            $this->potriveasteModulele($user, $client, $date['module'] ?? ['spv']);
 
             $zile = $date['proba_zile'] ?? 30;
 
@@ -141,7 +132,7 @@ class AdministrareController extends Controller
             'administrator' => 'nullable|boolean',
             // Modulele la care are acces: intrările din meniu pe care le va vedea
             'module' => 'nullable|array',
-            'module.*' => 'integer|exists:dianasoftmenuoptions,id',
+            'module.*' => 'string|in:' . implode(',', Modul::chei()),
         ]);
 
         $user = User::create([
@@ -197,7 +188,7 @@ class AdministrareController extends Controller
             'company_id' => 'nullable|exists:companies,id',
             'ip_permise' => 'nullable|string|max:2000',
             'module' => 'nullable|array',
-            'module.*' => 'integer|exists:dianasoftmenuoptions,id',
+            'module.*' => 'string|in:' . implode(',', Modul::chei()),
         ]);
 
         // Nici administratorul aplicatiei nu are voie sa se inchida singur afara.
@@ -351,38 +342,33 @@ class AdministrareController extends Controller
     }
 
     /**
-     * Modulele pe care le poate primi un cont.
+     * Scrie modulele date contului si intoarce numele lor.
      *
-     * Sunt intrarile de prim rang din meniu — SPV, e-Transport, Vector fiscal si
-     * celelalte. Ce sta sub ele nu se alege bucata cu bucata: cine primeste un
-     * modul primeste si ce se afla in el.
+     * Sunt doua scrieri, pentru ca sunt doua feluri de a le arata:
      *
-     * @return \Illuminate\Support\Collection<int, DianaSoftMenuOption>
+     *   - darea propriu-zisa, in „company_user.module": dupa ea se face antetul
+     *     cu siglele si tot dupa ea opreste middleware-ul cererile;
+     *   - intrarile din meniul din stanga care tin de modulele acelea, in
+     *     legatura om–optiune. Fara ele, omul ar avea modulul, dar meniul gol.
+     *
+     * @param  array<int, string>  $chei  cheile modulelor bifate
+     * @return array<int, string> numele modulelor date acum
      */
-    protected function moduleleAplicatiei()
+    protected function potriveasteModulele(User $user, Company $client, array $chei): array
     {
-        return DianaSoftMenuOption::where('parent', '\\')
-            ->orderBy('position1')
-            ->orderBy('name')
-            ->get();
-    }
+        $chei = array_values(array_intersect($chei, Modul::chei()));
 
-    /**
-     * Scrie modulele contului in firma clientului si intoarce numele celor date.
-     *
-     * Meniul se citeste din legatura om–optiune, cu „isactive" si „company_id":
-     * acelasi om poate lucra la doua firme, cu meniuri deosebite. Se scriu toate
-     * optiunile, nu doar cele alese — cele nealese raman pe „nu", ca ecranul de
-     * utilizatori sa le poata bifa mai tarziu fara sa lipseasca randul.
-     *
-     * @param  array<int, int|string>  $alese  id-urile modulelor bifate
-     * @return array<int, string> numele modulelor de prim rang date acum
-     */
-    protected function potriveasteModulele(User $user, Company $client, array $alese): array
-    {
+        Modul::scrie($user->id, $client->id, $chei);
+
         $toate = DianaSoftMenuOption::all();
-        $cerute = array_map('intval', $alese);
-        $active = $this->cuTotCeEDedesubt($toate, $cerute);
+        $sluguri = Modul::slugurileMeniului($chei);
+
+        $deschise = $this->cuTotCeEDedesubt(
+            $toate,
+            $toate->whereIn('slug', $sluguri)->pluck('id')->map(function ($id) {
+                return (int) $id;
+            })->all()
+        );
 
         DB::table('dianasoftmenuoption_user')
             ->where('user_id', $user->id)
@@ -396,7 +382,7 @@ class AdministrareController extends Controller
                 'user_id' => $user->id,
                 'dianasoftmenuoption_id' => $optiune->id,
                 'company_id' => $client->id,
-                'isactive' => in_array((int) $optiune->id, $active, true),
+                'isactive' => in_array((int) $optiune->id, $deschise, true),
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
@@ -406,7 +392,9 @@ class AdministrareController extends Controller
             DB::table('dianasoftmenuoption_user')->insert($randuri);
         }
 
-        return $toate->whereIn('id', $cerute)->pluck('name')->all();
+        return array_map(function ($cheie) {
+            return Modul::CATALOG[$cheie]['nume'];
+        }, $chei);
     }
 
     /**
@@ -448,33 +436,20 @@ class AdministrareController extends Controller
     }
 
     /**
-     * Modulele de prim rang pe care contul le are acum in firma clientului.
+     * Modulele pe care contul le are acum in firma clientului.
      *
-     * Se dau doar cele de prim rang: ele se bifeaza in fereastra, iar ce se afla
-     * sub ele merge dupa parinte.
+     * Contul caruia nu i s-a ales nimic anume — cele facute inainte de bifele
+     * acestea — are tot ce cuprinde abonamentul; asa se si arata in fereastra.
      *
-     * @return array<int, int>
+     * @return array<int, string>
      */
     protected function moduleleContului(User $user, Company $client): array
     {
-        $active = DB::table('dianasoftmenuoption_user')
-            ->where('user_id', $user->id)
-            ->where('company_id', $client->id)
-            ->where('isactive', true)
-            ->pluck('dianasoftmenuoption_id')
-            ->map(function ($id) {
-                return (int) $id;
-            })
-            ->all();
+        $aleLui = Modul::aleContului($user->id, $client->id);
 
-        return $this->moduleleAplicatiei()
-            ->whereIn('id', $active)
-            ->pluck('id')
-            ->map(function ($id) {
-                return (int) $id;
-            })
-            ->values()
-            ->all();
+        return $aleLui === null
+            ? Modul::vazuteDe($user->id, $client->id)
+            : $aleLui;
     }
 
     /** Scoate toate tokenurile utilizatorului si intoarce cate au fost. */

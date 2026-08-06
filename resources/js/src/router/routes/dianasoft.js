@@ -104,6 +104,8 @@ export default  [
                     component: () => import('@/views/app_pages/Spv.vue'),
                     meta: {
                                        rule: 'editor',
+                                       // Modulul fara care pagina nu se deschide deloc
+                                       modul: 'spv',
                                         }
                 },
                 // Paginile de mai jos au fost unite in /spv (taburi); linkurile vechi raman valide
@@ -116,6 +118,7 @@ export default  [
                     component: () => import('@/views/app_pages/Etransport.vue'),
                     meta: {
                                        rule: 'editor',
+                                       modul: 'etransport',
                                         }
                 },
                 { //Administrarea clientilor — doar contul din config('app.super_admin')
@@ -132,6 +135,7 @@ export default  [
                     component: () => import('@/views/app_pages/PortalJust.vue'),
                     meta: {
                                        rule: 'editor',
+                                       modul: 'portal_just',
                                         }
                 },
                 { //Vector fiscal
@@ -140,6 +144,8 @@ export default  [
                     component: () => import('@/views/app_pages/VectorFiscal.vue'),
                     meta: {
                                        rule: 'editor',
+                                       // Vectorul fiscal tine de SPV Curier
+                                       modul: 'spv',
                                         }
                 },
                

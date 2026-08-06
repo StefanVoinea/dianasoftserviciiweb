@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\AbonamentClient;
 use App\Support\ContextCompanie;
 use App\Support\ContextUtilizator;
+use App\Support\Modul;
 use Closure;
 
 /**
@@ -45,6 +46,21 @@ class ModulPermis
                 'success' => false,
                 'message' => 'Modulul nu este inclus în abonamentul dumneavoastră.',
                 'abonament' => 'modul_lipsa',
+            ], 403);
+        }
+
+        /*
+         * Modulul poate fi al firmei, dar nu si al omului: administratorul ei
+         * hotaraste cine cu ce lucreaza. Ascunderea din antet e doar inlesnire —
+         * oprirea adevarata e aici, pentru oricine trimite cererea de-a dreptul.
+         */
+        $omul = ContextUtilizator::curent();
+
+        if ($omul && !in_array($modul, Modul::vazuteDe($omul->id, ContextCompanie::curenta()), true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Nu aveți acces la acest modul. Cereți-l administratorului firmei.',
+                'abonament' => 'modul_nedat',
             ], 403);
         }
 

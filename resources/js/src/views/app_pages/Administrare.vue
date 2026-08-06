@@ -361,25 +361,21 @@
       >
         <b-form-checkbox
           v-for="modul in moduleAplicatie"
-          :key="modul.id"
-          :value="modul.id"
+          :key="modul.cheie"
+          :value="modul.cheie"
+          class="mb-25"
         >
-          <feather-icon
-            v-if="modul.icon"
-            :icon="modul.icon"
-            size="14"
-            class="mr-25"
-          />
           {{ modul.nume }}
           <span
             v-if="!modulDinAbonament(modul)"
-            class="small text-muted"
-          >— în afara abonamentului</span>
+            class="small text-danger"
+          >— în afara abonamentului firmei</span>
+          <small class="text-muted d-block">{{ modul.descriere }}</small>
         </b-form-checkbox>
       </b-form-checkbox-group>
       <small class="text-muted d-block">
-        Bifele acestea fac meniul contului. Ce se află sub un modul merge după el:
-        cine primește modulul primește și paginile din el.
+        Modulele nebifate nu se văd: nici în antet, nici la o cerere trimisă
+        de-a dreptul. Ce ține de un modul — pagini, meniu — merge după el.
       </small>
     </b-modal>
 
@@ -839,19 +835,13 @@ export default {
 
       return this.moduleAplicatie
         .filter(modul => this.modulDinAbonament(modul, client))
-        .map(modul => modul.id)
+        .map(modul => modul.cheie)
     },
     /** Ține modulul de abonamentul clientului, sau se dă pe deasupra lui? */
     modulDinAbonament(modul, client) {
-      const dupaAbonament = {
-        spv: 'modul_spv',
-        'etransport-anaf': 'modul_etransport',
-        'vector-fiscal': 'modul_spv',
-      }
-
       const { abonament } = client || this.clientCurent || {}
 
-      return Boolean(abonament && abonament[dupaAbonament[modul.slug]])
+      return Boolean(abonament && abonament[`modul_${modul.cheie}`])
     },
     deschideUtilizator(client, user) {
       this.eroareFormular = ''
