@@ -37,6 +37,8 @@ class KitBridgeTest extends TestCase
         $asteptate = [
             'server.php', 'cert-info.ps1', 'sign-pdf.ps1', 'itextsharp.dll',
             'configurare.env', 'instaleaza.ps1', 'dezinstaleaza.ps1', 'porneste-manual.bat', 'CITESTE-MA.txt',
+            // Fara ea, omul de la client n-are cu ce afla de ce nu merge
+            'diagnoza.bat', 'diagnoza.ps1',
         ];
 
         foreach ($asteptate as $fisier) {

@@ -25,6 +25,8 @@ class KitBridge
         'instaleaza.bat', 'dezinstaleaza.bat',
         'porneste-manual.bat', 'porneste-agent.bat',
         'instaleaza.ps1', 'dezinstaleaza.ps1',
+        // Verificarea de pe calculatorul clientului, cand ceva nu merge
+        'diagnoza.bat', 'diagnoza.ps1',
     ];
 
     /**

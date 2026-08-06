@@ -67,3 +67,7 @@ yarn-error.log*
 
 # Setari locale ale uneltelor de dezvoltare (pot contine coduri de acces)
 .claude/settings.json
+
+# Raportul lasat de diagnoza.bat pe calculatorul pe care a fost rulata
+/spv-bridge/kit/diagnoza.txt
+/spv-bridge/diagnoza.txt

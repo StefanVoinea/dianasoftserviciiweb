@@ -97,6 +97,12 @@ care trebuie să fie instalat.
 
 VERIFICARE
 ----------
+  - Ceva nu merge? Dublu clic pe „diagnoza.bat". Verifică pe rând programul
+    local, legătura cu aplicația, legătura cu ANAF, tokenul, semnarea și
+    intrarea în SPV cu certificatul; la fiecare pas care nu merge spune și
+    pricinile obișnuite. Raportul se scrie și în „diagnoza.txt", de trimis la
+    asistență. Citiți-l de sus în jos: primul pas care nu merge le strică și pe
+    cele de după el.
   - Stare:    Get-ScheduledTask "Acces token ANAF"
   - Test:     curl -H "Authorization: Bearer {{TOKEN}}" http://127.0.0.1:{{PORT}}/certificate
               (întoarce lista certificatelor conectate acum)
@@ -126,6 +132,7 @@ FIȘIERE
   agent.php           aduce de la aplicație lucrul pentru tokenul de aici
   agent-functii.php   uneltele lui
   cheie-publica.pem   cu ea se verifică licența și comenzile primite
+  diagnoza.bat        verificarea a tot ce trebuie să meargă (dublu clic)
   instaleaza.bat      instalarea pornirii automate (dublu clic)
   dezinstaleaza.bat   scoaterea ei (dublu clic)
   porneste-manual.bat pornirea programului cu fereastră, pentru verificări
