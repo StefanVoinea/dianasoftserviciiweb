@@ -172,20 +172,46 @@ Setările stau în **F5** (Configurare avansată).
 
 ### 5.1 Filtrarea SSL/TLS — pasul care rezolvă cel mai des problema
 
-`Protecții → SSL/TLS`
+Se deschide ESET, se apasă **F5** (Configurare avansată). Denumirile diferă
+puțin între versiuni: la cele noi secțiunea se cheamă **Protecții**, la cele mai
+vechi **Web și email**.
 
-1. Lăsați **Filtrare protocol SSL/TLS** pornită, dar la **Lista de adrese
-   filtrate / Excluded from filtering** adăugați, ca „adresă exclusă din
-   filtrare":
-   ```
-   app.dianasoft.ro
-   webserviced.anaf.ro
-   decl.anaf.mfinante.gov.ro
-   webserviceapl.anaf.ro
-   ```
-2. Dacă tot nu merge, treceți **temporar** filtrarea pe „Nu se scanează
-   protocolul SSL/TLS" și încercați din nou. Dacă atunci merge, cauza e
-   confirmată: rămâneți pe excluderi, nu pe filtrarea oprită de tot.
+**Calea cea mai sigură: scoateți programul, nu adresa.**
+
+`Protecții → SSL/TLS → Lista aplicațiilor filtrate SSL/TLS → Editare → Adăugare`
+
+Adăugați, cu acțiunea **„Ignoră"** (Ignore / Nu scana):
+
+```
+C:\Windows\System32\curl.exe
+C:\DianaSoft_SPV_Curier\php\php.exe
+```
+
+Prin ele trece tot ce vorbește cu ANAF. Scoase de sub filtrare, legătura rămâne
+cap la cap cu ANAF, iar certificatul de pe token ajunge întreg acolo. Browserul
+rămâne mai departe scanat — nu slăbiți protecția pe restul calculatorului.
+
+**Calea a doua, pe adrese** (dacă preferați să nu numiți programe):
+
+`Protecții → SSL/TLS → Lista adreselor excluse din filtrare → Editare → Adăugare`
+
+```
+*app.dianasoft.ro*
+*webserviced.anaf.ro*
+*decl.anaf.mfinante.gov.ro*
+*webserviceapl.anaf.ro*
+```
+
+**Proba, nu credința:** după salvare, rulați `diagnoza.bat` din dosarul
+programului. La pașii 2 și 3, rândul cu emitentul trebuie să arate o autoritate
+adevărată (DigiCert, Sectigo, Let's Encrypt și altele asemenea). Dacă mai scrie
+`ESET SSL Filter CA`, excluderea nu s-a aplicat — cel mai des pentru că lipsesc
+asteriscurile din adresă, sau pentru că setările sunt ținute de o politică ESET
+PROTECT, de pe server, care le rescrie pe cele locale.
+
+Dacă tot nu merge, treceți **temporar** filtrarea pe „Nu se scanează protocolul
+SSL/TLS" și încercați din nou. Dacă atunci merge, cauza e confirmată: rămâneți pe
+excluderi, nu pe filtrarea oprită de tot.
 
 **De ce contează:** ESET desface conexiunea și o reface cu certificatul lui, iar
 certificatul de pe token nu mai ajunge la ANAF (vezi capitolul 2).
