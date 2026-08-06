@@ -47,6 +47,17 @@ class PeneLegaturaAnafTest extends TestCase
         $this->assertStringContainsString('se primea răspunsul', $talc);
     }
 
+    /**
+     * Cand se repeta, pricina nu e reteaua, ci tokenul: fiecare legatura cu
+     * ANAF cere cheia de pe el, iar dialogul de PIN nevazut de nimeni omoara
+     * legatura. Se spune, ca sa nu se caute degeaba prin firewall.
+     */
+    public function test_ruperile_arata_si_spre_codul_pin_al_tokenului()
+    {
+        $this->assertStringContainsString('PIN', talcul_curl(56));
+        $this->assertStringContainsString('PIN', talcul_curl(35));
+    }
+
     /** Certificatul neincrezut arata spre antivirus, unde e si pricina. */
     public function test_codul_60_arata_spre_antivirus()
     {

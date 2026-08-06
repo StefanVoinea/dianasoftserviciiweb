@@ -494,6 +494,25 @@ două minute, și priviți `agent.log`. Dacă legătura se ridică imediat, cauz
 
 ## 9. Lucruri care se confundă cu o blocare de firewall
 
+- **`SEC_E_CONTEXT_EXPIRED` la apelurile către ANAF, dar firewall-ul e în
+  regulă** — tokenul așteaptă codul PIN. Fiecare legătură cu SPV se face cu
+  certificatul de pe token, deci cere cheia privată de pe el; dacă driverul
+  deschide dialogul de PIN și nu-l vede nimeni, operația rămâne în așteptare
+  până când Windows declară sesiunea securizată expirată. De verificat, în
+  ordine:
+  1. **Există un dialog de PIN care așteaptă?** Uitați-vă pe calculatorul cu
+     tokenul, inclusiv în spatele ferestrelor și pe celelalte sesiuni deschise.
+  2. **Este cineva conectat în Windows acolo?** Programul rulează ca sarcină
+     programată sub contul omului, pornită la autentificare — cu utilizatorul
+     delogat nu rulează nimic, iar cu sesiunea închisă de la distanță (RDP
+     deconectat) dialogul n-are unde să apară.
+  3. **Porniți „single logon" în driverul tokenului** (la SafeNet Authentication
+     Client: *Tools → Advanced*). Atunci PIN-ul se cere o dată pe sesiunea
+     Windows, nu la fiecare operație. Nu scăpați de PIN — certificatul e
+     calificat, legea îl cere — dar nu vi-l mai cere de zeci de ori pe zi.
+  4. **Proba limpede:** rulați `porneste-manual.bat` într-o fereastră vizibilă și
+     cereți o operație din aplicație. Dacă dialogul de PIN apare acolo, aceasta
+     era pricina.
 - **Semnarea eșuează cu `0x80131515`** — nu e antivirusul: fișierele venite din
   arhiva descărcată poartă „marca internetului", iar .NET refuză să încarce
   `itextsharp.dll`. Se rezolvă rulând din nou `instaleaza.bat`, care deblochează

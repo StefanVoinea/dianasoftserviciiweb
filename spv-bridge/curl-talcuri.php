@@ -27,12 +27,17 @@ function talcul_curl($cod)
         6 => 'numele serverului ANAF nu poate fi dezlegat (DNS)',
         7 => 'legătura cu ANAF nu se poate deschide — port închis sau internet căzut',
         28 => 'ANAF nu a răspuns în timpul dat',
-        35 => 'strângerea de mână TLS cu ANAF a eșuat — de obicei, traficul e desfăcut de antivirus',
+        35 => 'strângerea de mână TLS cu ANAF a eșuat. Două pricini obișnuite: tokenul își cere'
+            . ' codul PIN și nu e nimeni la calculator să-l introducă, ori traficul e desfăcut'
+            . ' de antivirus',
         52 => 'ANAF a închis legătura fără să răspundă',
         55 => 'legătura s-a rupt în timp ce se trimitea',
         56 => 'legătura s-a rupt în timp ce se primea răspunsul; sesiunea securizată s-a stins'
-            . ' înainte de capătul răspunsului (SEC_E_CONTEXT_EXPIRED). Se întâmplă la răspunsuri'
-            . ' mari sau când lanțul de servere al ANAF închide legătura pe neașteptate',
+            . ' înainte de capătul răspunsului (SEC_E_CONTEXT_EXPIRED). Dacă se repetă, cea mai'
+            . ' deasă pricină nu e rețeaua, ci tokenul: fiecare legătură cu ANAF cere cheia de pe'
+            . ' el, iar dacă driverul așteaptă codul PIN într-un dialog pe care nu-l vede nimeni,'
+            . ' legătura moare de la sine. Altfel, se întâmplă și la răspunsuri mari sau când'
+            . ' lanțul de servere al ANAF închide legătura pe neașteptate',
         60 => 'certificatul serverului ANAF nu este de încredere — semn că traficul e desfăcut'
             . ' de antivirus sau de proxy',
     );
