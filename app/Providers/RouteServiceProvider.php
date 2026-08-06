@@ -57,6 +57,21 @@ class RouteServiceProvider extends ServiceProvider
     protected function configureRateLimiting()
     {
         RateLimiter::for('api', function (Request $request) {
+            /*
+             * Puntea catre programele locale nu poarta trafic de om.
+             *
+             * Un singur lot de mesaje din SPV trece prin ea cu doua-trei cereri
+             * de fiecare document: panda care aduce comanda, corpul ei si
+             * rezultatul. Cu limita obisnuita, chiar aplicatia noastra ii
+             * raspundea agentului „bate mai rar la usa" (429) tocmai cand
+             * clientul isi descarca mesajele, iar descarcarea se oprea.
+             *
+             * Ramane totusi o limita, ca un agent stricat sa nu bata la nesfarsit.
+             */
+            if ($request->is('api/punte/*')) {
+                return Limit::perMinute(1200)->by($request->ip());
+            }
+
             return Limit::perMinute(60)->by(optional($request->user())->id ?: $request->ip());
         });
     }
