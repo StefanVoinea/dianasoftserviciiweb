@@ -34,6 +34,9 @@
 
 error_reporting(E_ALL);
 
+// Talcul codurilor cu care se opreste curl; stau deoparte, ca sa poata fi probate.
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'curl-talcuri.php';
+
 function incarca_env($cale)
 {
     $env = array();
@@ -387,11 +390,18 @@ function executa_curl(array $config, $url, array $optiuni = array())
 }
 
 /**
- * Cere ceva de la SPV, cu o a doua încercare pe sesiune nouă.
+ * Cere ceva de la SPV, cu încercări noi pe sesiune curată.
  *
- * Lanțul F5 al ANAF resetează uneori conexiunea; atunci se aruncă prăjitura de
- * sesiune și se întreabă din nou. Întoarce rezultatul curl, cu corpul scris în
- * fișierul temporar — cine îl primește răspunde de ștergerea lui.
+ * Lanțul F5 al ANAF resetează uneori conexiunea, iar sesiunea securizată se mai
+ * stinge și în timp ce răspunsul curge. Atunci se aruncă prăjitura de sesiune și
+ * se întreabă din nou, cu răgaz între încercări.
+ *
+ * Un răspuns cu antet, dar cu legătura ruptă la mijloc, nu e răspuns: fișierul
+ * ar fi trunchiat, iar cine îl primește n-ar avea de unde să știe. De aceea
+ * penele trecătoare se socotesc eșec chiar dacă a apucat să vină un status.
+ *
+ * Întoarce rezultatul curl, cu corpul scris în fișierul temporar — cine îl
+ * primește răspunde de ștergerea lui.
  */
 function spv_cere(array $config, $tinta)
 {
@@ -403,24 +413,35 @@ function spv_cere(array $config, $tinta)
         'cod_iesire' => -1,
     );
 
-    for ($incercare = 1; $incercare <= 2; $incercare++) {
+    $racaz = array(1 => 3, 2 => 8);
+
+    for ($incercare = 1; $incercare <= 3; $incercare++) {
         $rezultat = executa_curl($config, $tinta, array(
             'location',
             'cookie-jar = ' . $config['cookie_jar'],
             'cookie = ' . $config['cookie_jar'],
         ));
 
-        if ($rezultat['status'] >= 100) {
+        if ($rezultat['status'] >= 100 && !pana_trecatoare($rezultat['cod_iesire'])) {
             return $rezultat;
         }
 
         @unlink($rezultat['fisier_corp']);
         $rezultat['fisier_corp'] = null;
 
-        if ($incercare === 1) {
+        if (isset($racaz[$incercare])) {
             @unlink($config['cookie_jar']);
-            sleep(3);
+            sleep($racaz[$incercare]);
         }
+    }
+
+    /*
+     * Dupa toate incercarile: daca si ultima s-a rupt la mijloc, raspunsul nu e
+     * bun de dat mai departe, chiar daca a apucat sa vina un antet. Se sterge
+     * statusul, ca sa nu treaca drept izbanda pe la cine il primeste.
+     */
+    if (pana_trecatoare($rezultat['cod_iesire'])) {
+        $rezultat['status'] = 0;
     }
 
     return $rezultat;
@@ -785,7 +806,8 @@ if ($metoda === 'GET' && preg_match('#^/spv/([A-Za-z0-9_\-/.]+)$#', $calea, $pot
     }
 
     raspunde_json(502, array(
-        'eroare'  => 'Apelul către ANAF a eșuat (curl exit ' . $rezultat['cod_iesire'] . ')',
+        'eroare'  => 'Apelul către ANAF a eșuat: ' . talcul_curl($rezultat['cod_iesire'])
+            . ' [curl ' . $rezultat['cod_iesire'] . ']',
         'detalii' => $rezultat['iesire'],
     ));
 }
@@ -820,7 +842,8 @@ if ($metoda === 'GET' && $calea === '/spv-arhiva') {
 
     if ($rezultat['status'] < 100) {
         raspunde_json(502, array(
-            'eroare'  => 'Apelul către ANAF a eșuat (curl exit ' . $rezultat['cod_iesire'] . ')',
+            'eroare'  => 'Apelul către ANAF a eșuat: ' . talcul_curl($rezultat['cod_iesire'])
+            . ' [curl ' . $rezultat['cod_iesire'] . ']',
             'detalii' => $rezultat['iesire'],
         ));
     }
@@ -1011,7 +1034,8 @@ if ($metoda === 'POST' && $calea === '/decl/upload') {
 
     @unlink($rezultat['fisier_corp']);
     raspunde_json(502, array(
-        'eroare'  => 'Trimiterea către ANAF a eșuat (curl exit ' . $rezultat['cod_iesire'] . ')',
+        'eroare'  => 'Trimiterea către ANAF a eșuat: ' . talcul_curl($rezultat['cod_iesire'])
+            . ' [curl ' . $rezultat['cod_iesire'] . ']',
         'detalii' => $rezultat['iesire'],
     ));
 }
@@ -1058,7 +1082,8 @@ if (preg_match('#^/etransport/(.+)$#', $calea, $potrivire)) {
     @unlink($rezultat['fisier_corp']);
 
     raspunde_json(502, array(
-        'eroare'  => 'Apelul către e-Transport a eșuat (curl exit ' . $rezultat['cod_iesire'] . ')',
+        'eroare'  => 'Apelul către e-Transport a eșuat: ' . talcul_curl($rezultat['cod_iesire'])
+            . ' [curl ' . $rezultat['cod_iesire'] . ']',
         'detalii' => $rezultat['iesire'],
     ));
 }

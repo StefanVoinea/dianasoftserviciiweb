@@ -114,6 +114,7 @@ DEZINSTALARE
 FIȘIERE
 -------
   server.php          programul propriu-zis
+  curl-talcuri.php    tălmăcirea erorilor de legătură cu ANAF
   configurare.env     codul de acces și adresele ANAF
   php\                PHP-ul cu care rulează (dacă este în kit — vezi mai jos)
   cert-info.ps1       citirea certificatelor din magazinul Windows
