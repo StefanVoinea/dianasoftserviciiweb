@@ -155,7 +155,7 @@
           >necunoscută — solicitați datele din SPV</span>
           <b-badge
             v-if="rand.item.denumire_sursa"
-            variant="light"
+            variant="primary"
             class="ml-1"
           >
             {{ etichetaSursa(rand.item.denumire_sursa) }}
