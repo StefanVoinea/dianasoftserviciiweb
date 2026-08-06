@@ -61,7 +61,7 @@ function Pricini($lista) {
     Configurarea programului: de acolo se afla catre cine se vorbeste. Fisierul
     are perechi cheie=valoare, cu randuri de comentariu care incep cu #.
 #>
-function Citeste-Env($cale) {
+function CitesteEnv($cale) {
     $env = @{}
 
     if (-not (Test-Path -LiteralPath $cale)) { return $env }
@@ -115,6 +115,44 @@ function Desfacut($emitent) {
     return $false
 }
 
+<#
+    Ca "Cheama", dar aduce si raspunsul.
+
+    La SPV, codul HTTP singur nu dovedeste nimic: fara certificat, lantul ANAF
+    trimite spre pagina lui de autentificare, care raspunde tot cu 200. Se
+    deosebesc dupa cuprins — serviciul da JSON, pagina de autentificare da HTML.
+#>
+function CheamaCuCorp($adresa, $optiuni = @()) {
+    $fisier = Join-Path $env:TEMP ('diagnoza_corp_' + $PID + '.txt')
+
+    $argumente = @('-sS', '-o', $fisier, '-w', '%{http_code}', '--max-time', '45') + $optiuni + @($adresa)
+    $iesire = & $curl @argumente 2>&1
+    $cod = $LASTEXITCODE
+
+    $text = ($iesire | Out-String).Trim()
+    $status = 0
+    if ($text -match '(\d{3})\s*$') { $status = [int]$matches[1] }
+
+    $corp = ''
+    if (Test-Path -LiteralPath $fisier) {
+        $corp = (Get-Content -LiteralPath $fisier -Raw -ErrorAction SilentlyContinue)
+        Remove-Item -LiteralPath $fisier -ErrorAction SilentlyContinue
+    }
+
+    if (-not $corp) { $corp = '' }
+
+    return @{ status = $status; cod = $cod; text = $text; corp = $corp.Trim() }
+}
+
+<# Raspunsul vine de la serviciul SPV, sau de la pagina de autentificare? #>
+function PareRaspunsSpv($corp) {
+    if (-not $corp) { return $false }
+
+    $inceput = $corp.TrimStart()
+
+    return $inceput.StartsWith('{') -or $inceput.StartsWith('[')
+}
+
 <# Cheama o adresa si intoarce codul HTTP si codul cu care s-a oprit curl. #>
 function Cheama($adresa, $optiuni = @()) {
     $argumente = @('-sS', '-o', 'NUL', '-w', '%{http_code}', '--max-time', '45') + $optiuni + @($adresa)
@@ -130,6 +168,7 @@ function Cheama($adresa, $optiuni = @()) {
 
 function Talcul($cod) {
     switch ([int]$cod) {
+        0  { return 'raspuns neasteptat de la server' }
         6  { return 'numele serverului nu poate fi dezlegat (DNS)' }
         7  { return 'legatura nu se poate deschide - port inchis de firewall sau internet cazut' }
         28 { return 'a trecut vremea fara raspuns' }
@@ -147,7 +186,7 @@ Scrie ('Diagnoza acces token ANAF - ' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 Scrie ('Calculator: ' + $env:COMPUTERNAME + '   Utilizator Windows: ' + $env:USERNAME)
 Scrie ('Dosar: ' + $dosar)
 
-$config = Citeste-Env (Join-Path $dosar 'configurare.env')
+$config = CitesteEnv (Join-Path $dosar 'configurare.env')
 
 if ($config.Count -eq 0) {
     Semn 'Nu am gasit configurare.env langa acest script.'
@@ -201,6 +240,23 @@ if ($raspunsLocal.status -eq 401) {
     Bine ('programul local raspunde pe ' + $local + ' si cere cod de acces (corect)')
 } elseif ($raspunsLocal.status -ge 200) {
     Bine ('programul local raspunde pe ' + $local + ' (cod ' + $raspunsLocal.status + ')')
+    <#
+        Cu codul de acces se vede si daca programul chiar ajunge la certificate.
+        Citirea magazinului nu atinge cheia privata, deci nu cere PIN.
+    #>
+    if ($codAcces) {
+        $cuCod = Cheama ($local + '/certificate') @('-H', ('Authorization: Bearer ' + $codAcces))
+
+        if ($cuCod.status -eq 200) {
+            Bine 'programul local citeste certificatele de pe acest calculator'
+        } else {
+            Rau ('programul local nu da lista certificatelor (cod ' + $cuCod.status + ')')
+            Pricini @(
+                'codul de acces din configurare.env nu e cel cu care a fost facut kitul',
+                'tokenul nu e conectat, deci n-are ce lista - vezi pasul 4'
+            )
+        }
+    }
 } else {
     Rau ('programul local nu raspunde pe ' + $local + ' - ' + (Talcul $raspunsLocal.cod))
     Pricini @(
@@ -395,6 +451,14 @@ if ($FaraSemnare) {
     Scrie '       Daca apare fereastra de PIN, introduceti-l - asta si probam.' 'Yellow'
 
     try {
+        <#
+            Semnarea CMS sta in System.Security, care nu e incarcat din start in
+            Windows PowerShell. Fara randul acesta, proba cadea cu „Cannot find
+            type [...Pkcs.ContentInfo]" — adica din vina scriptului, nu a
+            tokenului, dar la citit parea ca tokenul nu raspunde.
+        #>
+        Add-Type -AssemblyName System.Security -ErrorAction Stop
+
         $continut = [Text.Encoding]::UTF8.GetBytes('proba de semnare ' + (Get-Date -Format 'o'))
         $ci = New-Object System.Security.Cryptography.Pkcs.ContentInfo(,$continut)
         $cms = New-Object System.Security.Cryptography.Pkcs.SignedCms($ci, $false)
@@ -437,16 +501,60 @@ if ($FaraSemnare) {
 } elseif (-not $ales) {
     Rau 'nu exista certificat cu care sa se incerce (vezi pasul 4)'
 } else {
-    $cuCertificat = Cheama $adresaAnaf @('--cert', ('CurrentUser\MY\' + $ales.Thumbprint))
+    <#
+        Se cheama intocmai ca programul: cu certificatul de pe token, urmand
+        redirectarile si tinand prajiturile de sesiune. Fara ele, lantul de
+        servere al ANAF raspunde 302 catre pagina lui de autentificare, iar
+        proba s-ar incheia cu un raspuns care nu spune nimic.
+    #>
+    $prajituri = Join-Path $env:TEMP ('diagnoza_spv_' + $PID + '.txt')
 
-    if ($cuCertificat.status -eq 200) {
-        Bine 'ANAF a raspuns 200: certificatul e primit si are drepturi in SPV'
+    $cuCertificat = CheamaCuCorp $adresaAnaf @(
+        '--cert', ('CurrentUser\MY\' + $ales.Thumbprint),
+        '--location',
+        '--cookie-jar', $prajituri,
+        '--cookie', $prajituri
+    )
+
+    Remove-Item -LiteralPath $prajituri -ErrorAction SilentlyContinue
+
+    if ($cuCertificat.status -eq 200 -and (PareRaspunsSpv $cuCertificat.corp)) {
+        Bine 'SPV a raspuns: certificatul e primit'
+        Amanunt ('Raspunsul incepe cu: ' + $cuCertificat.corp.Substring(0, [Math]::Min(150, $cuCertificat.corp.Length)))
+        Amanunt 'Daca in el scrie "eroare", mesajul e al ANAF si spune ce anume lipseste.'
+    } elseif ($cuCertificat.status -eq 200) {
+        <#
+            Cod bun, dar raspunsul nu e al serviciului: am ajuns pe pagina de
+            autentificare a ANAF. Se intampla cand certificatul nu e primit —
+            fie nu a ajuns intreg (trafic desfacut), fie nu e inrolat.
+        #>
+        Rau 'ANAF a raspuns cu pagina lui de autentificare, nu cu datele din SPV'
+        Amanunt ('Raspunsul incepe cu: ' + $cuCertificat.corp.Substring(0, [Math]::Min(150, $cuCertificat.corp.Length)))
+        Pricini @(
+            'certificatul nu a ajuns intreg la ANAF: traficul e desfacut de antivirus (vezi pasul 3)',
+            'certificatul nu este inrolat in SPV pentru nicio firma',
+            'tokenul nu a dat cheia: dialogul de PIN nu a fost dus la capat (vezi pasul 5)'
+        )
     } elseif ($cuCertificat.status -eq 403 -or $cuCertificat.status -eq 401) {
         Rau ('ANAF a raspuns ' + $cuCertificat.status + ': legatura merge, dar certificatul nu e primit')
         Pricini @(
             'certificatul nu este inrolat in SPV pentru nicio firma',
             'inrolarea a expirat sau a fost retrasa',
             'certificatul e valabil, dar e al altei persoane decat cea inrolata'
+        )
+    } elseif ($cuCertificat.cod -eq 0) {
+        <#
+            Legatura a mers pana la capat, dar raspunsul nu e cel asteptat. O
+            redirectare ramasa dupa ce s-au urmat toate inseamna, aproape mereu,
+            ca certificatul nu a fost primit si lantul ANAF trimite spre pagina
+            lui de autentificare.
+        #>
+        Rau ('ANAF a raspuns ' + $cuCertificat.status + ', nu ce se astepta')
+        Amanunt $cuCertificat.text
+        Pricini @(
+            'certificatul nu a fost primit, iar ANAF a trimis spre pagina lui de autentificare',
+            'traficul e desfacut de antivirus, deci certificatul nu ajunge intreg la ANAF',
+            'serviciul SPV e in mentenanta - se vede si intrand pe www.anaf.ro dintr-un browser'
         )
     } else {
         Rau ('apelul nu a reusit - ' + (Talcul $cuCertificat.cod) + ' (cod HTTP ' + $cuCertificat.status + ')')
