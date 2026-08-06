@@ -4,6 +4,8 @@ namespace App\Support;
 
 use App\Models\AbonamentClient;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Modulele vandute: SPV Curier, Dispecer e-Transport si Grefier alert.
@@ -68,13 +70,38 @@ class Modul
     }
 
     /**
+     * A ajuns coloana pe serverul acesta?
+     *
+     * Intre punerea codului nou si rularea migrarilor trece o clipa, iar in
+     * clipa aceea fiecare cerere ar cadea cu „Unknown column 'module'". Darea
+     * pe om e o inlesnire, nu o incuietoare: pana vine coloana, se lucreaza ca
+     * pana acum — dupa abonament — in loc sa se opreasca aplicatia.
+     *
+     * Raspunsul se tine minte pe cererea aceasta; schema nu se schimba sub noi.
+     */
+    protected static function areColoana(): bool
+    {
+        static $are = null;
+
+        if ($are === null) {
+            try {
+                $are = Schema::hasColumn('company_user', 'module');
+            } catch (\Throwable $e) {
+                $are = false;
+            }
+        }
+
+        return $are;
+    }
+
+    /**
      * Modulele date contului in firma aceasta.
      *
      * @return array<int, string>|null null = toate cele din abonament
      */
     public static function aleContului($userId, $companieId): ?array
     {
-        if (!$userId || !$companieId) {
+        if (!$userId || !$companieId || !self::areColoana()) {
             return null;
         }
 
@@ -100,6 +127,18 @@ class Modul
      */
     public static function scrie($userId, $companieId, ?array $chei): void
     {
+        /*
+         * Fara coloana, bifele n-au unde sa se scrie. Nu se opreste salvarea
+         * contului pentru atat — dar se scrie in jurnalul serverului, ca sa nu
+         * ramana o alegere pierduta fara urma.
+         */
+        if (!self::areColoana()) {
+            Log::warning('Modulele contului nu s-au putut scrie: lipsește coloana „module" din company_user.'
+                . ' Rulați „php artisan migrate".', ['user_id' => $userId, 'company_id' => $companieId]);
+
+            return;
+        }
+
         DB::table('company_user')
             ->where('user_id', $userId)
             ->where('company_id', $companieId)
