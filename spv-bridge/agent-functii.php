@@ -65,6 +65,13 @@ function agent_curl($config, $optiuni)
         'silent',
         'show-error',
         'max-time = 300',
+        /*
+         * Deschiderea legaturii are vremea ei, mai scurta decat a raspunsului:
+         * un pachet de deschidere pierdut pe drum ar tine Windows-ul in loc
+         * vreo 21 de secunde, iar agentul ar sta degeaba. Asa se afla mai
+         * repede ca s-a stricat ceva, si se incearca din nou.
+         */
+        'connect-timeout = 15',
         'write-out = "\n%{http_code}"',
         'url = "' . agent_pentru_config($optiuni['url']) . '"',
     );
@@ -168,7 +175,7 @@ function agent_desluseste_panda($rezultat, &$motiv = null)
     $motiv = '';
 
     if ($rezultat['cod'] !== 0) {
-        $motiv = agent_talcul_curl($rezultat['cod']);
+        $motiv = agent_talcul_curl($rezultat['cod'], $rezultat['corp']);
 
         return false;
     }
@@ -204,8 +211,16 @@ function agent_desluseste_panda($rezultat, &$motiv = null)
     return $date['comanda'] ? $date['comanda'] : null;
 }
 
-/** Cu ce s-a oprit curl — doar tâlcurile care se întâlnesc aievea. */
-function agent_talcul_curl($cod)
+/**
+ * Cu ce s-a oprit curl — doar tâlcurile care se întâlnesc aievea.
+ *
+ * La codul 28 se pune și vorba lui curl, fiindcă tâlcul atârnă de ea: „timed
+ * out after 21000 ms" înseamnă că nici legătura nu s-a putut deschide (pachetul
+ * de deschidere s-a pierdut pe drum, fără ca cineva să spună „nu"), pe când o
+ * vreme mai lungă înseamnă că legătura s-a deschis, dar răspunsul n-a mai venit.
+ * Sunt două pricini deosebite, iar omul care caută pana trebuie să știe care.
+ */
+function agent_talcul_curl($cod, $iesire = '')
 {
     $talcuri = array(
         5 => 'proxy-ul scris în setările calculatorului nu poate fi găsit',
@@ -219,9 +234,16 @@ function agent_talcul_curl($cod)
             . ' de antivirus sau de proxy',
     );
 
-    return isset($talcuri[$cod])
+    $talc = isset($talcuri[$cod])
         ? $talcuri[$cod] . ' [curl ' . $cod . ']'
         : 'curl s-a oprit cu codul ' . $cod;
+
+    // Vorba lui curl, cand a spus-o: „Connection timed out after 21014 ms".
+    if (preg_match('/curl:\s*\(\d+\)\s*(.+)/', (string) $iesire, $potrivire)) {
+        $talc .= ' — ' . agent_inceputul($potrivire[1]);
+    }
+
+    return $talc;
 }
 
 /** Ce înseamnă codul cu care a răspuns cineva în locul unui 200. */

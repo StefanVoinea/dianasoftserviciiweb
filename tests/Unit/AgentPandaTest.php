@@ -64,6 +64,22 @@ class AgentPandaTest extends TestCase
     }
 
     /**
+     * La 28, vorba lui curl deosebeste doua pene care se scriu la fel: legatura
+     * care nu s-a putut deschide de raspunsul care n-a mai venit.
+     */
+    public function test_vremea_scursa_spune_si_cat_a_asteptat()
+    {
+        $motiv = '';
+        $iesire = 'curl: (28) Connection timed out after 21014 milliseconds';
+
+        $rezultat = agent_desluseste_panda($this->raspuns(28, 0, $iesire), $motiv);
+
+        $this->assertFalse($rezultat);
+        $this->assertStringContainsString('curl 28', $motiv);
+        $this->assertStringContainsString('21014', $motiv);
+    }
+
+    /**
      * Certificatul neincrezut e semnul traficului desfacut de antivirus — acolo
      * cade si legitimarea cu certificatul de pe token.
      */
