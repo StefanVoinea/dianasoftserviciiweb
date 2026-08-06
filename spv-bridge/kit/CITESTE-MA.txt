@@ -29,7 +29,7 @@ CERINȚE
 INSTALARE
 ---------
 1. Copiați acest folder pe calculatorul cu tokenul, de exemplu în:
-      C:\AccesTokenANAF
+      C:\DianaSoft_SPV_Curier
 2. Dublu clic pe „instaleaza.bat”. Atât.
 
    Windows nu rulează fișierele .ps1 la dublu clic, iar pe cele venite dintr-o

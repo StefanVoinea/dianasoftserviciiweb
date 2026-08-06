@@ -94,17 +94,17 @@ $c.ServicePoint.Certificate.Issuer
 
 ## 3. Ce trebuie lăsat să ruleze (excepții de scanare)
 
-Dosarul obișnuit de instalare este `C:\AccesTokenANAF` (poate fi altul — cel în
+Dosarul obișnuit de instalare este `C:\DianaSoft_SPV_Curier` (poate fi altul — cel în
 care ați dezarhivat kitul).
 
 | Ce | De ce |
 |----|-------|
-| `C:\AccesTokenANAF\` (tot dosarul, cu subdosare) | programul, configurarea, arhiva de documente |
-| `C:\AccesTokenANAF\php\php.exe` | rulează și programul local, și agentul |
+| `C:\DianaSoft_SPV_Curier\` (tot dosarul, cu subdosare) | programul, configurarea, arhiva de documente |
+| `C:\DianaSoft_SPV_Curier\php\php.exe` | rulează și programul local, și agentul |
 | `C:\Windows\System32\curl.exe` | cu el se vorbește cu ANAF și cu aplicația |
 | `powershell.exe` | citirea certificatelor, semnarea, tipărirea (scripturile `.ps1`) |
-| `C:\AccesTokenANAF\PDFtoPrinter.exe` | tipărirea declarațiilor și a recipiselor |
-| `C:\AccesTokenANAF\itextsharp.dll` | biblioteca de semnare; unele antivirusuri o pun în carantină |
+| `C:\DianaSoft_SPV_Curier\PDFtoPrinter.exe` | tipărirea declarațiilor și a recipiselor |
+| `C:\DianaSoft_SPV_Curier\itextsharp.dll` | biblioteca de semnare; unele antivirusuri o pun în carantină |
 
 Cele două sarcini programate care pornesc totul la autentificare se numesc:
 
@@ -130,7 +130,7 @@ administrator):
 ```powershell
 New-NetFirewallRule -DisplayName "Acces token ANAF - iesire (php)" `
   -Direction Outbound -Action Allow -Protocol TCP -RemotePort 443 `
-  -Program "C:\AccesTokenANAF\php\php.exe"
+  -Program "C:\DianaSoft_SPV_Curier\php\php.exe"
 
 New-NetFirewallRule -DisplayName "Acces token ANAF - iesire (curl)" `
   -Direction Outbound -Action Allow -Protocol TCP -RemotePort 443 `
@@ -200,11 +200,11 @@ ESET: `*.dianasoft.ro`, `*.anaf.ro`, `*.anaf.mfinante.gov.ro`.
 ### 5.3 Excluderi de performanță (fișiere și procese)
 
 `Detecții → Excluderi → Excluderi de performanță` — adăugați
-`C:\AccesTokenANAF\` cu tot ce e sub el.
+`C:\DianaSoft_SPV_Curier\` cu tot ce e sub el.
 
 `Detecții → Excluderi → Excluderi de procese` — adăugați:
 ```
-C:\AccesTokenANAF\php\php.exe
+C:\DianaSoft_SPV_Curier\php\php.exe
 C:\Windows\System32\curl.exe
 ```
 
@@ -215,7 +215,7 @@ C:\Windows\System32\curl.exe
 Dacă HIPS e pe „Mod interactiv" sau „Mod bazat pe politici", el poate opri
 `php.exe` să pornească `curl.exe` sau `powershell.exe`. Verificați în
 `Instrumente → Fișiere jurnal → HIPS` dacă apar opriri pentru `php.exe`. Dacă
-da, faceți o regulă care permite `C:\AccesTokenANAF\php\php.exe` să pornească
+da, faceți o regulă care permite `C:\DianaSoft_SPV_Curier\php\php.exe` să pornească
 alte aplicații.
 
 ### 5.5 Firewall (numai la Internet Security și Endpoint Security)
@@ -254,13 +254,13 @@ carantină `itextsharp.dll` sau oprește sarcinile programate.
 `Securitate Windows → Protecție împotriva virușilor și amenințărilor →
 Gestionare setări → Excluderi → Adăugare excludere`
 
-- Folder: `C:\AccesTokenANAF`
+- Folder: `C:\DianaSoft_SPV_Curier`
 - Proces: `php.exe`
 
 Sau din PowerShell, ca administrator:
 
 ```powershell
-Add-MpPreference -ExclusionPath "C:\AccesTokenANAF"
+Add-MpPreference -ExclusionPath "C:\DianaSoft_SPV_Curier"
 Add-MpPreference -ExclusionProcess "php.exe"
 Get-MpPreference | Select-Object -ExpandProperty ExclusionPath
 ```
@@ -277,7 +277,7 @@ Get-MpThreatDetection | Select-Object -Last 10 InitialDetectionTime, Resources
   GravityZone: politica → `Network Protection → Content Control → Scan SSL`) —
   opriți-o sau adăugați cele patru adrese la excepții.
 - **Protecție → Antivirus → Setări → Gestionare excepții** — adăugați dosarul
-  `C:\AccesTokenANAF`, bifând și „Aplicare la scanare la accesare".
+  `C:\DianaSoft_SPV_Curier`, bifând și „Aplicare la scanare la accesare".
 - **Protecție → Firewall → Setări → Reguli aplicații** — adăugați `php.exe` și
   `curl.exe` cu „Permite".
 - **Advanced Threat Defense** — dacă în „Notificări" apare `php.exe` blocat,
@@ -289,7 +289,7 @@ Get-MpThreatDetection | Select-Object -Last 10 InitialDetectionTime, Resources
   criptate"** — alegeți „Nu scana conexiunile criptate" sau adăugați cele patru
   adrese la **„Site-uri web de încredere"**. La Endpoint Security: politica →
   `Network settings → Encrypted connections scanning → Trusted addresses`.
-- **Setări → Excluderi → Gestionare excluderi** — adăugați `C:\AccesTokenANAF\*`.
+- **Setări → Excluderi → Gestionare excluderi** — adăugați `C:\DianaSoft_SPV_Curier\*`.
 - **Setări → Excluderi → Aplicații de încredere** — adăugați `php.exe` și
   `curl.exe`, bifând „Nu scana traficul de rețea".
 - **Firewall → Reguli pentru aplicații** — `php.exe` în grupul „De încredere".
@@ -299,7 +299,7 @@ Get-MpThreatDetection | Select-Object -Last 10 InitialDetectionTime, Resources
 - **Meniu → Setări → Protecție → Protecție de bază → Scut web → „Activează
   scanarea HTTPS"** — dezactivați-o, ori adăugați cele patru adrese la
   **„Excepții"**.
-- **Meniu → Setări → General → Excepții** — adăugați `C:\AccesTokenANAF\**`.
+- **Meniu → Setări → General → Excepții** — adăugați `C:\DianaSoft_SPV_Curier\**`.
 - **Protecție → Firewall → Reguli aplicații** — `php.exe` și `curl.exe` pe
   „Permite".
 - **Protecție → Scut comportamental** — dacă a pus programul în carantină, se
@@ -310,7 +310,7 @@ Get-MpThreatDetection | Select-Object -Last 10 InitialDetectionTime, Resources
 - **Setări → Firewall → Reguli program** — `php.exe` și `curl.exe` pe
   „Permite".
 - **Setări → Antivirus → Scanări și riscuri → Elemente excluse din scanări** —
-  adăugați dosarul `C:\AccesTokenANAF`.
+  adăugați dosarul `C:\DianaSoft_SPV_Curier`.
 - **Setări → Antivirus → Scanări și riscuri → Elemente excluse din detectarea
   Auto-Protect, SONAR și Descărcare inteligentă** — același dosar. Fără el,
   SONAR oprește programul după câteva zile de funcționare, ca „comportament
@@ -346,14 +346,14 @@ drum, iar imprimanta să fie văzută de contul Windows sub care rulează progra
 |----------------|------------------|
 | `PDFtoPrinter.exe` dispare din dosar sau ajunge în carantină — e un program mic, nesemnat, pe care multe antivirusuri îl trec drept „aplicație nedorită" | Excluderile din capitolul 3, plus restaurarea lui din carantină |
 | Scripturile `.ps1` nu mai pornesc (modulul de „protecție împotriva scripturilor" / AMSI) | Excluderea de proces pentru `powershell.exe`, la capitolele 5–6 |
-| Fișierul PDF nu poate fi scris în dosar („protecție împotriva ransomware", „acces controlat la foldere") | Adăugați `C:\AccesTokenANAF` la folderele permise |
+| Fișierul PDF nu poate fi scris în dosar („protecție împotriva ransomware", „acces controlat la foldere") | Adăugați `C:\DianaSoft_SPV_Curier` la folderele permise |
 
 La Defender, accesul controlat la foldere se verifică așa:
 
 ```powershell
 Get-MpPreference | Select-Object EnableControlledFolderAccess
-Add-MpPreference -ControlledFolderAccessAllowedApplication "C:\AccesTokenANAF\php\php.exe"
-Add-MpPreference -ControlledFolderAccessAllowedApplication "C:\AccesTokenANAF\PDFtoPrinter.exe"
+Add-MpPreference -ControlledFolderAccessAllowedApplication "C:\DianaSoft_SPV_Curier\php\php.exe"
+Add-MpPreference -ControlledFolderAccessAllowedApplication "C:\DianaSoft_SPV_Curier\PDFtoPrinter.exe"
 ```
 
 ### 7.2 Contul Windows, nu calculatorul, vede imprimantele
@@ -396,11 +396,11 @@ Test-NetConnection server-print -Port 445
 De pe calculatorul cu tokenul, direct cu scriptul folosit de program:
 
 ```powershell
-cd C:\AccesTokenANAF
+cd C:\DianaSoft_SPV_Curier
 powershell -ExecutionPolicy Bypass -File .\print-pdf.ps1 `
-  -Cale "C:\AccesTokenANAF\arhiva\...\document.pdf" `
+  -Cale "C:\DianaSoft_SPV_Curier\arhiva\...\document.pdf" `
   -Imprimanta "Numele exact al imprimantei" `
-  -Program "C:\AccesTokenANAF\PDFtoPrinter.exe"
+  -Program "C:\DianaSoft_SPV_Curier\PDFtoPrinter.exe"
 ```
 
 - „Imprimanta '...' nu există pe acest calculator" — numele diferă de cel din
@@ -440,15 +440,34 @@ calculatorului.
 **3. Ce spune agentul?**
 
 ```powershell
-Get-Content C:\AccesTokenANAF\agent.log -Tail 30
+Get-Content C:\DianaSoft_SPV_Curier\agent.log -Tail 30
 ```
 
-- `Serverul nu răspunde; reîncerc peste 5s` — și apoi 10s, 20s, 40s, 60s:
-  ieșirea pe 443 e blocată sau desfăcută de antivirus. **Acesta e semnul clasic
-  al problemei descrise în capitolul 2.**
+De la versiunea în care agentul spune și pricina, rândul de eroare o poartă cu
+el — nu mai trebuie ghicită:
+
+- `Serverul nu răspunde: legătura nu se poate deschide — port închis de firewall
+  sau internet căzut [curl 7]` — ieșirea pe 443 e oprită.
+- `… certificatul serverului nu este de încredere … [curl 60]` sau `… strângerea
+  de mână TLS a eșuat … [curl 35]` — **traficul e desfăcut de antivirus sau de
+  proxy: exact problema din capitolul 2.**
+- `… răspunsul nu vine de la aplicație, ci de la altcineva de pe drum …`, urmat
+  de începutul acelui răspuns — a răspuns pagina de oprire a antivirusului, a
+  proxy-ului din firmă sau a portalului de rețea. Textul arătat spune cine.
+- După trei minute de pană, agentul scrie o singură dată și ce e de verificat,
+  în ordine. Când legătura se ridică, scrie `Legătura s-a ridicat, după N min`.
 - `Serverul nu-mi recunoaște codul de acces` — nu e firewall: certificatul nu e
   legat de kit. Se rezolvă din aplicație, cu „Citește token-urile conectate".
-- Rânduri cu `Comanda ...` — legătura e bună.
+- Rânduri cu `Comanda ...` — legătura e bună. Într-o zi liniștită, agentul scrie
+  din jumătate în jumătate de oră `Pândesc mai departe; legătura cu serverul e
+  bună` — ca tăcerea din jurnal să nu semene cu un agent oprit.
+
+> **La kiturile mai vechi**, jurnalul arată altfel: acolo apare
+> `Serverul nu răspunde; reîncerc peste 5s` chiar și când totul merge, la fiecare
+> pândă împlinită fără nimic de lucru. Dacă printre acele rânduri apar și rânduri
+> `Comanda ...`, **legătura e bună** — mesajul nu înseamnă nimic rău. Semnul
+> adevărat al unei pene, la kiturile vechi, este lipsa oricărui rând `Comanda`
+> vreme îndelungată. Se lămurește instalând kitul nou.
 
 **4. Se ajunge la server și la ANAF?**
 
@@ -480,7 +499,7 @@ două minute, și priviți `agent.log`. Dacă legătura se ridică imediat, cauz
   `itextsharp.dll`. Se rezolvă rulând din nou `instaleaza.bat`, care deblochează
   tot dosarul, sau manual:
   ```powershell
-  Get-ChildItem C:\AccesTokenANAF -Recurse -File | Unblock-File
+  Get-ChildItem C:\DianaSoft_SPV_Curier -Recurse -File | Unblock-File
   ```
 - **„Programul de pe calculatorul cu tokenul nu rulează"**, dar `php` apare în
   procese — de obicei tokenul a fost scos din USB, ori sesiunea Windows a fost
@@ -503,7 +522,7 @@ două minute, și priviți `agent.log`. Dacă legătura se ridică imediat, cauz
 >   `decl.anaf.mfinante.gov.ro` și `webserviceapl.anaf.ro`;
 > - aceste patru adrese **scoase de sub inspecția TLS** (proxy, antivirus, UTM) —
 >   conexiunea folosește certificat de client de pe token, iar inspecția o rupe;
-> - **excluderea din scanare** a dosarului de instalare (`C:\AccesTokenANAF`) și
+> - **excluderea din scanare** a dosarului de instalare (`C:\DianaSoft_SPV_Curier`) și
 >   a proceselor `php.exe` și `curl.exe`;
 > - **intrare TCP 8099 numai** dacă legătura e configurată „direct", limitată la
 >   adresa serverului aplicației. Pe legătura „prin tunel" nu se deschide nimic;

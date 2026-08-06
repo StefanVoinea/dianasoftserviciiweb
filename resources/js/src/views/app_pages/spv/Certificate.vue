@@ -67,7 +67,8 @@
           </h6>
 
           <small class="text-muted d-block mb-2">
-            Rulați <code>instaleaza.ps1</code> din kit pe acel calculator: programul pornește
+            Dezarhivați kitul în folderul <code>C:\DianaSoft_SPV_Curier</code> și rulați
+            <code>instaleaza.bat</code> din kit pe acel calculator: programul pornește
             apoi automat la fiecare autentificare. Fiecare kit are cod de acces propriu.
           </small>
 
@@ -807,7 +808,7 @@
 
       <h6>2. Ce se scoate de sub scanare</h6>
       <ul class="mb-2 pl-3">
-        <li>dosarul de instalare, cu tot ce e sub el — de obicei <code>C:\AccesTokenANAF</code></li>
+        <li>dosarul de instalare, cu tot ce e sub el — de obicei <code>C:\DianaSoft_SPV_Curier</code></li>
         <li>procesele <code>php.exe</code> (din dosarul kitului) și <code>C:\Windows\System32\curl.exe</code></li>
         <li><code>powershell.exe</code>, <code>PDFtoPrinter.exe</code> și <code>itextsharp.dll</code> — citirea certificatelor, semnarea, tipărirea</li>
       </ul>
@@ -833,11 +834,12 @@
       </p>
       <pre class="verificari-ajutor mb-2">Get-ScheduledTask "Acces token ANAF*"
 curl.exe -sS -o NUL -w "%{http_code}`n" http://127.0.0.1:8099/certificate
-Get-Content C:\AccesTokenANAF\agent.log -Tail 30
+Get-Content C:\DianaSoft_SPV_Curier\agent.log -Tail 30
 Test-NetConnection app.dianasoft.ro -Port 443</pre>
       <ul class="small mb-2 pl-3">
         <li>a doua comandă trebuie să răspundă <code>401</code> — programul cere codul de acces, deci trăiește;</li>
-        <li>în jurnal, șirul „<em>Serverul nu răspunde; reîncerc peste 5s… 10s… 20s</em>” e semnul clasic al ieșirii blocate sau desfăcute de antivirus;</li>
+        <li>rândurile „<em>Serverul nu răspunde: …</em>” poartă cu ele și pricina — port închis, TLS desfăcut de antivirus, sau un răspuns venit de la altcineva de pe drum;</li>
+        <li>la kiturile mai vechi, „<em>Serverul nu răspunde; reîncerc peste 5s</em>” apare și când totul merge: dacă printre acele rânduri sunt și rânduri „<em>Comanda …</em>”, legătura e bună;</li>
         <li>„<em>Serverul nu-mi recunoaște codul de acces</em>” nu e firewall: apăsați „Citește token-urile conectate”.</li>
       </ul>
 
