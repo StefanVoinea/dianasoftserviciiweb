@@ -123,8 +123,10 @@ VERIFICARE
   - Stare:    Get-ScheduledTask "Acces token ANAF"
   - Test:     curl -H "Authorization: Bearer {{TOKEN}}" http://127.0.0.1:{{PORT}}/certificate
               (întoarce lista certificatelor conectate acum)
-  - Manual:   dublu-clic pe porneste-manual.bat (programul, cu fereastră)
-              apoi pe porneste-agent.bat (agentul, în altă fereastră)
+  - Manual:   dublu-clic pe porneste-manual.bat — ridică toate instanțele,
+              fiecare în fereastra ei, pe porturile din configurare.env;
+              apoi pe porneste-agent.bat (agentul, în altă fereastră).
+              Ca să le opriți, închideți toate ferestrele deschise atunci.
 
 DEZINSTALARE
 ------------

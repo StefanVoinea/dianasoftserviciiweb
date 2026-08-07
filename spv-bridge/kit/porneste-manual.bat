@@ -16,6 +16,33 @@ if exist "%~dp0php\php.exe" (
   set "PHP_INI="
 )
 
-echo Acces token ANAF - pornire manuala. Inchideti fereastra pentru a-l opri.
-"%PHP_EXE%" %PHP_INI% -S 127.0.0.1:8099 server.php
+rem  Instalarea porneste mai multe instante, pe porturi vecine, ca o descarcare
+rem  lunga din SPV sa nu tina pe loc dosarul urmarit si celelalte lucrari. Aici
+rem  se citesc de acolo: pornita de mana cu un singur port, verificarea ar arata
+rem  altceva decat merge in fiecare zi.
+set "PORTURI="
+if exist "%~dp0configurare.env" (
+  for /f "usebackq eol=# tokens=1,* delims==" %%a in ("%~dp0configurare.env") do (
+    if /i "%%a"=="PUNTE_LOCAL_PORTURI" set "PORTURI=%%b"
+  )
+)
+if not defined PORTURI set "PORTURI=8099"
+
+rem  Celelalte instante pleaca fiecare in fereastra ei; prima ramane aici, ca
+rem  inchiderea acestei ferestre sa opreasca ceva vazut, nu ceva ascuns.
+set "PRIMUL="
+for %%p in (%PORTURI%) do (
+  if not defined PRIMUL (
+    set "PRIMUL=%%p"
+  ) else (
+    echo Pornesc o instanta pe portul %%p, in fereastra ei.
+    start "Acces token ANAF :%%p" "%PHP_EXE%" %PHP_INI% -S 127.0.0.1:%%p server.php
+  )
+)
+
+echo.
+echo Acces token ANAF - pornire manuala, pe porturile: %PORTURI%
+echo Inchideti TOATE ferestrele deschise acum pentru a opri programul.
+echo.
+"%PHP_EXE%" %PHP_INI% -S 127.0.0.1:%PRIMUL% server.php
 pause

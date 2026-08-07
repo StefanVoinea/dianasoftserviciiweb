@@ -189,6 +189,33 @@ class KitBridgeTest extends TestCase
         $zip->close();
     }
 
+    /**
+     * Pornirea de mana ridica toate instantele, nu una singura.
+     *
+     * Instalarea porneste trei programe, pe porturi vecine, ca o descarcare
+     * lunga din SPV sa nu tina pe loc dosarul urmarit. Pornirea de mana avea
+     * insa 8099 scris in ea: cine verifica asa vedea altceva decat merge in
+     * fiecare zi — si tocmai lucrul despartit, adica ce trebuia verificat, nu
+     * se vedea deloc.
+     */
+    public function test_pornirea_de_mana_ridica_toate_instantele(): void
+    {
+        $kit = $this->construieste();
+
+        $zip = new ZipArchive();
+        $zip->open($kit['cale']);
+        $continut = $zip->getFromName('porneste-manual.bat');
+        $zip->close();
+
+        $this->assertStringContainsString('PUNTE_LOCAL_PORTURI', $continut, 'nu citește porturile din configurare');
+        $this->assertMatchesRegularExpression('/for %%p in \(%PORTURI%\)/', $continut, 'nu trece prin toate porturile');
+        $this->assertStringNotContainsString(
+            '-S 127.0.0.1:8099',
+            $continut,
+            'portul e scris de mână în loc să vină din configurare'
+        );
+    }
+
     /** Arhiva poarta numele modulului, ca omul sa stie ce a descarcat. */
     public function test_arhiva_se_numeste_dupa_modul(): void
     {
