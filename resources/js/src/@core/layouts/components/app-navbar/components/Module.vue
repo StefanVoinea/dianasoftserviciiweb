@@ -85,7 +85,7 @@
  * alături, ca text, și dispare pe ecrane înguste — sigla rămâne.
  */
 import { BLink, BImg } from 'bootstrap-vue'
-import { contextul, contextStiut } from '@/libs/module'
+import { contextul, contextStiut, moduleStiute } from '@/libs/module'
 
 export default {
   components: { BLink, BImg },
