@@ -126,6 +126,53 @@ class SpvController extends Controller
     }
 
     /**
+     * Urmatorul lot de documente lipsa, fara sa se mai intrebe ANAF de lista.
+     *
+     * O citire aduce cel mult atatea documente cate incap intr-o cerere de
+     * pagina: fiecare are pauza ceruta de ANAF si drumul prin tunel, iar un lot
+     * prea mare ar depasi rabdarea serverului de web si omul ar vedea o eroare
+     * in locul lucrului deja facut. Restul se aduceau la urmatoarea apasare —
+     * dar nimeni n-are de ce sa apese de cinci ori pentru o suta de mesaje.
+     *
+     * De aici incolo apasarea e una singura: fila cere lot dupa lot pana nu mai
+     * ramane nimic. Lista nu se mai cere de la ANAF la fiecare lot — mesajele
+     * sunt deja in baza de date —, deci nu se consuma apeluri degeaba.
+     */
+    public function descarcaLipsa(Request $request, SpvStorage $storage)
+    {
+        /*
+         * Se scot din interogare cele aduse deja si cele care au esuat de prea
+         * multe ori: altfel s-ar citi tot tabelul, la fiecare lot, ca pe urma
+         * sa fie aruncat aproape intreg. Ce ramane de cantarit in PHP e doar
+         * fisierul care s-ar putea sa fi disparut de pe disc.
+         */
+        $mesaje = SpvMesaj::query()
+            ->whereNull('arhiva_cale')
+            ->where('incercari', '<', (int) config('anaf.spv.incercari_max'))
+            ->when($request->filled('cif'), function ($intrebare) use ($request) {
+                return $intrebare->where('cif', 'like', '%' . $request->query('cif') . '%');
+            })
+            ->orderByDesc('data_creare')
+            ->orderByDesc('id')
+            ->get()
+            ->all();
+
+        try {
+            $rezultat = $this->descarcaFisiereLipsa($mesaje, $storage);
+        } catch (SpvException $e) {
+            Jurnal::esec('mesaje_descarcare', 'Aducerea documentelor lipsă a eșuat: ' . $e->getMessage());
+
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => ['mesaje' => $this->istoric($request)],
+            'descarcare' => $rezultat,
+        ]);
+    }
+
+    /**
      * Toate mesajele salvate vreodata, cele mai noi primele. Filtrul de CIF se
      * aplica, dar nu si fereastra de zile — aceea priveste doar apelul la ANAF.
      */

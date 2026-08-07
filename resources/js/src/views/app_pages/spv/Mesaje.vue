@@ -703,7 +703,12 @@ export default {
 
       const parti = []
       if (rezultat.descarcate) parti.push(`${rezultat.descarcate} fișiere descărcate`)
-      if (rezultat.ramase) parti.push(`${rezultat.ramase} rămase pentru următoarea încărcare`)
+      /*
+       * Loturile se cer acum unul după altul, până se golesc. Dacă tot au rămas
+       * documente, înseamnă că un lot n-a mai adus nimic și s-a oprit — nu că
+       * mai e ceva de apăsat.
+       */
+      if (rezultat.ramase) parti.push(`${rezultat.ramase} care nu s-au putut aduce acum`)
       if (rezultat.erori && rezultat.erori.length) parti.push(`${rezultat.erori.length} eșuate`)
 
       return parti.join(', ')
@@ -773,12 +778,24 @@ export default {
              * găsit nimic. Altfel butonul pare că nu face nimic, iar omul crede
              * pe bună dreptate că e stricat.
              */
-            this.infoDescarcare = tacut && !payload.noi
-              ? ''
-              : this.rezumatCitire(payload, response.data.descarcare)
-          } else {
-            this.error = response.data.message || 'Nu s-au putut încărca datele SPV'
+            const descarcare = response.data.descarcare || {}
+            const arata = !(tacut && !payload.noi)
+
+            if (!descarcare.ramase) this.infoDescarcare = arata ? this.rezumatCitire(payload, descarcare) : ''
+
+            /*
+             * O cerere aduce cel mult un lot de documente — fiecare are pauza
+             * cerută de ANAF și drumul până la tokenul clientului, iar un lot
+             * prea mare ar depăși răbdarea serverului de web. Ce a rămas se
+             * cere mai departe de aici, lot după lot: omul apasă o dată, nu de
+             * cinci ori pentru o sută de mesaje.
+             */
+            return descarcare.ramase ? this.aduceRestul(payload, descarcare, arata) : Promise.resolve()
           }
+
+          this.error = response.data.message || 'Nu s-au putut încărca datele SPV'
+
+          return Promise.resolve()
         })
         .catch(err => {
           this.error = err.response && err.response.data && err.response.data.message
@@ -787,6 +804,73 @@ export default {
         })
         .finally(() => {
           this.loading = false
+        })
+    },
+    /**
+     * Aduce loturile rămase, unul după altul, până nu mai rămâne nimic.
+     *
+     * Nu se mai cere lista de la ANAF la fiecare lot: mesajele sunt deja în
+     * baza de date, iar o listă cerută de cinci ori ar consuma degeaba din
+     * limita de apeluri. Se cer doar documentele lipsă.
+     *
+     * @param {object} payload ce a răspuns ANAF la citirea de la început
+     * @param {object} descarcare rezultatul primului lot
+     * @param {boolean} arata se scrie mersul lucrului pe ecran?
+     */
+    aduceRestul(payload, descarcare, arata) {
+      const params = {}
+
+      if (this.listaCif.length === 1) {
+        [params.cif] = this.listaCif
+      }
+
+      const adunate = {
+        descarcate: descarcare.descarcate || 0,
+        ramase: descarcare.ramase || 0,
+        erori: [...(descarcare.erori || [])],
+      }
+
+      const incaUnLot = () => {
+        if (!adunate.ramase) return Promise.resolve()
+
+        if (arata) {
+          this.infoDescarcare = `${adunate.descarcate} documente aduse, `
+            + `${adunate.ramase} de adus. Vă rugăm așteptați...`
+        }
+
+        return this.$http.get('/spv/descarca-lipsa', { params })
+          .then(response => {
+            const lot = (response.data && response.data.descarcare) || {}
+            const acum = lot.descarcate || 0
+
+            if (response.data && response.data.data && Array.isArray(response.data.data.mesaje)) {
+              this.messages = response.data.data.mesaje
+            }
+
+            adunate.descarcate += acum
+            adunate.ramase = lot.ramase || 0
+
+            if (lot.erori && lot.erori.length) adunate.erori.push(...lot.erori)
+
+            /*
+             * Un lot din care n-a venit nimic nu are de ce să fie urmat de
+             * altul: ori documentele acelea nu se pot aduce, ori ANAF nu le dă
+             * acum. Fără oprirea asta, fila ar cere la nesfârșit același lot.
+             */
+            if (!acum) return Promise.resolve()
+
+            return incaUnLot()
+          })
+      }
+
+      return incaUnLot()
+        .then(() => {
+          if (arata) this.infoDescarcare = this.rezumatCitire(payload, adunate)
+        })
+        .catch(err => {
+          this.error = err.response && err.response.data && err.response.data.message
+            ? err.response.data.message
+            : 'Aducerea documentelor rămase s-a oprit'
         })
     },
     alegeToateFirmele() {

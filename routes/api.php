@@ -122,6 +122,8 @@ Route::middleware(['auth:api', 'companie.anaf', 'modul:spv'])->group(function ()
     Route::get('/spv', 'Api\SpvController@index');
     // Mesajele deja stocate, fara sa se intrebe ANAF
     Route::get('/spv/stocate', 'Api\SpvController@stocate');
+    // Urmatorul lot de documente lipsa: fila il cere pana nu mai ramane nimic
+    Route::get('/spv/descarca-lipsa', 'Api\SpvController@descarcaLipsa');
     Route::get('/spv/history', 'Api\SpvHistoryController@index');
     Route::get('/spv/download', 'Api\SpvFileController@download');
     Route::get('/spv/fisier', 'Api\SpvFileController@open');
