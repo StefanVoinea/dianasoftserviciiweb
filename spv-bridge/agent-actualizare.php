@@ -62,7 +62,7 @@ if (!actualizare_e_liniste($config)) {
 
 // --- 1. Pachetul -----------------------------------------------------------
 
-$arhiva = $dosar . DIRECTORY_SEPARATOR . 'actualizare.zip';
+$arhiva = $dosar . DIRECTORY_SEPARATOR . 'actualizare.json';
 $antete = $dosar . DIRECTORY_SEPARATOR . 'actualizare_antete.tmp';
 
 $adus = agent_curl($config, array(
@@ -135,10 +135,19 @@ if (!$bunaSemnatura) {
 
 // --- 3. Copia de siguranta -------------------------------------------------
 
-$zip = new ZipArchive();
+/*
+ * Pachetul e un document JSON, nu o arhiva.
+ *
+ * PHP-ul din kit e mic dinadins — are mbstring si openssl, atat cat ii trebuie
+ * programului — si nu are extensia zip. O arhiva ar fi cerut-o, iar innoirea ar
+ * fi cazut chiar pe calculatoarele pentru care a fost facuta, cu „Class
+ * ZipArchive not found". Textul se citeste oriunde, fara nimic instalat, iar
+ * fisierele noastre sunt oricum text.
+ */
+$pachet = json_decode((string) @file_get_contents($arhiva), true);
 
-if ($zip->open($arhiva) !== true) {
-    actualizare_spune($config, 'arhiva nu se poate deschide.');
+if (!is_array($pachet) || !isset($pachet['fisiere']) || !is_array($pachet['fisiere'])) {
+    actualizare_spune($config, 'pachetul nu are forma asteptata; nu-l folosesc.');
     @unlink($arhiva);
     exit(1);
 }
@@ -148,26 +157,22 @@ $copie = $dosar . DIRECTORY_SEPARATOR . 'copie-' . date('Ymd-His');
 
 $deScris = array();
 
-for ($i = 0; $i < $zip->numFiles; $i++) {
-    $nume = $zip->getNameIndex($i);
-
+foreach ($pachet['fisiere'] as $nume => $cuprins) {
     if (!in_array($nume, $ingaduite, true)) {
         continue;
     }
 
-    $cuprins = $zip->getFromIndex($i);
+    $desfacut = base64_decode((string) $cuprins, true);
 
-    if ($cuprins === false) {
+    if ($desfacut === false) {
         continue;
     }
 
-    $deScris[$nume] = $cuprins;
+    $deScris[$nume] = $desfacut;
 }
 
-$zip->close();
-
 if ($deScris === array()) {
-    actualizare_spune($config, 'arhiva n-a adus niciun fisier cunoscut.');
+    actualizare_spune($config, 'pachetul n-a adus niciun fisier cunoscut.');
     @unlink($arhiva);
     exit(1);
 }

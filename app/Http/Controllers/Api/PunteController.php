@@ -257,11 +257,11 @@ class PunteController extends Controller
 
         $pachet = $actualizare->pachetul();
 
-        return response()->download($pachet['arhiva'], 'actualizare.zip', [
+        return response()->download($pachet['arhiva'], 'actualizare.json', [
             'X-Versiune' => $pachet['versiune'],
             'X-Amprenta' => $pachet['amprenta'],
             'X-Semnatura' => $pachet['semnatura'],
-            'Content-Type' => 'application/zip',
+            'Content-Type' => 'application/json',
         ])->deleteFileAfterSend(true);
     }
 

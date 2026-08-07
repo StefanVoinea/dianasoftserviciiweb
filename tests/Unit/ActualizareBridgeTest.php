@@ -5,7 +5,6 @@ namespace Tests\Unit;
 use App\Services\Anaf\Bridge\ActualizareBridge;
 use App\Services\Anaf\Bridge\Licente;
 use Tests\TestCase;
-use ZipArchive;
 
 /**
  * Innoirea de la distanta a programului de la client.
@@ -54,21 +53,62 @@ class ActualizareBridgeTest extends TestCase
         @rmdir($dosar);
     }
 
+    /** @return array cuprinsul pachetului, asa cum il citeste clientul */
+    protected function cuprinsul(string $cale): array
+    {
+        $pachet = json_decode(file_get_contents($cale), true);
+
+        $this->assertIsArray($pachet, 'pachetul nu se poate citi');
+        $this->assertArrayHasKey('fisiere', $pachet);
+
+        return $pachet;
+    }
+
     /** Pachetul poarta fisierele si versiunea, ca sa se stie ce s-a pus. */
     public function test_pachetul_poarta_fisierele_si_versiunea()
     {
         $pachet = $this->serviciu()->pachetul();
-
-        $zip = new ZipArchive();
-        $this->assertTrue($zip->open($pachet['arhiva']) === true);
+        $cuprins = $this->cuprinsul($pachet['arhiva']);
 
         foreach (['server.php', 'agent.php', 'agent-functii.php', 'versiune.txt'] as $fisier) {
-            $this->assertNotFalse($zip->locateName($fisier), 'Lipsește ' . $fisier . ' din pachet');
+            $this->assertArrayHasKey($fisier, $cuprins['fisiere'], 'Lipsește ' . $fisier . ' din pachet');
         }
 
-        $this->assertSame($pachet['versiune'], trim($zip->getFromName('versiune.txt')));
+        $this->assertSame($pachet['versiune'], trim(base64_decode($cuprins['fisiere']['versiune.txt'])));
+        $this->assertSame($pachet['versiune'], $cuprins['versiune']);
 
-        $zip->close();
+        // Fisierele calatoresc intregi: ce se scrie la client e ce e aici.
+        $this->assertStringContainsString(
+            '<?php',
+            base64_decode($cuprins['fisiere']['server.php']),
+            'programul n-a ajuns întreg în pachet'
+        );
+
+        @unlink($pachet['arhiva']);
+    }
+
+    /**
+     * Pachetul se citeste fara nicio extensie de PHP.
+     *
+     * PHP-ul din kit e mic dinadins — mbstring si openssl, atat cat ii trebuie
+     * programului. O arhiva ar fi cerut extensia zip, iar innoirea ar fi cazut
+     * chiar pe calculatoarele pentru care a fost facuta, cu „Class ZipArchive
+     * not found". De aceea pachetul e text.
+     */
+    public function test_pachetul_nu_cere_nicio_extensie_la_client()
+    {
+        $pachet = $this->serviciu()->pachetul();
+
+        $this->assertNotNull(
+            json_decode(file_get_contents($pachet['arhiva']), true),
+            'pachetul trebuie să fie citibil fără extensii'
+        );
+
+        $client = file_get_contents(base_path('spv-bridge/agent-actualizare.php'));
+
+        $this->assertStringNotContainsString('new ZipArchive', $client, 'clientul încă cere extensia zip');
+        $this->assertStringContainsString('json_decode', $client);
+
         @unlink($pachet['arhiva']);
     }
 
@@ -79,15 +119,16 @@ class ActualizareBridgeTest extends TestCase
     public function test_pachetul_nu_atinge_ce_nu_are_voie()
     {
         $pachet = $this->serviciu()->pachetul();
-
-        $zip = new ZipArchive();
-        $zip->open($pachet['arhiva']);
+        $cuprins = $this->cuprinsul($pachet['arhiva']);
 
         foreach (['configurare.env', 'cheie-publica.pem', 'php/php.exe', 'itextsharp.dll'] as $interzis) {
-            $this->assertFalse($zip->locateName($interzis), $interzis . ' n-are ce căuta în pachetul de înnoire');
+            $this->assertArrayNotHasKey(
+                $interzis,
+                $cuprins['fisiere'],
+                $interzis . ' n-are ce căuta în pachetul de înnoire'
+            );
         }
 
-        $zip->close();
         @unlink($pachet['arhiva']);
     }
 

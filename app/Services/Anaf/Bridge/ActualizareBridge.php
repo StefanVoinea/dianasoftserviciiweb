@@ -3,7 +3,6 @@
 namespace App\Services\Anaf\Bridge;
 
 use App\Services\Anaf\Spv\SpvException;
-use ZipArchive;
 
 /**
  * Innoirea programului de la client, fara ca cineva sa se duca acolo.
@@ -86,26 +85,39 @@ class ActualizareBridge
     public function pachetul(): array
     {
         $versiune = $this->versiunea();
-        $cale = tempnam(sys_get_temp_dir(), 'act') . '.zip';
 
-        $zip = new ZipArchive();
-
-        if ($zip->open($cale, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-            throw new SpvException('Arhiva de actualizare nu a putut fi creată.');
-        }
+        $fisiere = [];
 
         foreach ($this->fisierele() as $nume => $sursa) {
-            $zip->addFile($sursa, $nume);
+            $fisiere[$nume] = base64_encode((string) file_get_contents($sursa));
         }
 
-        // Versiunea calatoreste in arhiva: clientul o scrie langa program dupa
+        // Versiunea calatoreste in pachet: clientul o scrie langa program dupa
         // ce a pus fisierele, si de acolo o citeste data viitoare.
-        $zip->addFromString('versiune.txt', $versiune);
-
-        $zip->close();
+        $fisiere['versiune.txt'] = base64_encode($versiune);
 
         /*
-         * Se semneaza amprenta arhivei, nu arhiva intreaga: semnatura ramane
+         * Pachetul e un document JSON, nu o arhiva.
+         *
+         * PHP-ul din kit e mic dinadins — are mbstring si openssl, atat cat ii
+         * trebuie programului — si nu are extensia zip. O arhiva ar fi cerut-o,
+         * iar innoirea ar fi cazut chiar pe calculatoarele pentru care a fost
+         * facuta, cu „Class ZipArchive not found". Textul se citeste oriunde,
+         * fara nimic instalat, iar fisierele noastre sunt oricum text.
+         */
+        $cale = tempnam(sys_get_temp_dir(), 'act') . '.json';
+
+        $scris = file_put_contents($cale, json_encode([
+            'versiune' => $versiune,
+            'fisiere' => $fisiere,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+
+        if ($scris === false) {
+            throw new SpvException('Pachetul de actualizare nu a putut fi scris.');
+        }
+
+        /*
+         * Se semneaza amprenta pachetului, nu pachetul intreg: semnatura ramane
          * scurta, incape intr-un antet, iar clientul verifica intai ca fisierul
          * primit e chiar cel semnat.
          */
