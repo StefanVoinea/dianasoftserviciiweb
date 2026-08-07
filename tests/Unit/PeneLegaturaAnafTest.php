@@ -58,6 +58,16 @@ class PeneLegaturaAnafTest extends TestCase
         $this->assertStringContainsString('PIN', talcul_curl(35));
     }
 
+    /**
+     * Codul 58 nu e o pana de retea, ci un certificat negasit — si nu se
+     * reincearca: pana nu se conecteaza tokenul, a doua incercare da la fel.
+     */
+    public function test_certificatul_negasit_se_spune_pe_nume()
+    {
+        $this->assertFalse(pana_trecatoare(58));
+        $this->assertStringContainsString('tokenul nu e conectat', talcul_curl(58));
+    }
+
     /** Certificatul neincrezut arata spre antivirus, unde e si pricina. */
     public function test_codul_60_arata_spre_antivirus()
     {

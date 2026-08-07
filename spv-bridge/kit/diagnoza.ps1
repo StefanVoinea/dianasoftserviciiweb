@@ -175,6 +175,7 @@ function Talcul($cod) {
         35 { return 'strangerea de mana TLS a esuat' }
         52 { return 'serverul a inchis fara sa raspunda' }
         56 { return 'legatura s-a rupt in timp ce se primea raspunsul' }
+        58 { return 'certificatul cerut nu s-a gasit in magazinul Windows - tokenul nu e conectat, sau amprenta e alta' }
         60 { return 'certificatul serverului nu este de incredere' }
         default { return ('curl s-a oprit cu codul ' + $cod) }
     }
@@ -460,7 +461,7 @@ if ($FaraSemnare) {
     try {
         <#
             Semnarea CMS sta in System.Security, care nu e incarcat din start in
-            Windows PowerShell. Fara randul acesta, proba cadea cu „Cannot find
+            Windows PowerShell. Fara randul acesta, proba cadea cu 'Cannot find
             type [...Pkcs.ContentInfo]" — adica din vina scriptului, nu a
             tokenului, dar la citit parea ca tokenul nu raspunde.
         #>
@@ -526,7 +527,11 @@ if ($FaraSemnare) {
         $prajituri = Join-Path $env:TEMP ('diagnoza_spv_' + $PID + '_' + $certificat.Thumbprint + '.txt')
 
         $raspuns = CheamaCuCorp $adresaAnaf @(
-            '--cert', ('CurrentUser\MY' + $certificat.Thumbprint),
+            # Bara dintre magazin si amprenta se scrie prin interpolare: lipita
+            # de mana, se pierde usor la o editare, iar curl raspunde atunci
+            # 'Failed to get certificate location" — o eroare care pare a fi a
+            # tokenului, desi e a noastra.
+            '--cert', "CurrentUser\MY\$($certificat.Thumbprint)",
             '--location',
             '--cookie-jar', $prajituri,
             '--cookie', $prajituri

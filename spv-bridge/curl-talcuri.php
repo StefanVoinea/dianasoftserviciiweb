@@ -32,6 +32,8 @@ function talcul_curl($cod)
             . ' de antivirus',
         52 => 'ANAF a închis legătura fără să răspundă',
         55 => 'legătura s-a rupt în timp ce se trimitea',
+        58 => 'certificatul cerut nu s-a găsit în magazinul Windows al contului sub care rulează programul:'
+            . ' tokenul nu e conectat, ori amprenta cerută este a altui certificat',
         56 => 'legătura s-a rupt în timp ce se primea răspunsul; sesiunea securizată s-a stins'
             . ' înainte de capătul răspunsului (SEC_E_CONTEXT_EXPIRED). Dacă se repetă, cea mai'
             . ' deasă pricină nu e rețeaua, ci tokenul: fiecare legătură cu ANAF cere cheia de pe'

@@ -177,7 +177,9 @@ class KitBridgeTest extends TestCase
         $zip = new ZipArchive();
         $zip->open($kit['cale']);
 
-        foreach (['instaleaza.ps1', 'dezinstaleaza.ps1'] as $fisier) {
+        // Toate scripturile kitului, nu doar cele de instalare: aceeasi
+        // ghilimea rupe parsarea oriunde ar sta.
+        foreach (['instaleaza.ps1', 'dezinstaleaza.ps1', 'diagnoza.ps1'] as $fisier) {
             $continut = $zip->getFromName($fisier);
 
             $this->assertStringNotContainsString('„', $continut, $fisier . ' conține ghilimele de deschidere');
