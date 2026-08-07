@@ -114,6 +114,40 @@ class KitBridgeTest extends TestCase
      * ghilimea, iar scriptul nu se mai compileaza deloc. Instalarea nu porneste
      * si nimeni nu afla de ce.
      */
+    /**
+     * Kitul duce fiecare script pe care programul stie sa-l cheme.
+     *
+     * A lipsit pdf-info.ps1: programul il chema la fiecare declaratie venita ca
+     * PDF, iar la client PowerShell raspundea „the argument ... does not exist".
+     * Fisierul era in depozit, dar nu si in lista kitului — o scapare pe care
+     * nimeni n-avea cum s-o vada pana la primul PDF pus in dosarul urmarit.
+     */
+    public function test_kitul_duce_toate_scripturile_chemate_de_program(): void
+    {
+        $server = file_get_contents(base_path('spv-bridge/server.php'));
+
+        preg_match_all('/[A-Za-z0-9_-]+\.ps1/', $server, $potriviri);
+
+        $cerute = array_unique($potriviri[0]);
+
+        // Daca tiparul nu mai gaseste nimic, testul n-ar mai pazi nimic.
+        $this->assertNotEmpty($cerute, 'Nu s-a găsit niciun script chemat de program.');
+        $duse = (new \ReflectionClass(KitBridge::class))->getConstant('FISIERE_BRIDGE');
+
+        foreach ($cerute as $script) {
+            $this->assertContains(
+                $script,
+                $duse,
+                'Programul cheamă ' . $script . ', dar kitul nu-l duce la client.'
+            );
+
+            $this->assertFileExists(
+                base_path('spv-bridge/' . $script),
+                $script . ' e trecut în kit, dar lipsește din depozit.'
+            );
+        }
+    }
+
     public function test_scripturile_din_depozit_au_bom_utf8(): void
     {
         $scripturi = array_merge(

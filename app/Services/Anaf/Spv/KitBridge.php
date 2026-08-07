@@ -16,6 +16,8 @@ class KitBridge
     protected const FISIERE_BRIDGE = [
         'server.php', 'curl-talcuri.php', 'agent.php', 'agent-functii.php', 'agent-lucreaza.php',
         'cert-info.ps1', 'sign-pdf.ps1', 'merge-pdf.ps1',
+        // Fara ea, declaratiile venite ca PDF nu pot fi citite deloc
+        'pdf-info.ps1',
         'imprimante.ps1', 'print-pdf.ps1', 'itextsharp.dll',
     ];
 

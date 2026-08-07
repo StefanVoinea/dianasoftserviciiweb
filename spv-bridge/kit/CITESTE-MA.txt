@@ -143,6 +143,7 @@ FIȘIERE
   cert-info.ps1       citirea certificatelor din magazinul Windows
   sign-pdf.ps1        semnarea documentelor cu certificatul de pe token
   merge-pdf.ps1       unirea documentelor pentru tipărire
+  pdf-info.ps1        citirea declarației dintr-un PDF
   imprimante.ps1      citirea imprimantelor de pe acest calculator
   print-pdf.ps1       trimiterea la imprimantă
   itextsharp.dll      bibliotecă folosită la semnare
