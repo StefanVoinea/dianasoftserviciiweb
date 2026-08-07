@@ -33,10 +33,17 @@ if ($sarcinaAgent) {
     Write-Host "Sarcina '$numeAgent' a fost eliminată." -ForegroundColor Green
 }
 
-# Procesele PHP rămase — programul de pe port, instanțele vecine și agentul
-Get-CimInstance Win32_Process -Filter "Name = 'php.exe'" | Where-Object {
-    $_.CommandLine -like "*-S*:$Port*" -or $_.CommandLine -like '*agent.php*' -or
-    $_.CommandLine -like '*agent-lucreaza.php*' -or $_.CommandLine -like '*server.php*'
+<#
+    Procesele PHP rămase — programul de pe port, instanțele vecine și agentul.
+
+    Se caută după dosarul acesta, nu după numele scripturilor: pe același
+    calculator pot sta două instalări, pentru două firme, iar dezinstalarea
+    uneia n-are ce căuta în cealaltă.
+#>
+$dosar = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+Get-CimInstance Win32_Process -Filter "Name = 'php.exe'" -ErrorAction SilentlyContinue | Where-Object {
+    $_.CommandLine -and ($_.CommandLine -like "*$dosar*" -or $_.CommandLine -like "*-S*:$Port*")
 } | ForEach-Object {
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
     Write-Host "Proces oprit: $($_.ProcessId)" -ForegroundColor Green

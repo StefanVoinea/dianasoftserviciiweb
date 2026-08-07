@@ -89,10 +89,34 @@ if (-not (Test-Path $caleEnv)) {
 <#
     3. Curăță o instalare anterioară.
 
-    Dacă sarcina veche a fost făcută dintr-o fereastră de administrator, acum nu
-    mai poate fi ștearsă: Windows răspunde "Access is denied". Se spune limpede
-    ce e de făcut, în loc să se oprească totul cu un mesaj în engleză.
+    Întâi se opresc sarcinile și procesele care rulează chiar acum.
+
+    Ștergerea sarcinii nu oprește și programul pornit de ea: rămâne în picioare,
+    iar instalarea îl mai pornește o dată. Așa ajungeau doi agenți să întrebe
+    serverul și două programe să se bată pe același port — al doilea nici nu
+    putea porni, dar sarcina îl tot încerca, la nesfârșit.
+
+    Se opresc numai procesele din acest dosar: pe același calculator pot sta
+    două instalări, pentru două firme, iar a doua n-are nicio vină.
 #>
+foreach ($veche in @(Get-ScheduledTask -TaskName "$NumeSarcina*" -ErrorAction SilentlyContinue)) {
+    Stop-ScheduledTask -TaskName $veche.TaskName -ErrorAction SilentlyContinue
+}
+
+$dinDosar = @(Get-CimInstance Win32_Process -Filter "Name = 'php.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -and $_.CommandLine -like "*$folder*" })
+
+foreach ($proces in $dinDosar) {
+    Stop-Process -Id $proces.ProcessId -Force -ErrorAction SilentlyContinue
+}
+
+if ($dinDosar.Count -gt 0) {
+    Scrie "S-au oprit $($dinDosar.Count) proces(e) rămase din instalarea de dinainte." 'Yellow'
+    # Portul se eliberează cu o clipă întârziere; fără răgazul acesta, programul
+    # nou pornește peste cel vechi și cade cu 'Address already in use'.
+    Start-Sleep -Seconds 2
+}
+
 $existenta = Get-ScheduledTask -TaskName $NumeSarcina -ErrorAction SilentlyContinue
 if ($existenta) {
     Scrie "Există deja o sarcină cu acest nume — se înlocuiește." 'Yellow'
@@ -267,6 +291,29 @@ try {
     }
 } catch {
     Scrie "Verificarea a eșuat: $($_.Exception.Message)" 'Yellow'
+}
+
+<#
+    Se numără ce a rămas pornit, ca instalarea să spună singură dacă a ieșit
+    strâmb: câte un program pe fiecare port, plus agentul — nici mai mult, nici
+    mai puțin. Un număr în plus înseamnă că a rămas ceva de dinainte, iar doi
+    agenți întreabă serverul de două ori pentru aceeași treabă.
+#>
+$pornite = @(Get-CimInstance Win32_Process -Filter "Name = 'php.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -and $_.CommandLine -like "*$folder*" })
+
+$agenti = @($pornite | Where-Object { $_.CommandLine -like '*agent.php*' }).Count
+$programe = @($pornite | Where-Object { $_.CommandLine -like '*server.php*' }).Count
+$asteptate = $porturi.Count
+
+$culoare = 'Green'
+if ($programe -gt $asteptate -or $agenti -gt 1) { $culoare = 'Yellow' }
+
+Scrie "Rulează $programe instanță(e) a programului și $agenti agent." $culoare
+
+if ($programe -gt $asteptate -or $agenti -gt 1) {
+    Scrie "Sunt mai multe decât trebuie ($asteptate instanțe și un agent)." 'Yellow'
+    Scrie "Reporniți calculatorul, sau rulați dezinstaleaza.bat și apoi instaleaza.bat din nou." 'Yellow'
 }
 
 <#
