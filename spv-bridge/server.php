@@ -73,6 +73,54 @@ function raspunde_json($status, $date)
     exit;
 }
 
+/** Se scrie langa program, ca sa ramana urma si dupa ce fereastra s-a inchis. */
+function scrie_eroarea($text)
+{
+    @file_put_contents(
+        __DIR__ . DIRECTORY_SEPARATOR . 'erori.log',
+        date('Y-m-d H:i:s') . ' ' . $text . PHP_EOL,
+        FILE_APPEND
+    );
+}
+
+/*
+ * Nicio poticneala nu are voie sa lase cererea fara raspuns.
+ *
+ * Serverul din PHP tine un singur proces: o eroare fatala nu doar ca lasa
+ * cererea in aer, ci opreste programul cu totul, iar sarcina programata il
+ * reporneste abia peste un minut — timp in care aplicatia crede ca la client
+ * nu ruleaza nimic. Se prinde deci si ce se arunca, si ce se opreste: se scrie
+ * in erori.log de langa program si se raspunde cinstit, cu motivul.
+ */
+set_exception_handler(function ($e) {
+    $unde = method_exists($e, 'getFile') ? ' (' . $e->getFile() . ':' . $e->getLine() . ')' : '';
+
+    scrie_eroarea('Neprinsa: ' . $e->getMessage() . $unde);
+
+    raspunde_json(500, array(
+        'eroare' => 'Programul local s-a poticnit: ' . $e->getMessage(),
+        'detalii' => 'Amanuntele sunt in erori.log, langa program. Lucrarea urmatoare merge mai departe.',
+    ));
+});
+
+register_shutdown_function(function () {
+    $ultima = error_get_last();
+    $fatale = array(E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR);
+
+    if (!$ultima || !in_array($ultima['type'], $fatale, true)) {
+        return;
+    }
+
+    scrie_eroarea('Fatala: ' . $ultima['message'] . ' (' . $ultima['file'] . ':' . $ultima['line'] . ')');
+
+    if (!headers_sent()) {
+        raspunde_json(500, array(
+            'eroare' => 'Programul local s-a oprit din lucrarea aceasta: ' . $ultima['message'],
+            'detalii' => 'Amanuntele sunt in erori.log, langa program.',
+        ));
+    }
+});
+
 /**
  * Programul cu care se tipăresc PDF-urile.
  *

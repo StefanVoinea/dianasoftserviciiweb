@@ -184,6 +184,18 @@ return [
     ],
 
     /*
+     * Instiintarea celui care tine aplicatia, cand ceva se strica.
+     *
+     * Nu opreste nimic: lucrarea merge mai departe, iar eroarea e doar
+     * consemnata. Aceeasi eroare nu se trimite de doua ori inainte de racire —
+     * o pana care se repeta de o suta de ori ar face cutia postala de necitit.
+     */
+    'alerte' => [
+        'email' => env('ANAF_ALERTE_EMAIL', 'stefan.voinea@gmail.com'),
+        'racire_minute' => (int) env('ANAF_ALERTE_RACIRE_MINUTE', 30),
+    ],
+
+    /*
      * Arhiva de documente de pe calculatorul clientului.
      *
      * Aplicatia sta in cloud, dar documentele fiscale raman la client: sunt

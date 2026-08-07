@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AnafCertificat;
 use App\Models\BridgeComanda;
+use App\Services\Anaf\AlertaEroare;
 use App\Services\Anaf\Bridge\Licente;
 use App\Services\Anaf\Bridge\Punte;
 use App\Services\Anaf\Jurnal;
@@ -74,6 +75,13 @@ class PunteController extends Controller
         $terminata = $this->punte->asteapta($comanda);
 
         if ($terminata === null) {
+            AlertaEroare::trimite('programul local nu a răspuns', 'Programul local nu a răspuns în răgazul dat.', [
+                'company_id' => $certificat->company_id,
+                'certificat_id' => $certificat->id,
+                'comanda' => $comanda->metoda . ' ' . $comanda->cale,
+                'agent_vazut_la' => optional($certificat->agent_vazut_la)->format('d.m.Y H:i:s'),
+            ]);
+
             return response()->json([
                 'eroare' => 'Programul local nu a răspuns.',
                 'detalii' => 'Calculatorul cu tokenul este închis sau agentul nu rulează.',
@@ -237,6 +245,18 @@ class PunteController extends Controller
 
         if ($eroare) {
             $comanda->update(['stare' => 'eroare', 'eroare' => mb_substr($eroare, 0, 1000), 'terminata_la' => now()]);
+
+            /*
+             * Programul de la client a raspuns ca n-a putut duce comanda la
+             * capat. Aplicatia merge mai departe — cine astepta primeste eroarea
+             * si isi vede de treaba — dar noi trebuie sa aflam, cu tot cu cine
+             * si cu ce s-a lucrat: altfel se afla abia cand suna clientul.
+             */
+            AlertaEroare::trimite('programul de la client', $eroare, [
+                'company_id' => $comanda->company_id,
+                'certificat_id' => $comanda->certificat_id,
+                'comanda' => $comanda->metoda . ' ' . $comanda->cale,
+            ]);
 
             return response()->json(['primit' => true]);
         }

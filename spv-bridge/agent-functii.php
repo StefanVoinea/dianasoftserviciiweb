@@ -91,15 +91,22 @@ function agent_adresele_locale($local, $porturi)
  *
  * @return array<string, int> adresa locala => cate lucrari are pe ea
  */
-function agent_lucrari_active($config, $rabdare = 900)
+function agent_lucrari_active($config, $rabdare = 420)
 {
     $active = array();
 
     foreach ((array) glob($config['dosar'] . '/agent_lucru_*.tmp') as $semn) {
         $facut = @filemtime($semn);
 
+        /*
+         * O lucrare nu poate tine mai mult decat rabdarea lui curl (300s) plus
+         * trimiterea rezultatului. Peste atat inseamna ca procesul ei a cazut,
+         * iar semnul lui ar tine locul ocupat degeaba. Se spune in jurnal: un
+         * proces cazut e ceva ce merita stiut.
+         */
         if ($facut === false || (time() - $facut) > $rabdare) {
             @unlink($semn);
+            agent_scrie($config, 'Am curățat semnul unei lucrări care nu s-a mai încheiat: ' . basename($semn) . '.');
 
             continue;
         }
