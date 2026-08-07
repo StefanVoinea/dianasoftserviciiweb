@@ -124,6 +124,51 @@ class CertificatScosDinUzTest extends TestCase
     }
 
     /**
+     * Recitirea tokenelor nu invie certificatul scos din uz.
+     *
+     * Pe acelasi calculator stau adesea doua certificate — unul pentru SPV,
+     * altul pentru SEAP. Cel scos anume din uz era pus la loc pe „activ" la
+     * fiecare apasare pe „Citeste token-urile conectate", iar aplicatia ajungea
+     * sa lucreze tocmai cu el.
+     */
+    public function test_recitirea_tokenelor_nu_invie_certificatul_scos_din_uz()
+    {
+        (new CertificateController())->comutaActiv($this->certificat);
+
+        $this->assertFalse((bool) $this->certificat->fresh()->activ);
+
+        $this->reinregistreaza($this->certificat->thumbprint, 'POPESCU ION');
+
+        $this->assertFalse(
+            (bool) $this->certificat->fresh()->activ,
+            'Certificatul scos din uz a fost înviat de recitirea tokenelor.'
+        );
+    }
+
+    /** Certificatul nou, necunoscut pana acum, intra in uz din start. */
+    public function test_certificatul_nou_intra_in_uz()
+    {
+        $nou = $this->reinregistreaza(strtoupper(bin2hex(random_bytes(20))), 'CERTIFICAT NOU');
+
+        $this->assertTrue((bool) $nou->activ);
+
+        $nou->delete();
+    }
+
+    /** Cum reinregistreaza aplicatia un certificat citit de pe calculatorul clientului. */
+    protected function reinregistreaza(string $amprenta, string $cn)
+    {
+        $metoda = new \ReflectionMethod(CertificatService::class, 'inregistreaza');
+        $metoda->setAccessible(true);
+
+        return $metoda->invoke(app(CertificatService::class), [
+            'thumbprint' => $amprenta,
+            'cn' => $cn,
+            'valabil_pana_la' => now()->addYear()->toDateTimeString(),
+        ], null, null);
+    }
+
+    /**
      * Dosarul urmarit ramane bifat — bifa se pastreaza pentru ziua cand va fi
      * repus — dar pana atunci nimeni nu umbla in calculatorul lui.
      */

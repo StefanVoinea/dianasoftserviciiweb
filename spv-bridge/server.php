@@ -73,6 +73,28 @@ function raspunde_json($status, $date)
     exit;
 }
 
+/**
+ * Fara amprenta nu se cheama ANAF.
+ *
+ * Pe un calculator pot sta mai multe certificate — unul pentru SPV, altul
+ * pentru SEAP — iar curl, primind selectorul gol, il lasa pe Windows sa aleaga.
+ * Alegerea lui n-are de unde sa stie care e cel bun, iar ANAF raspunde atunci cu
+ * redirectare spre pagina lui de autentificare: legatura pare stricata, desi de
+ * fapt nimeni n-a spus cu ce certificat sa se vorbeasca.
+ */
+function cere_amprenta(array $config)
+{
+    if (trim((string) $config['thumbprint']) !== '') {
+        return;
+    }
+
+    raspunde_json(400, array(
+        'eroare' => 'Nu mi s-a spus cu ce certificat să vorbesc cu ANAF.',
+        'detalii' => 'Cererea nu poartă antetul X-Thumbprint, iar în configurare.env nu e scrisă nicio'
+            . ' amprentă. Alegeți certificatul în aplicație, la SPV -> Certificate digitale.',
+    ));
+}
+
 /** Se scrie langa program, ca sa ramana urma si dupa ce fereastra s-a inchis. */
 function scrie_eroarea($text)
 {
@@ -453,6 +475,8 @@ function executa_curl(array $config, $url, array $optiuni = array())
  */
 function spv_cere(array $config, $tinta)
 {
+    cere_amprenta($config);
+
     $rezultat = array(
         'status' => 0,
         'content_type' => '',
@@ -1015,6 +1039,8 @@ if ($metoda === 'GET' && ($calea === '/certificat' || $calea === '/certificate')
  * Succes cand raspunsul contine "displayFile.do".
  */
 if ($metoda === 'POST' && $calea === '/decl/login') {
+    cere_amprenta($config);
+
     @unlink($config['decl_jar']);
 
     $sesiune = array(

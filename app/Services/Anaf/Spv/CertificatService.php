@@ -368,7 +368,13 @@ class CertificatService
             'email' => $date['email'] ?? null,
             'valabil_de_la' => $date['valabil_de_la'] ?? null,
             'valabil_pana_la' => $date['valabil_pana_la'] ?? null,
-            'activ' => true,
+            /*
+             * Certificatul cunoscut isi pastreaza starea: unul scos anume din
+             * uz — pentru ca e al altui serviciu, SEAP de pilda — n-are voie sa
+             * fie inviat de o simpla recitire a tokenelor. Numai cele noi intra
+             * in uz din start.
+             */
+            'activ' => $certificat->exists ? (bool) $certificat->activ : true,
         ]);
 
         if ($bridgeUrl) {
@@ -376,7 +382,12 @@ class CertificatService
             $certificat->bridge_token = $bridgeToken;
         }
 
-        if (!AnafCertificat::where('implicit', true)->exists()) {
+        /*
+         * Primul certificat inregistrat devine cel implicit — dar numai daca e
+         * in uz. Altfel, un certificat scos anume din uz (al altui serviciu) ar
+         * ajunge sa fie cel pe care cade toata lumea fara certificat atribuit.
+         */
+        if ($certificat->activ && !AnafCertificat::where('implicit', true)->exists()) {
             $certificat->implicit = true;
         }
 
@@ -463,7 +474,8 @@ class CertificatService
             'valabil_de_la' => $date['valabil_de_la'] ?? null,
             'valabil_pana_la' => $date['valabil_pana_la'] ?? null,
             'ultima_utilizare' => now(),
-            'activ' => true,
+            // Vezi mai sus: starea unui certificat cunoscut nu se schimba de la sine.
+            'activ' => $certificat->exists ? (bool) $certificat->activ : true,
         ]);
 
         // Bridge-ul de pe care a fost citit devine ruta lui de acces.
@@ -481,7 +493,12 @@ class CertificatService
         }
 
         // Primul certificat inregistrat devine cel implicit.
-        if (!AnafCertificat::where('implicit', true)->exists()) {
+        /*
+         * Primul certificat inregistrat devine cel implicit — dar numai daca e
+         * in uz. Altfel, un certificat scos anume din uz (al altui serviciu) ar
+         * ajunge sa fie cel pe care cade toata lumea fara certificat atribuit.
+         */
+        if ($certificat->activ && !AnafCertificat::where('implicit', true)->exists()) {
             $certificat->implicit = true;
         }
 

@@ -403,7 +403,15 @@ if ($toate.Count -eq 0) {
     Bine ('certificate cu cheie privata: ' + $cuCheie.Count)
 }
 
-$ales = $null
+<#
+    Nu se mai alege niciunul.
+
+    Pe acelasi calculator stau adesea doua certificate — unul pentru SPV, altul
+    pentru SEAP sau pentru semnat documente. Alegand din burta pe primul, diagnoza
+    proba tocmai certificatul nepotrivit si dadea vina pe retea. De acum se
+    incearca fiecare, iar la pasul 6 se spune care e primit de ANAF si care nu.
+#>
+$deIncercat = @()
 
 foreach ($certificat in $cuCheie) {
     $zile = [int]([datetime]$certificat.NotAfter - (Get-Date)).TotalDays
@@ -411,29 +419,28 @@ foreach ($certificat in $cuCheie) {
     if ($zile -lt 0) { $stare = 'EXPIRAT de ' + [Math]::Abs($zile) + ' zile' }
     elseif ($zile -lt 30) { $stare = 'expira in ' + $zile + ' zile' }
 
-    Amanunt ($certificat.Subject)
+    $insemnare = ''
+    if ($amprenta -and $certificat.Thumbprint -eq $amprenta.ToUpper()) {
+        $insemnare = ' [cel scris in configurare.env]'
+    }
+
+    Amanunt ($certificat.Subject + $insemnare)
     Amanunt ('  amprenta ' + $certificat.Thumbprint + ' - ' + $stare)
 
-    if ($zile -lt 0) { continue }
-
-    if ($amprenta -and $certificat.Thumbprint -eq $amprenta.ToUpper()) { $ales = $certificat }
-    if (-not $ales -and -not $amprenta) { $ales = $certificat }
+    if ($zile -ge 0) { $deIncercat += $certificat }
 }
 
-if ($amprenta -and -not $ales) {
-    Rau ('amprenta din configurare.env (' + $amprenta + ') nu se gaseste printre certificatele valabile')
+if ($amprenta -and -not ($cuCheie | Where-Object { $_.Thumbprint -eq $amprenta.ToUpper() })) {
+    Rau ('amprenta din configurare.env (' + $amprenta + ') nu se gaseste printre certificatele de aici')
     Pricini @(
         'tokenul conectat acum e altul decat cel configurat',
         ('certificatul a expirat si a fost inlocuit: stergeti amprenta din configurare.env - ' +
             'aplicatia trimite oricum amprenta ceruta la fiecare operatie')
     )
-
-    $ales = $cuCheie | Where-Object { [datetime]$_.NotAfter -gt (Get-Date) } | Select-Object -First 1
 }
 
-if ($ales) {
-    Bine ('se lucreaza mai departe cu: ' + $ales.Subject)
-}
+# Cel dintai valabil e folosit doar la proba de semnare, care cere un singur token.
+$ales = $deIncercat | Select-Object -First 1
 
 # --- 5. Semnarea -----------------------------------------------------------
 
@@ -498,80 +505,75 @@ Titlu '6. Intrarea in SPV cu certificatul (ce face aplicatia)'
 
 if ($FaraSemnare) {
     Semn 'sarita la cerere (-FaraSemnare): si apelul acesta cere cheia de pe token'
-} elseif (-not $ales) {
+} elseif ($deIncercat.Count -eq 0) {
     Rau 'nu exista certificat cu care sa se incerce (vezi pasul 4)'
 } else {
-    <#
-        Se cheama intocmai ca programul: cu certificatul de pe token, urmand
-        redirectarile si tinand prajiturile de sesiune. Fara ele, lantul de
-        servere al ANAF raspunde 302 catre pagina lui de autentificare, iar
-        proba s-ar incheia cu un raspuns care nu spune nimic.
-    #>
-    $prajituri = Join-Path $env:TEMP ('diagnoza_spv_' + $PID + '.txt')
+    $primite = 0
 
-    $cuCertificat = CheamaCuCorp $adresaAnaf @(
-        '--cert', ('CurrentUser\MY\' + $ales.Thumbprint),
-        '--location',
-        '--cookie-jar', $prajituri,
-        '--cookie', $prajituri
-    )
+    foreach ($certificat in $deIncercat) {
+        Scrie ''
+        Scrie ('  Cu certificatul: ' + $certificat.Subject) 'White'
 
-    Remove-Item -LiteralPath $prajituri -ErrorAction SilentlyContinue
-
-    if ($cuCertificat.status -eq 200 -and (PareRaspunsSpv $cuCertificat.corp)) {
-        Bine 'SPV a raspuns: certificatul e primit'
-        Amanunt ('Raspunsul incepe cu: ' + $cuCertificat.corp.Substring(0, [Math]::Min(150, $cuCertificat.corp.Length)))
-        Amanunt 'Daca in el scrie "eroare", mesajul e al ANAF si spune ce anume lipseste.'
-    } elseif ($cuCertificat.status -eq 200) {
         <#
-            Cod bun, dar raspunsul nu e al serviciului: am ajuns pe pagina de
-            autentificare a ANAF. Se intampla cand certificatul nu e primit —
-            fie nu a ajuns intreg (trafic desfacut), fie nu e inrolat.
+            Se cheama intocmai ca programul: cu certificatul de pe token, urmand
+            redirectarile si tinand prajiturile de sesiune. Fara ele, lantul de
+            servere al ANAF raspunde 302 catre pagina lui de autentificare, iar
+            proba s-ar incheia cu un raspuns care nu spune nimic.
+
+            Fiecare certificat isi are borcanul lui de prajituri: sesiunea unuia
+            n-are ce cauta in proba celuilalt.
         #>
-        Rau 'ANAF a raspuns cu pagina lui de autentificare, nu cu datele din SPV'
-        Amanunt ('Raspunsul incepe cu: ' + $cuCertificat.corp.Substring(0, [Math]::Min(150, $cuCertificat.corp.Length)))
-        Pricini @(
-            'certificatul nu a ajuns intreg la ANAF: traficul e desfacut de antivirus (vezi pasul 3)',
-            'certificatul nu este inrolat in SPV pentru nicio firma',
-            'tokenul nu a dat cheia: dialogul de PIN nu a fost dus la capat (vezi pasul 5)'
+        $prajituri = Join-Path $env:TEMP ('diagnoza_spv_' + $PID + '_' + $certificat.Thumbprint + '.txt')
+
+        $raspuns = CheamaCuCorp $adresaAnaf @(
+            '--cert', ('CurrentUser\MY' + $certificat.Thumbprint),
+            '--location',
+            '--cookie-jar', $prajituri,
+            '--cookie', $prajituri
         )
-    } elseif ($cuCertificat.status -eq 403 -or $cuCertificat.status -eq 401) {
-        Rau ('ANAF a raspuns ' + $cuCertificat.status + ': legatura merge, dar certificatul nu e primit')
+
+        Remove-Item -LiteralPath $prajituri -ErrorAction SilentlyContinue
+
+        $inceputul = ''
+        if ($raspuns.corp) {
+            $inceputul = $raspuns.corp.Substring(0, [Math]::Min(150, $raspuns.corp.Length))
+        }
+
+        if ($raspuns.status -eq 200 -and (PareRaspunsSpv $raspuns.corp)) {
+            $primite++
+            Bine 'SPV a raspuns: acesta e certificatul primit de ANAF'
+            Amanunt ('Raspunsul incepe cu: ' + $inceputul)
+            Amanunt 'Daca in el scrie "eroare", mesajul e al ANAF si spune ce anume lipseste.'
+        } elseif ($raspuns.status -eq 200) {
+            Rau 'ANAF a raspuns cu pagina lui de autentificare, nu cu datele din SPV'
+            Amanunt ('Raspunsul incepe cu: ' + $inceputul)
+        } elseif ($raspuns.status -eq 403 -or $raspuns.status -eq 401) {
+            Rau ('ANAF a raspuns ' + $raspuns.status + ': legatura merge, dar certificatul nu e primit')
+        } elseif ($raspuns.cod -eq 0) {
+            Rau ('ANAF a raspuns ' + $raspuns.status + ', nu ce se astepta')
+            Amanunt $raspuns.text
+        } else {
+            Rau ('apelul nu a reusit - ' + (Talcul $raspuns.cod) + ' (cod HTTP ' + $raspuns.status + ')')
+            Amanunt $raspuns.text
+        }
+    }
+
+    Scrie ''
+
+    if ($primite -eq 0) {
+        Rau 'Niciun certificat de pe acest calculator nu a fost primit de ANAF.'
         Pricini @(
-            'certificatul nu este inrolat in SPV pentru nicio firma',
-            'inrolarea a expirat sau a fost retrasa',
-            'certificatul e valabil, dar e al altei persoane decat cea inrolata'
-        )
-    } elseif ($cuCertificat.cod -eq 0) {
-        <#
-            Legatura a mers pana la capat, dar raspunsul nu e cel asteptat. O
-            redirectare ramasa dupa ce s-au urmat toate inseamna, aproape mereu,
-            ca certificatul nu a fost primit si lantul ANAF trimite spre pagina
-            lui de autentificare.
-        #>
-        Rau ('ANAF a raspuns ' + $cuCertificat.status + ', nu ce se astepta')
-        Amanunt $cuCertificat.text
-        Pricini @(
-            'certificatul nu a fost primit, iar ANAF a trimis spre pagina lui de autentificare',
-            'traficul e desfacut de antivirus, deci certificatul nu ajunge intreg la ANAF',
-            'serviciul SPV e in mentenanta - se vede si intrand pe www.anaf.ro dintr-un browser'
+            'traficul catre ANAF e desfacut de antivirus: cu el desfacut, niciun certificat nu ajunge intreg (vezi pasul 3)',
+            'tokenul cere codul PIN si nu-l introduce nimeni (vezi pasul 5)',
+            'niciunul dintre certificate nu e inrolat in SPV pentru vreo firma'
         )
     } else {
-        Rau ('apelul nu a reusit - ' + (Talcul $cuCertificat.cod) + ' (cod HTTP ' + $cuCertificat.status + ')')
-        Amanunt $cuCertificat.text
+        Bine ('Certificate primite de ANAF: ' + $primite + ' din ' + $deIncercat.Count + '.')
 
-        if ($cuCertificat.cod -eq 56 -or $cuCertificat.cod -eq 35) {
-            Pricini @(
-                'tokenul cere codul PIN si nu-l introduce nimeni: vezi pasul 5',
-                'traficul catre ANAF e desfacut de antivirus: cu el desfacut, certificatul nu ajunge la ANAF',
-                'ANAF a inchis legatura pe neasteptate - se mai incearca o data'
-            )
-        } else {
-            Pricini @(
-                'iesirea catre ANAF e oprita de firewall',
-                'traficul e desfacut de antivirus',
-                'tokenul nu raspunde: vezi pasii 4 si 5'
-            )
+        if ($deIncercat.Count -gt 1) {
+            Amanunt 'Pe acest calculator stau mai multe certificate. In aplicatie, la SPV -> Certificate'
+            Amanunt 'digitale, scoateti din uz pe cele care nu sunt pentru SPV (de pilda cel de SEAP):'
+            Amanunt 'asa nu se mai incearca niciodata cu ele.'
         }
     }
 }
