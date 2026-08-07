@@ -55,7 +55,17 @@ class Kernel extends ConsoleKernel
          * are, licența nu se mai emite, iar programul de la el se oprește singur
          * când expiră ce are — fără să meargă cineva acolo să-l închidă.
          */
-        $schedule->command('anaf:licente-bridge')->dailyAt('07:30')->withoutOverlapping();
+        /*
+         * Din ceas în ceas, nu o dată pe zi: un calculator instalat la ora zece
+         * rămânea altfel nelicențiat până a doua zi dimineața — pornit, legat,
+         * și totuși nefolositor, fiindcă programul de la client refuză orice
+         * comandă fără licență. Kiturile noi și-o cer singure la pornire, dar
+         * cele deja instalate n-au de unde ști asta.
+         *
+         * Nu costă mai nimic: fără „--forțează" se emite numai unde lipsește sau
+         * stă să expire, iar agenții adormiți se văd dintr-o dată.
+         */
+        $schedule->command('anaf:licente-bridge')->hourly()->withoutOverlapping();
     }
 
     /**

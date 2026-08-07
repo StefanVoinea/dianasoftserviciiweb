@@ -192,6 +192,17 @@ class Licente
         return json_encode($date, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
+    /**
+     * Semnătura pentru programul de la client — aceeași cheie, altă ușă.
+     *
+     * Înnoirea programului se verifică la client cu cheia publică din kit, exact
+     * ca licența și ca jetoanele de comandă.
+     */
+    public function semneazaPentruBridge(string $continut): string
+    {
+        return $this->semneaza($continut);
+    }
+
     /** @return string semnătura, în base64 (sau brută, când e cerută pentru jeton) */
     protected function semneaza(string $continut, bool $bruta = false): string
     {

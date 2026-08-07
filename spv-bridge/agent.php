@@ -39,12 +39,25 @@ agent_scrie($config, 'Pornit. Întreb ' . $config['server'] . ' dacă are ceva d
  */
 agent_inroleaza($config);
 
+/*
+ * Si licenta si-o cere tot el. Fara ea, programul de langa noi refuza orice
+ * comanda, iar omul vede in aplicatie „Programul nu are licenta valida pe acest
+ * calculator" desi totul e pornit si legat.
+ */
+agent_licentiaza($config);
+
 $pauzaLaEroare = 5;
 $motiv = '';
 // De când ține pana de acum, și de când n-a mai fost nimic de lucru
 $deCandNuMerge = 0;
 $spusCeEDeFacut = false;
 $ultimaVorba = time();
+// Cand s-a incercat ultima innoire: nu se reia la fiecare panda
+$ultimaInnoire = 0;
+// Cand s-a uitat ultima data daca licenta mai e buna
+$ultimaLicenta = time();
+// Licenta tine luni de zile; se intreaba de ea o data la sase ceasuri
+$rastimpLicenta = 21600;
 
 /*
  * Din cât în cât se scrie în jurnal că agentul e viu, chiar dacă n-are ce face.
@@ -143,6 +156,34 @@ while (true) {
     $pauzaLaEroare = 5;
 
     if ($comanda === null) {
+        /*
+         * Panda goala e clipa potrivita pentru innoire: nu e nimic de lucru,
+         * iar innoirea repornaste programul. Se incearca o singura data la un
+         * ceas — o innoire care nu izbuteste n-are de ce sa fie reluata la
+         * fiecare panda.
+         */
+        $innoireCeruta = isset($GLOBALS['agent_innoire']) ? $GLOBALS['agent_innoire'] : null;
+
+        if ($innoireCeruta && (time() - $ultimaInnoire) > 3600) {
+            $ultimaInnoire = time();
+
+            agent_scrie($config, 'Serverul are versiunea ' . $innoireCeruta . ', eu am '
+                . agent_versiunea_locala($config['dosar']) . '. Pornesc innoirea.');
+
+            agent_porneste_innoirea($config);
+        }
+
+        /*
+         * Tot pe panda goala se uita si la licenta. Ea tine luni de zile, dar
+         * cand se apropie de capat programul local o spune la /identitate, si
+         * atunci se cere alta — fara sa mai astepte cineva sa salveze ceva in
+         * aplicatie.
+         */
+        if (time() - $ultimaLicenta >= $rastimpLicenta) {
+            $ultimaLicenta = time();
+            agent_licentiaza($config);
+        }
+
         /*
          * Pânda s-a împlinit fără nicio comandă — starea cea mai obișnuită. Se
          * întreabă din nou, îndată; din jumătate în jumătate de oră se scrie

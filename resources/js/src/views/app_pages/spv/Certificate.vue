@@ -222,6 +222,22 @@
                     ? 'prin tunel, oprit din ' + rand.item.agent_vazut_la
                     : 'prin tunel, încă nepornit') }}
               </div>
+              <!-- Versiunea programului de la client: se înnoiește singură, dar
+                   se vede, ca să știm cine a rămas în urmă. -->
+              <div
+                v-if="rand.item.versiune_bridge"
+                class="small"
+                :class="rand.item.versiune_bridge === versiuneProgram ? 'text-muted' : 'text-warning'"
+              >
+                <feather-icon
+                  :icon="rand.item.versiune_bridge === versiuneProgram ? 'CheckCircleIcon' : 'DownloadIcon'"
+                  size="12"
+                  class="mr-25"
+                />{{ rand.item.versiune_bridge === versiuneProgram
+                  ? 'program la zi'
+                  : 'program vechi — se înnoiește singur' }}
+              </div>
+
               <!-- Licența programului local: se reînnoiește singură, dar se
                    vede, ca să nu surprindă pe nimeni când se apropie de capăt. -->
               <div
@@ -860,6 +876,8 @@ export default {
       certificate: [],
       abonati: [],
       zileAvertizare: 30,
+      // Versiunea programului local pe care o are serverul acum
+      versiuneProgram: '',
       emailNou: '',
       certificatAles: null,
       eroare: '',
@@ -967,6 +985,7 @@ export default {
           this.certificate = raspuns.data.data || []
           this.abonati = raspuns.data.abonati || []
           this.zileAvertizare = raspuns.data.zile_avertizare || 30
+          this.versiuneProgram = raspuns.data.versiune_program || ''
         })
         .catch(err => {
           this.eroare = this.mesajEroare(err, 'Nu s-au putut încărca certificatele')

@@ -15,6 +15,7 @@ class KitBridge
     /** Fisierele bridge-ului, luate din instalarea curenta. */
     protected const FISIERE_BRIDGE = [
         'server.php', 'curl-talcuri.php', 'agent.php', 'agent-functii.php', 'agent-lucreaza.php',
+        'agent-actualizare.php',
         'cert-info.ps1', 'sign-pdf.ps1', 'merge-pdf.ps1',
         // Fara ea, declaratiile venite ca PDF nu pot fi citite deloc
         'pdf-info.ps1',
@@ -165,6 +166,13 @@ class KitBridge
                 pathinfo($fisier, PATHINFO_EXTENSION) === 'bat' ? $continut : $this->cuBom($continut)
             );
         }
+
+        /*
+         * Versiunea programului merge cu kitul: dupa ea stie agentul, la prima
+         * panda, daca are ce innoi. Fara ea, orice instalare noua ar cere o
+         * innoire pe care tocmai a primit-o.
+         */
+        $zip->addFromString('versiune.txt', app(\App\Services\Anaf\Bridge\ActualizareBridge::class)->versiunea());
 
         $zip->addFromString('configurare.env', $this->configurare($token));
         $zip->addFromString('CITESTE-MA.txt', $this->cuBom($this->documentatie($token, $port)));

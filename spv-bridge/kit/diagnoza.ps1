@@ -267,6 +267,38 @@ if ($raspunsLocal.status -eq 401) {
     )
 }
 
+<#
+    Licenta programului local. Fara ea, programul raspunde 403 la orice comanda,
+    desi sarcina ruleaza, portul asculta si tokenul e conectat: din afara pare
+    ca totul e in regula, iar in aplicatie se vede doar "Programul nu are
+    licenta valida pe acest calculator". De aceea se intreaba aici, devreme.
+#>
+if ($codAcces) {
+    $identitate = Cheama ($local + '/identitate') @('-H', ('Authorization: Bearer ' + $codAcces))
+
+    if ($identitate.status -eq 200) {
+        $stare = $null
+        try { $stare = $identitate.corp | ConvertFrom-Json } catch { $stare = $null }
+
+        if ($stare -and $stare.licentiat) {
+            $panaLa = ''
+            if ($stare.licenta -and $stare.licenta.expira) { $panaLa = ' (pana la ' + $stare.licenta.expira + ')' }
+            Bine ('programul local are licenta pentru acest calculator' + $panaLa)
+        } else {
+            Rau 'programul local NU are licenta valida pe acest calculator'
+            Pricini @(
+                'calculatorul a fost instalat de curand, iar agentul n-a apucat inca sa ceara licenta: lasati-l pornit cateva minute',
+                'agentul nu ajunge la aplicatie, deci n-are de unde sa ia licenta - vezi pasul 2',
+                'licenta a expirat cat timp calculatorul a stat inchis',
+                'licenta a fost emisa pentru alt calculator: s-a copiat dosarul de pe alta statie, stergeti licenta.json si lasati agentul sa ceara alta',
+                'toate certificatele acestui calculator sunt scoase din uz in aplicatie'
+            )
+        }
+    } elseif ($identitate.status -ge 200) {
+        Semn ('programul local nu raspunde la /identitate (cod ' + $identitate.status + ') - kit vechi, fara licentiere')
+    }
+}
+
 # --- 2. Aplicatia ----------------------------------------------------------
 
 Titlu ('2. Legatura cu aplicatia (' + $aplicatia + ')')

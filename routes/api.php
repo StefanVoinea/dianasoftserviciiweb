@@ -54,6 +54,10 @@ Route::post('/punte/agent/inrolare', 'Api\PunteController@inrolare');
 Route::post('/punte/agent/asteapta', 'Api\PunteController@asteapta');
 Route::get('/punte/agent/corp/{comanda}', 'Api\PunteController@corp');
 Route::post('/punte/agent/rezultat/{comanda}', 'Api\PunteController@rezultat');
+// Innoirea programului de la client: pachet semnat, verificat acolo
+Route::get('/punte/agent/actualizare', 'Api\PunteController@actualizare');
+// Licenta ceruta de programul de la client, indata dupa instalare
+Route::post('/punte/agent/licenta', 'Api\PunteController@licenta');
 
 // Fața dinspre aplicație: se poartă întocmai ca programul local.
 Route::any('/punte/{certificat}/{cale?}', 'Api\PunteController@proxy')

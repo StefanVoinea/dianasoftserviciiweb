@@ -3,14 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AbonamentClient;
 use App\Models\AnafCertificat;
 use App\Models\BridgeComanda;
 use App\Services\Anaf\AlertaEroare;
+use App\Services\Anaf\Bridge\ActualizareBridge;
 use App\Services\Anaf\Bridge\Licente;
 use App\Services\Anaf\Bridge\Punte;
 use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\CertificatService;
 use App\Support\ContextCompanie;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -124,19 +127,142 @@ class PunteController extends Controller
             ], 401);
         }
 
-        $comanda = $this->punte->urmatoarea($certificate);
+        /*
+         * Agentul isi spune versiunea la fiecare panda. Se tine minte pe
+         * certificat — asa se vede in aplicatie cine a ramas in urma — si se
+         * raspunde cu cea de acum, ca el sa stie daca are ce innoi.
+         */
+        $alLui = trim((string) $request->header('X-Versiune'));
+        $acum = app(ActualizareBridge::class)->versiunea();
 
-        if (!$comanda) {
-            return response()->json(['comanda' => null], 200);
+        if ($alLui !== '') {
+            AnafCertificat::query()->toateCompaniile()
+                ->whereIn('id', $certificate->pluck('id'))
+                ->update(['versiune_bridge' => mb_substr($alLui, 0, 32)]);
         }
 
-        return response()->json(['comanda' => [
-            'id' => $comanda->id,
-            'metoda' => $comanda->metoda,
-            'cale' => $comanda->cale,
-            'antete' => $comanda->antete,
-            'are_corp' => $comanda->corp_fisier !== null,
-        ]]);
+        $comanda = $this->punte->urmatoarea($certificate);
+
+        $innoire = ($alLui !== '' && $alLui !== $acum) ? ['versiune' => $acum] : null;
+
+        if (!$comanda) {
+            return response()->json(['comanda' => null, 'actualizare' => $innoire], 200);
+        }
+
+        return response()->json([
+            'comanda' => [
+                'id' => $comanda->id,
+                'metoda' => $comanda->metoda,
+                'cale' => $comanda->cale,
+                'antete' => $comanda->antete,
+                'are_corp' => $comanda->corp_fisier !== null,
+            ],
+            'actualizare' => $innoire,
+        ]);
+    }
+
+    /**
+     * Licenta ceruta de programul de la client, pentru calculatorul lui.
+     *
+     * Pana acum licenta pleca numai dinspre server: la salvarea certificatului,
+     * sau noaptea, cu comanda planificata. Un calculator instalat azi ramanea
+     * deci nelicentiat pana a doua zi dimineata — pornit, legat prin tunel, si
+     * totusi nefolositor, fiindca programul refuza orice comanda fara licenta.
+     *
+     * Acum o cere el, indata dupa inrolare. Nu se poate face invers — serverul
+     * sa i-o duca in clipa inrolarii — fiindca agentul asteapta chiar raspunsul
+     * la inrolare: comanda ar sta in coada pana i-ar expira rabdarea.
+     */
+    public function licenta(Request $request, Licente $licente)
+    {
+        $certificate = $this->punte->certificateleAgentului($request);
+
+        if ($certificate->isEmpty()) {
+            return response()->json([
+                'eroare' => 'Cod de acces invalid.',
+                'detalii' => $this->punte->deCeNuAgentul($request),
+            ], 401);
+        }
+
+        $masina = trim((string) $request->input('masina'));
+
+        if ($masina === '') {
+            return response()->json(['eroare' => 'Lipsește amprenta calculatorului.'], 422);
+        }
+
+        /*
+         * Licenta e a calculatorului, nu a certificatului: pe acelasi calculator
+         * pot sta mai multe tokene, iar programul e unul singur. Se emite pentru
+         * cel dintai certificat in lucru de acolo si se tine minte la toate.
+         *
+         * Certificatele scoase din uz nu dau licenta: un calculator pe care au
+         * ramas numai ele n-are ce lucra, si e mai bine sa se vada asta decat sa
+         * para pregatit.
+         */
+        $inLucru = $certificate->where('activ', true);
+
+        if ($inLucru->isEmpty()) {
+            return response()->json([
+                'eroare' => 'Nu se poate emite licența.',
+                'detalii' => 'Toate certificatele acestui calculator sunt scoase din uz în aplicație.',
+            ], 409);
+        }
+
+        $certificat = $inLucru->first();
+
+        /*
+         * Licenta urmeaza abonamentul, ca si cea data de comanda planificata:
+         * altfel un calculator si-ar innoi-o singur la nesfarsit, iar oprirea de
+         * la sine a programului n-ar mai insemna nimic.
+         */
+        $abonament = AbonamentClient::alClientului($certificat->company_id);
+
+        if ($abonament && !$abonament->activ()) {
+            return response()->json([
+                'eroare' => 'Nu se poate emite licența.',
+                'detalii' => $abonament->motiv(),
+            ], 402);
+        }
+
+        $licenta = $licente->emite($certificat, $masina);
+
+        AnafCertificat::query()->toateCompaniile()
+            ->whereIn('id', $inLucru->pluck('id'))
+            ->update(['licenta_pana_la' => Carbon::parse($licenta['date']['expira'])]);
+
+        ContextCompanie::pentru($certificat->company_id, function () use ($certificat, $licenta, $masina) {
+            Jurnal::scrie(
+                'licenta_bridge',
+                'Programul de la client si-a cerut licența pentru certificatul ' . $certificat->cn
+                    . ', până la ' . $licenta['date']['expira'],
+                ['masina' => $masina]
+            );
+        });
+
+        return response()->json($licenta);
+    }
+
+    /**
+     * Pachetul de innoire a programului de la client.
+     *
+     * Se da numai agentilor care se legitimeaza cu codul lor, si merge semnat:
+     * clientul verifica semnatura cu cheia publica din kit inainte de a inlocui
+     * ceva. Fara verificarea aceea, oricine i-ar putea trimite alt program.
+     */
+    public function actualizare(Request $request, ActualizareBridge $actualizare)
+    {
+        if ($this->punte->certificateleAgentului($request)->isEmpty()) {
+            return response()->json(['eroare' => 'Cod de acces invalid.'], 401);
+        }
+
+        $pachet = $actualizare->pachetul();
+
+        return response()->download($pachet['arhiva'], 'actualizare.zip', [
+            'X-Versiune' => $pachet['versiune'],
+            'X-Amprenta' => $pachet['amprenta'],
+            'X-Semnatura' => $pachet['semnatura'],
+            'Content-Type' => 'application/zip',
+        ])->deleteFileAfterSend(true);
     }
 
     /**

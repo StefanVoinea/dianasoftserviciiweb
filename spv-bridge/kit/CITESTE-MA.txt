@@ -150,6 +150,7 @@ FIȘIERE
   agent.php           aduce de la aplicație lucrul pentru tokenul de aici
   agent-functii.php   uneltele lui
   agent-lucreaza.php  duce la capăt o lucrare, în procesul ei
+  agent-actualizare.php înnoirea programului, verificată cu cheia publică
   cheie-publica.pem   cu ea se verifică licența și comenzile primite
   diagnoza.bat        verificarea a tot ce trebuie să meargă (dublu clic)
   instaleaza.bat      instalarea pornirii automate (dublu clic)

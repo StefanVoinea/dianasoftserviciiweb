@@ -290,7 +290,11 @@ function agent_intreaba($config, &$motiv = null)
     $rezultat = agent_curl($config, array(
         'metoda' => 'POST',
         'url' => $config['server'] . '/api/punte/agent/asteapta',
-        'antete' => array('Authorization: Bearer ' . $config['token']),
+        'antete' => array(
+            'Authorization: Bearer ' . $config['token'],
+            // Versiunea de aici: dupa ea stie serverul cine a ramas in urma
+            'X-Versiune: ' . agent_versiunea_locala($config['dosar']),
+        ),
     ));
 
     if ($rezultat['status'] === 401) {
@@ -359,7 +363,132 @@ function agent_desluseste_panda($rezultat, &$motiv = null)
      * de rețea: jurnalul se umplea de „Serverul nu răspunde", iar așteptarea
      * creștea până la un minut, în care comenzile chiar sosite stăteau la coadă.
      */
+    /*
+     * Serverul spune, o data cu comanda, si daca programul de aici a ramas in
+     * urma. Vestea se pune deoparte, ca bucla sa porneasca innoirea cand n-are
+     * altceva de facut.
+     */
+    $GLOBALS['agent_innoire'] = isset($date['actualizare']['versiune'])
+        ? $date['actualizare']['versiune']
+        : null;
+
     return $date['comanda'] ? $date['comanda'] : null;
+}
+
+/**
+ * Isi cere licenta pentru calculatorul acesta, daca n-o are.
+ *
+ * Pana acum licenta venea numai dinspre server — la salvarea certificatului in
+ * aplicatie, sau noaptea. Un calculator instalat azi ramanea nelicentiat pana a
+ * doua zi: pornit, legat, si totusi nefolositor, fiindca programul refuza orice
+ * comanda fara licenta. Acum si-o cere singur, indata dupa inrolare.
+ *
+ * @return bool s-a licentiat acum?
+ */
+function agent_licentiaza($config)
+{
+    // Intai se intreaba programul de langa noi: cine e si daca are licenta.
+    $identitate = agent_curl($config, array(
+        'url' => $config['local'] . '/identitate',
+        'antete' => array('Authorization: Bearer ' . $config['token']),
+    ));
+
+    if ($identitate['cod'] !== 0 || $identitate['status'] !== 200) {
+        return false;
+    }
+
+    $date = json_decode($identitate['corp'], true);
+
+    if (!is_array($date) || empty($date['masina'])) {
+        return false;
+    }
+
+    if (!empty($date['licentiat'])) {
+        return false;
+    }
+
+    agent_scrie($config, 'Programul de aici nu are licenta; o cer de la aplicatie.');
+
+    $cerere = $config['dosar'] . '/agent_licenta_cerere.json';
+    @file_put_contents($cerere, json_encode(array('masina' => $date['masina'])));
+
+    $primita = agent_curl($config, array(
+        'metoda' => 'POST',
+        'url' => $config['server'] . '/api/punte/agent/licenta',
+        'antete' => array(
+            'Authorization: Bearer ' . $config['token'],
+            'Content-Type: application/json',
+        ),
+        'corp_fisier' => $cerere,
+    ));
+
+    @unlink($cerere);
+
+    if ($primita['cod'] !== 0 || $primita['status'] !== 200) {
+        agent_scrie($config, 'Aplicatia nu mi-a dat licenta (' . $primita['status'] . ').');
+
+        return false;
+    }
+
+    // Licenta se pune la programul local, care o verifica el cu cheia publica.
+    $fisier = $config['dosar'] . '/agent_licenta_primita.json';
+    @file_put_contents($fisier, $primita['corp']);
+
+    $pusa = agent_curl($config, array(
+        'metoda' => 'POST',
+        'url' => $config['local'] . '/licenta',
+        'antete' => array(
+            'Authorization: Bearer ' . $config['token'],
+            'Content-Type: application/json',
+        ),
+        'corp_fisier' => $fisier,
+    ));
+
+    @unlink($fisier);
+
+    if ($pusa['cod'] !== 0 || $pusa['status'] !== 200) {
+        agent_scrie($config, 'Licenta a venit, dar programul local n-a primit-o (' . $pusa['status'] . ').');
+
+        return false;
+    }
+
+    agent_scrie($config, 'Licenta a fost pusa. Programul poate primi comenzi.');
+
+    return true;
+}
+
+/** Versiunea programului de aici, scrisa langa el de ultima innoire. */
+function agent_versiunea_locala($dosar)
+{
+    $cale = $dosar . DIRECTORY_SEPARATOR . 'versiune.txt';
+
+    return is_file($cale) ? trim((string) @file_get_contents($cale)) : 'necunoscuta';
+}
+
+/**
+ * Porneste innoirea intr-un proces al ei si se intoarce indata.
+ *
+ * Nu se face in bucla agentului: innoirea repornaste programul si, la sfarsit,
+ * chiar pe el — treaba asta n-are ce cauta in mijlocul pandei.
+ */
+function agent_porneste_innoirea($config)
+{
+    $php = defined('PHP_BINARY') && PHP_BINARY !== '' ? PHP_BINARY : 'php';
+    $ini = php_ini_loaded_file();
+
+    $linie = escapeshellarg($php)
+        . ($ini ? ' -c ' . escapeshellarg($ini) : '')
+        . ' ' . escapeshellarg($config['dosar'] . '/agent-actualizare.php');
+
+    $maner = @popen('start "" /B ' . $linie, 'r');
+
+    if ($maner === false) {
+        return false;
+    }
+
+    pclose($maner);
+
+    return true;
 }
 
 /**

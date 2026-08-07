@@ -54,6 +54,7 @@ class CertificateController extends Controller
                     'mod_legatura' => $certificat->mod_legatura ?: 'direct',
                     'agent_vazut_la' => Format::dataOra($certificat->agent_vazut_la),
                     'agent_treaz' => app(Punte::class)->agentulEsteTreaz($certificat),
+                    'versiune_bridge' => $certificat->versiune_bridge,
                     'implicit' => $certificat->implicit,
                     'valabil_de_la' => Format::dataOra($certificat->valabil_de_la),
                     'valabil_pana_la' => Format::dataOra($certificat->valabil_pana_la),
@@ -80,6 +81,8 @@ class CertificateController extends Controller
             'data' => $certificate,
             'abonati' => CertificatAbonat::orderBy('email')->get(),
             'zile_avertizare' => config('anaf.certificate.zile_avertizare'),
+            // Versiunea de acum a programului local: dupa ea se vede cine a ramas in urma
+            'versiune_program' => app(\App\Services\Anaf\Bridge\ActualizareBridge::class)->versiunea(),
         ]);
     }
 
