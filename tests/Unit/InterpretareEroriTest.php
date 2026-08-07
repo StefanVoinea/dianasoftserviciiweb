@@ -608,9 +608,191 @@ class InterpretareEroriTest extends TestCase
         $problema = $rezultat['probleme'][0];
 
         $this->assertNotNull($problema['explicatie']);
-        $this->assertStringContainsString('Condiția cerută este', $problema['explicatie']);
+        // Conditia se da talmacita, nu doar repetata cu semnele validatorului.
+        $this->assertStringContainsString('Condiția cerută, pe înțeles', $problema['explicatie']);
         $this->assertNotNull($problema['de_corectat']);
         $this->assertFalse($rezultat['netradus']);
+    }
+
+    /**
+     * Codul de taxa nemapat: eroarea cea mai deasa la D406.
+     *
+     * Mesajul e acelasi ca la orice valoare din afara listei, dar intelesul e
+     * altul: nu s-a scris o valoare gresita, ci a plecat codul intern al
+     * programului de contabilitate in locul celui din nomenclatorul ANAF. Se
+     * deosebeste dupa forma codului si se spune ce e de facut — maparea.
+     */
+    public function test_codul_de_taxa_nemapat_trimite_la_mapare(): void
+    {
+        $erori = "E: MasterFiles (1) sectiune TaxTable (1)\n eroare atribut: TaxCode: valoarea '301104' nu se afla in lista";
+
+        $rezultat = $this->serviciu()->interpreteaza($erori, $this->declaratie());
+        $problema = $rezultat['probleme'][0];
+
+        $this->assertStringContainsString('nomenclatorul ANAF', $problema['explicatie']);
+        $this->assertStringContainsString('codul intern', $problema['explicatie']);
+        $this->assertStringContainsString('mapare', $problema['de_corectat']);
+    }
+
+    /** O valoare care nu e cod de taxa ramane explicata ca pana acum. */
+    public function test_valoarea_din_afara_listei_ramane_explicata_simplu(): void
+    {
+        $erori = "E: informatii (1)\n eroare atribut: tip: valoarea 'XYZ' nu se afla in lista";
+
+        $problema = $this->serviciu()->interpreteaza($erori, $this->declaratie())['probleme'][0];
+
+        $this->assertStringContainsString('doar câteva valori dinainte stabilite', $problema['explicatie']);
+    }
+
+    /**
+     * D394: „daca atributul X = V atunci sectiunea Y nu trebuie sa apara".
+     * Regula nu spune care dintre cele doua e adevarul, deci se spune limpede
+     * ca alegerea e a omului si ce inseamna fiecare varianta.
+     */
+    public function test_regula_de_potrivire_intre_atribut_si_sectiune(): void
+    {
+        $erori = "F: validari globale\n eroare regula: R112.1: daca atributul op_efectuate = 0 atunci sectiunea serieFacturi nu trebuie sa apara";
+
+        $problema = $this->serviciu()->interpreteaza($erori, $this->declaratie())['probleme'][0];
+
+        $this->assertStringContainsString('op_efectuate', $problema['explicatie']);
+        $this->assertStringContainsString('serieFacturi', $problema['explicatie']);
+        $this->assertStringContainsString('Una dintre ele e greșită', $problema['de_corectat']);
+        $this->assertSame('op_efectuate="0"', $problema['cauta']);
+    }
+
+    /**
+     * D112: reguli scrise cu semnele validatorului. „# null" inseamna
+     * „completat", iar cine nu stie notatia citeste randul degeaba.
+     */
+    public function test_regula_cu_semnele_validatorului_se_talmaceste(): void
+    {
+        $erori = "E: asigurat (4) sectiune asiguratD (2)\n eroare regula: S90a: Data_CMI # null daca (D_3 # null si D_4 # null)";
+
+        $problema = $this->serviciu()->interpreteaza($erori, $this->declaratie())['probleme'][0];
+
+        $this->assertStringContainsString('Data_CMI', $problema['explicatie']);
+        $this->assertStringContainsString('este completat', $problema['explicatie']);
+        $this->assertStringNotContainsString('# null', $problema['explicatie']);
+    }
+
+    /** A4200: pricina nu e in declaratie, ci in stickul de memorie. */
+    public function test_zilele_fiscale_trimit_la_stickul_de_memorie(): void
+    {
+        $erori = "F: validari globale\n eroare regula: R1: Numarul de zile fiscale declarate (31) este diferit de numarul de fisiere de tip zi fiscala gasite (20)";
+
+        $problema = $this->serviciu()->interpreteaza($erori, $this->declaratie())['probleme'][0];
+
+        $this->assertStringContainsString('31', $problema['explicatie']);
+        $this->assertStringContainsString('20', $problema['explicatie']);
+        $this->assertStringContainsString('Lipsesc fișiere', $problema['de_corectat']);
+    }
+
+    /** Cand sunt mai multe fisiere decat zile, vinovate sunt rapoartele vechi. */
+    public function test_prea_multe_fisiere_arata_spre_descarcarile_vechi(): void
+    {
+        $erori = "F: validari globale\n eroare regula: R1: Numarul de zile fiscale declarate (20) este diferit de numarul de fisiere de tip zi fiscala gasite (31)";
+
+        $problema = $this->serviciu()->interpreteaza($erori, $this->declaratie())['probleme'][0];
+
+        $this->assertStringContainsString('descărcări mai vechi', $problema['de_corectat']);
+    }
+
+    /** Codul fiscal invalid al unui partener strain: prefixul tarii, nu RO. */
+    public function test_codul_fiscal_invalid_pomeneste_partenerul_strain(): void
+    {
+        $erori = "E: informatii (1)\n eroare atribut: cui: CUI invalid ('12345678')";
+
+        $problema = $this->serviciu()->interpreteaza($erori, $this->declaratie())['probleme'][0];
+
+        $this->assertStringContainsString('partener străin', $problema['de_corectat']);
+    }
+
+    /**
+     * La sute de erori, pricina e rareori in date: de obicei validatorul e vechi
+     * sau s-a ales D406T in loc de D406. Se spune inainte ca omul sa inceapa sa
+     * corecteze randuri.
+     */
+    public function test_multe_erori_la_d406_trimit_la_pricina_comuna(): void
+    {
+        $randuri = ["E: MasterFiles (1) sectiune TaxTable (1)"];
+
+        for ($i = 0; $i < 25; $i++) {
+            $randuri[] = " eroare atribut: TaxCode: valoarea '30110" . $i . "' nu se afla in lista";
+        }
+
+        $d406 = new AnafDeclaratie(['tip' => 'D406', 'cui' => '15208744', 'anul' => 2026, 'luna' => 6]);
+
+        $rezumat = $this->serviciu()->interpreteaza(implode("\n", $randuri), $d406)['rezumat'];
+
+        $this->assertStringContainsString('D406T', $rezumat);
+        $this->assertStringContainsString('actualizat', $rezumat);
+    }
+
+    /** La putine erori nu se da sfatul acela: ar fi zgomot. */
+    public function test_putine_erori_nu_primesc_sfatul_general(): void
+    {
+        $erori = "E: MasterFiles (1)\n eroare atribut: TaxCode: valoarea '301104' nu se afla in lista";
+
+        $d406 = new AnafDeclaratie(['tip' => 'D406', 'cui' => '15208744', 'anul' => 2026, 'luna' => 6]);
+
+        $this->assertStringNotContainsString('D406T', $this->serviciu()->interpreteaza($erori, $d406)['rezumat']);
+    }
+
+    /**
+     * D394: cota zero cere un tip de operatiune care sa-i spuna pricina.
+     * Regula insira valorile ingaduite; se dau toate, nu doar faptul ca a gresit.
+     */
+    public function test_valorile_ingaduite_se_insira_la_regula_de_potrivire(): void
+    {
+        $erori = "F: validari globale\n eroare regula: R217.1: daca cota = 0 atunci tip (C) trebuie sa fie unul din 'LS', 'AS', 'N', 'V'";
+
+        $problema = $this->serviciu()->interpreteaza($erori, $this->declaratie())['probleme'][0];
+
+        $this->assertStringContainsString("'LS', 'AS', 'N', 'V'", $problema['explicatie']);
+        $this->assertStringContainsString('Acum are valoarea C', $problema['explicatie']);
+        $this->assertStringContainsString('cota zero', $problema['de_corectat']);
+        $this->assertSame('tip="C"', $problema['cauta']);
+    }
+
+    /**
+     * D394: codul partenerului cerut de felul lui. De obicei nu codul e gresit,
+     * ci felul — o persoana fizica trecuta drept juridica.
+     */
+    public function test_codul_partenerului_trimite_intai_la_felul_lui(): void
+    {
+        $erori = "F: validari globale\n eroare regula: R218.3: daca tip_partener = 2 atunci cuiP trebuie sa fie un CIF valid";
+
+        $problema = $this->serviciu()->interpreteaza($erori, $this->declaratie())['probleme'][0];
+
+        $this->assertStringContainsString('tip_partener', $problema['explicatie']);
+        $this->assertStringContainsString('CIF valid', $problema['explicatie']);
+        $this->assertStringContainsString('persoană fizică trecută din greșeală', $problema['de_corectat']);
+    }
+
+    /**
+     * D112: la certificatele medicale de continuare, pricina e aproape mereu
+     * aceeasi — datele certificatului initial, necompletate.
+     */
+    public function test_certificatul_medical_trimite_la_cel_initial(): void
+    {
+        $erori = "E: asigurat (4) sectiune asiguratD (2)\n eroare regula: S90a: Data_CMI # null daca (D_3 # null si D_4 # null)";
+
+        $problema = $this->serviciu()->interpreteaza($erori, $this->declaratie())['probleme'][0];
+
+        $this->assertStringContainsString('certificat', $problema['de_corectat']);
+        $this->assertStringContainsString('inițial', $problema['de_corectat']);
+    }
+
+    /** Un camp obisnuit din aceeasi familie primeste indrumarea generala. */
+    public function test_campul_obisnuit_ramane_cu_indrumarea_generala(): void
+    {
+        $erori = "E: asigurat (1)\n eroare regula: S12: Suma_X # null daca (D_1 # null)";
+
+        $problema = $this->serviciu()->interpreteaza($erori, $this->declaratie())['probleme'][0];
+
+        $this->assertStringContainsString('la înregistrarea la care s-a oprit', $problema['de_corectat']);
+        $this->assertStringNotContainsString('certificatului inițial', $problema['de_corectat']);
     }
 
     /** Un mesaj nerecunoscut se arata ca atare, nu se ascunde si nu se inventeaza. */

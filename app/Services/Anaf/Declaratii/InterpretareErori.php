@@ -31,6 +31,9 @@ class InterpretareErori
      */
     protected const MAXIM_EXPLICATE = 300;
 
+    /** De la cate erori incolo se cauta pricina comuna, nu randul gresit. */
+    protected const MULTE_ERORI = 20;
+
     /**
      * @param string|null $xml continutul fisierului, pentru a arata unde anume
      *                         trebuie corectat (linia si coloana)
@@ -205,9 +208,12 @@ class InterpretareErori
         // Regulile fara sablon propriu primesc totusi o explicatie: conditia
         // ceruta e chiar in mesaj, cu valorile de acum trecute in paranteze.
         if ($explicatie === null && $context['tip'] === 'regula') {
+            $talmacita = $this->talmacesteConditia($antet['mesaj']);
+
             $explicatie = 'Regulile de corelare verifică potrivirea dintre câmpuri: dacă un câmp are o anumită '
-                . 'valoare, atunci altele trebuie completate într-un anumit fel. Condiția cerută este: '
-                . $antet['mesaj'];
+                . 'valoare, atunci altele trebuie completate într-un anumit fel. Condiția cerută, pe înțeles: '
+                . $talmacita
+                . ($talmacita !== $antet['mesaj'] ? ' (scrisă de validator așa: ' . $antet['mesaj'] . ')' : '');
 
             $rezolvat['de_corectat'] = 'Citește condiția de mai sus și verifică în fișier câmpurile pe care le '
                 . 'numește: valorile lor de acum sunt trecute în paranteze, chiar în textul regulii. '
@@ -244,6 +250,45 @@ class InterpretareErori
             // daca fisierul e disponibil, ramane varianta chiar gasita in el.
             'cauta' => $candidati[0] ?? null,
         ];
+    }
+
+    /**
+     * Regulile de corelare sunt scrise in limbajul validatorului, nu in romana.
+     *
+     * ANAF le da asa cum stau in DecValidation.jar: „Data_CMI # null daca (D_3 #
+     * null si D_4 # null)". Cine nu stie ca „#" inseamna „diferit de" si ca
+     * „null" inseamna „necompletat" citeste randul de trei ori si tot nu afla ce
+     * i se cere. Se talmacesc semnele, pastrand numele campurilor asa cum sunt —
+     * dupa ele se cauta in fisier.
+     */
+    protected function talmacesteConditia(string $mesaj): string
+    {
+        $talmacit = $mesaj;
+
+        // „daca ... atunci ..." se scrie de multe ori fara „atunci"
+        $talmacit = preg_replace('/^\s*daca\s+/ui', 'Dacă ', $talmacit);
+        $talmacit = preg_replace('/\s+atunci\s+/ui', ', atunci ', $talmacit);
+
+        $inlocuiri = [
+            '/\s*#\s*null\b/ui' => ' este completat',
+            '/\s*=\s*null\b/ui' => ' este necompletat',
+            '/\s*#\s*/u' => ' ≠ ',
+            '/\bnull\b/ui' => 'necompletat',
+            '/\bsi\b/ui' => 'și',
+            '/\bsau\b/ui' => 'sau',
+            '/\bnu trebuie sa apara\b/ui' => 'nu are voie să apară',
+            '/\btrebuie sa apara\b/ui' => 'trebuie să apară',
+            '/\btrebuie sa fie\b/ui' => 'trebuie să fie',
+            '/\btrebuie sa existe\b/ui' => 'trebuie să existe',
+            '/\bsectiunea\b/ui' => 'secțiunea',
+            '/\batributul\b/ui' => 'atributul',
+        ];
+
+        foreach ($inlocuiri as $tipar => $inlocuire) {
+            $talmacit = preg_replace($tipar, $inlocuire, $talmacit);
+        }
+
+        return trim(preg_replace('/\s{2,}/u', ' ', $talmacit));
     }
 
     /**
@@ -592,7 +637,10 @@ class InterpretareErori
                             . 'potrivește. Nu înseamnă că firma nu ar exista, ci că numărul în sine e greșit '
                             . '(o cifră lipsă, inversată sau în plus).',
                         'de_corectat' => 'Caută în fișier valoarea ' . $m[1] . ' și înlocuiește-o cu codul fiscal '
-                            . 'corect, scris doar cu cifre, fără prefixul RO și fără spații.' . $asteptat,
+                            . 'corect, scris doar cu cifre, fără prefixul RO și fără spații.' . $asteptat
+                            . ' Dacă e vorba de un partener străin, greșeala e de obicei alta: codul lui poartă '
+                            . 'prefixul României în loc de al țării sale (HU, BG, DE și așa mai departe), iar '
+                            . 'atunci verificarea cifrei de control se face după regulile greșite.',
                     ];
                 },
             ],
@@ -652,7 +700,31 @@ class InterpretareErori
         return [
             [
                 'tipar' => "/^valoarea\\s*'([^']*)'\\s*nu se afla in lista/ui",
-                'explica' => function ($m) {
+                'explica' => function ($m, $declaratie, $context = []) {
+                    /*
+                     * La SAF-T, aceasta e eroarea cea mai deasa, si aproape
+                     * niciodata nu inseamna „valoare gresita": inseamna ca in
+                     * fisier a plecat codul intern al programului de
+                     * contabilitate in locul codului din nomenclatorul ANAF.
+                     * Se vede dupa forma: coduri numerice de sase cifre, la zeci
+                     * de randuri deodata.
+                     */
+                    $pareCodDeTaxa = (bool) preg_match('/^\d{5,6}$/', $m[1]);
+
+                    if ($pareCodDeTaxa) {
+                        return [
+                            'cauta' => '"' . $m[1] . '"',
+                            'explicatie' => 'Codul „' . $m[1] . '" nu se află în nomenclatorul ANAF. La D406, '
+                                . 'aceasta e cea mai deasă eroare și rareori înseamnă o valoare greșită: de '
+                                . 'obicei în fișier a plecat codul intern al programului de contabilitate, în '
+                                . 'locul codului oficial cerut de ANAF.',
+                            'de_corectat' => 'Se face maparea în programul de contabilitate: fiecărui cod intern '
+                                . '(de taxă, de cont, de tip de document) i se pune în dreptul lui codul din '
+                                . 'nomenclatorul SAF-T al ANAF. După mapare, fișierul se generează din nou. '
+                                . 'Dacă erorile sunt zeci, aproape sigur lipsește maparea întreagă, nu un cod.',
+                        ];
+                    }
+
                     return [
                         'cauta' => '"' . $m[1] . '"',
                         'explicatie' => 'Acest câmp acceptă doar câteva valori dinainte stabilite, iar „' . $m[1]
@@ -1035,6 +1107,128 @@ class InterpretareErori
     {
         return [
             [
+                /*
+                 * Forma cea mai deasa la D394: „daca atributul X = V atunci
+                 * sectiunea Y nu trebuie sa apara". Omul citeste conditia si
+                 * nu-si da seama care dintre cele doua e de schimbat, fiindca
+                 * regula nu spune care e adevarul si care urmarea.
+                 */
+                'tipar' => '/^daca\s+atributul\s+(\S+)\s*=\s*(\S+)\s+atunci\s+sectiunea\s+(.+?)\s+nu trebuie sa apara/ui',
+                'explica' => function ($m) {
+                    return [
+                        'camp' => $m[1],
+                        'cauta' => $m[1] . '="' . $m[2] . '"',
+                        'explicatie' => 'Cele două nu pot sta împreună: câmpul „' . $m[1] . '" are valoarea '
+                            . $m[2] . ', iar cu ea secțiunea „' . trim($m[3]) . '" nu are voie să apară în '
+                            . 'declarație.',
+                        'de_corectat' => 'Una dintre ele e greșită, și numai dumneavoastră știți care. Dacă '
+                            . 'secțiunea „' . trim($m[3]) . '" chiar are ce căuta acolo, atunci greșit e câmpul '
+                            . '„' . $m[1] . '" — schimbați-l în programul de contabilitate. Dacă valoarea lui e '
+                            . 'cea corectă, scoateți secțiunea.',
+                    ];
+                },
+            ],
+            [
+                /*
+                 * D394: „daca cota = 0 atunci tip (C) trebuie sa fie unul din
+                 * 'LS', 'AS', 'N', 'V'". Valoarea de acum sta in paranteza, iar
+                 * cele ingaduite in lista de la capat — se spun amandoua.
+                 */
+                'tipar' => '/^daca\s+(\S+)\s*=\s*(\S+)\s+atunci\s+(\S+)\s*(?:\(([^)]*)\))?\s*trebuie sa fie unul din\s*(.+)$/ui',
+                'explica' => function ($m) {
+                    $acum = isset($m[4]) && $m[4] !== '' ? ' Acum are valoarea ' . $m[4] . '.' : '';
+
+                    return [
+                        'camp' => $m[3],
+                        'cauta' => isset($m[4]) && $m[4] !== '' ? $m[3] . '="' . $m[4] . '"' : $m[3] . '="',
+                        'explicatie' => 'Când „' . $m[1] . '" este ' . $m[2] . ', câmpul „' . $m[3] . '" nu poate '
+                            . 'lua decât una dintre valorile: ' . rtrim(trim($m[5]), '.') . '.' . $acum,
+                        'de_corectat' => 'Alegeți pentru „' . $m[3] . '" una dintre valorile de mai sus, în '
+                            . 'programul de contabilitate. La D394, greșeala vine de obicei din felul '
+                            . 'operațiunii: o factură cu cota zero trebuie trecută pe tipul care îi arată '
+                            . 'pricina (scutită, neimpozabilă, taxare inversă), nu pe cel obișnuit.',
+                    ];
+                },
+            ],
+            [
+                /*
+                 * D394: „daca tip_partener = 2 atunci cuiP trebuie sa fie un CIF
+                 * valid". Pricina obisnuita nu e codul, ci felul partenerului.
+                 */
+                'tipar' => '/^daca\s+(\S+)\s*=\s*(\S+)\s+atunci\s+(\S+)\s+trebuie sa fie un\s+(CIF|CUI|CNP)\s+valid/ui',
+                'explica' => function ($m) {
+                    return [
+                        'camp' => $m[3],
+                        'cauta' => $m[3] . '="',
+                        'explicatie' => 'Partenerul e trecut cu „' . $m[1] . '" = ' . $m[2] . ', iar pentru felul '
+                            . 'acesta de partener câmpul „' . $m[3] . '" trebuie să fie un ' . strtoupper($m[4])
+                            . ' valid — ceea ce nu este.',
+                        'de_corectat' => 'De cele mai multe ori nu codul e greșit, ci felul partenerului: o '
+                            . 'persoană fizică trecută din greșeală ca persoană juridică. Verificați întâi „'
+                            . $m[1] . '" în nomenclatorul de parteneri; dacă acolo e corect, atunci corectați '
+                            . 'codul fiscal, scris doar cu cifre, fără prefix și fără spații.',
+                    ];
+                },
+            ],
+            [
+                /*
+                 * D112 si celelalte declaratii cu asigurati: reguli scrise cu
+                 * semnele validatorului („# null" = „completat"). Ele se
+                 * talmacesc, ca omul sa nu descifreze notatia.
+                 */
+                'tipar' => '/^(\S+)\s*#\s*null\s+daca\s*\((.+)\)\s*$/ui',
+                'explica' => function ($m) {
+                    /*
+                     * Certificatele medicale de continuare: pricina cea mai
+                     * deasa a regulilor din familia Data_CMI. Omul completeaza
+                     * certificatul de acum, dar nu si datele celui dintai, iar
+                     * validatorul cere legatura dintre ele.
+                     */
+                    $esteCertificatMedical = stripos($m[1], 'CMI') !== false;
+
+                    $deCorectat = 'Completați „' . $m[1] . '" în programul de contabilitate, la înregistrarea '
+                        . 'la care s-a oprit validarea, și generați declarația din nou. Dacă în realitate '
+                        . 'câmpul n-are ce valoare să primească, atunci greșite sunt celelalte câmpuri din '
+                        . 'condiție — ele fac ca acesta să fie cerut.';
+
+                    if ($esteCertificatMedical) {
+                        $deCorectat = 'La certificatele medicale de continuare, aceasta e aproape întotdeauna '
+                            . 'aceeași scăpare: s-a completat certificatul de acum, dar nu și datele '
+                            . 'certificatului inițial (seria, numărul și data lui). Completați-le la angajatul '
+                            . 'în cauză și refaceți declarația — legătura dintre certificate e chiar ce cere '
+                            . 'regula.';
+                    }
+
+                    return [
+                        'camp' => $m[1],
+                        'cauta' => $m[1] . '="',
+                        'explicatie' => 'Câmpul „' . $m[1] . '" a rămas necompletat, deși în situația aceasta '
+                            . 'el este obligatoriu. Condiția care îl cere: ' . $this->talmacesteConditia($m[2]) . '.',
+                        'de_corectat' => $deCorectat,
+                    ];
+                },
+            ],
+            [
+                /*
+                 * A4200 (case de marcat): numarul de zile fiscale declarate nu
+                 * se potriveste cu al fisierelor gasite. Pricina obisnuita nu e
+                 * in declaratie, ci in stickul de memorie.
+                 */
+                'tipar' => '/Numarul de zile fiscale declarate\s*\((\d+)\)\s*este diferit de numarul de fisiere[^(]*\((\d+)\)/ui',
+                'explica' => function ($m) {
+                    return [
+                        'explicatie' => 'Declarația spune ' . $m[1] . ' zile fiscale, dar s-au găsit ' . $m[2]
+                            . ' fișiere de tip zi fiscală. Cele două trebuie să fie la fel.',
+                        'de_corectat' => ((int) $m[2] > (int) $m[1]
+                            ? 'Sunt mai multe fișiere decât zile: pe stickul de memorie au rămas rapoarte de la '
+                                . 'descărcări mai vechi. Ștergeți tot ce e pe stick, descărcați din nou din casa '
+                                . 'de marcat și refaceți declarația.'
+                            : 'Lipsesc fișiere: descărcarea din casa de marcat nu a mers până la capăt, sau '
+                                . 'câteva zile n-au fost salvate. Descărcați din nou, de pe stick gol.'),
+                    ];
+                },
+            ],
+            [
                 'tipar' => '/^atributul\s+(\S+)\s*\(([^)]*)\)\s*trebuie sa fie egal cu\s*(.+?)\s*\(([^)]*)\)\s*$/ui',
                 'explica' => function ($m) {
                     return [
@@ -1255,6 +1449,19 @@ class InterpretareErori
         if ($explicate < $cate) {
             $rezumat .= ' Pentru ' . ($cate - $explicate) . ' dintre ele nu am o explicație pregătită, '
                 . 'așa că apar cu mesajul original.';
+        }
+
+        /*
+         * Cand erorile curg cu sutele, pricina e rareori in date. La D406 sunt
+         * doua greseli de pornire care dau exact asta, si amandoua se dreg
+         * dintr-o apasare — merita spuse inainte ca omul sa inceapa sa
+         * corecteze randuri.
+         */
+        if ($cate >= self::MULTE_ERORI && $declaratie && $declaratie->tip === 'D406') {
+            $rezumat .= ' Fiind atât de multe, verificați întâi două lucruri care le dau pe toate deodată: '
+                . 'că validatorul DUKIntegrator este actualizat, și că declarația a fost validată ca D406, nu '
+                . 'ca D406T (cea de test). Dacă erorile sunt „valoarea … nu se află în listă", atunci lipsește '
+                . 'maparea codurilor interne pe nomenclatorul ANAF, în programul de contabilitate.';
         }
 
         return $rezumat;
