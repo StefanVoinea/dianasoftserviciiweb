@@ -10,10 +10,39 @@ class SpvClient
     protected $transport;
     protected $config;
 
+    /** Cand a plecat spre ANAF apelul dinainte (microtime). */
+    protected $ultimulApel = 0.0;
+
     public function __construct(SpvTransport $transport, array $config)
     {
         $this->transport = $transport;
         $this->config = $config;
+    }
+
+    /**
+     * Pauza ceruta de ANAF intre doua apeluri.
+     *
+     * Se socoteste de la plecarea apelului dinainte, nu de la intoarcerea lui.
+     * Asa ANAF primeste tot cel mult un apel la ragazul cerut, dar noi nu mai
+     * asteptam de doua ori: un lot de mesaje aduse prin tunel are fiecare apel
+     * de cateva secunde, iar pauza intreaga se adauga peste ele degeaba. La o
+     * suta de mesaje, asta insemna doua minute de asteptare fara rost.
+     */
+    protected function asteaptaRandul(): void
+    {
+        $ragaz = (int) $this->config['throttle_ms'] * 1000;
+
+        if ($ragaz <= 0) {
+            return;
+        }
+
+        $trecut = (int) ((microtime(true) - $this->ultimulApel) * 1000000);
+
+        if ($this->ultimulApel > 0 && $trecut < $ragaz) {
+            usleep($ragaz - $trecut);
+        }
+
+        $this->ultimulApel = microtime(true);
     }
 
     public function listaMesaje(int $zile = 60, ?string $cif = null): array
@@ -96,7 +125,7 @@ class SpvClient
     {
         // Pauza ceruta de ANAF intre apeluri se tine si aici: apelul lui e tot
         // unul catre ei, doar ca facut de la celalalt capat.
-        usleep($this->config['throttle_ms'] * 1000);
+        $this->asteaptaRandul();
 
         return $this->transport->descarcaInArhiva($id, $destinatie);
     }
@@ -122,7 +151,7 @@ class SpvClient
 
     private function call(string $path, array $query): Response
     {
-        usleep($this->config['throttle_ms'] * 1000);
+        $this->asteaptaRandul();
 
         $response = $this->transport->get($path, $query);
 

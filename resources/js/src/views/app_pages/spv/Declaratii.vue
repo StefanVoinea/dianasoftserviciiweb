@@ -840,6 +840,8 @@ export default {
       fisiere: [],
       dinFolder: [],
       declaratii: [],
+      // Câte fișiere se trimit deodată la validare (vezi trimiteInGrupuri)
+      FISIERE_DEODATA: 3,
       explicatie: null,
       explicatieVizibila: false,
       explicatieInCurs: false,
@@ -1256,18 +1258,59 @@ export default {
           if (!this.poateDepune) this.depuneDupaSemnare = false
         })
     },
+    /**
+     * Trimite fișierele în grupuri care merg deodată.
+     *
+     * Într-o singură cerere, serverul le lua unul câte unul, iar fiecare trece
+     * prin validatorul ANAF — un program Java care pornește din nou pentru
+     * fiecare fișier și ține câteva secunde. Zece declarații însemnau astfel
+     * minute de așteptare, cu un singur fir de lucru ocupat. Trimise câte trei
+     * deodată, serverul le validează în paralel.
+     *
+     * Mai mult de atât n-are rost: validatorul mănâncă procesor, iar cererile
+     * peste puterea serverului s-ar aștepta oricum una pe alta.
+     */
+    trimiteInGrupuri(fisiere, cateOdata) {
+      const rezultate = []
+      const erori = []
+
+      const unul = fisier => {
+        const formular = new FormData()
+        formular.append('fisiere[]', fisier)
+
+        return this.$http.post('/declaratii', formular, { headers: { 'Content-Type': 'multipart/form-data' } })
+          .then(raspuns => {
+            rezultate.push(...(raspuns.data.data || []))
+            erori.push(...(raspuns.data.erori || []))
+          })
+          .catch(err => {
+            const date = err.response && err.response.data
+
+            if (date && date.erori && date.erori.length) {
+              erori.push(...date.erori)
+            } else {
+              erori.push(`${fisier.name}: ${this.mesajEroare(err, 'nu a putut fi încărcat')}`)
+            }
+          })
+      }
+
+      // Grupurile pleacă unul după altul, dar fișierele dintr-un grup, deodată.
+      let lant = Promise.resolve()
+
+      for (let i = 0; i < fisiere.length; i += cateOdata) {
+        const grup = fisiere.slice(i, i + cateOdata)
+
+        lant = lant.then(() => Promise.all(grup.map(unul)))
+      }
+
+      return lant.then(() => ({ rezultate, erori }))
+    },
     incarca() {
       this.eroare = ''
       this.incarcaInCurs = true
 
-      const formular = new FormData()
-      this.deIncarcat.forEach(fisier => formular.append('fisiere[]', fisier))
-
-      this.$http.post('/declaratii', formular, { headers: { 'Content-Type': 'multipart/form-data' } })
-        .then(raspuns => {
-          const incarcate = raspuns.data.data || []
-          const erori = raspuns.data.erori || []
-
+      this.trimiteInGrupuri(this.deIncarcat.slice(), this.FISIERE_DEODATA)
+        .then(({ rezultate: incarcate, erori }) => {
           this.fisiere = []
           this.dinFolder = []
 

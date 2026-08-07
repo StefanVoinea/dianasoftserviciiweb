@@ -22,8 +22,30 @@ class Punte
     /** Cât ține agentul linia deschisă întrebând dacă are ceva de făcut. */
     public const PANDA_SECUNDE = 25;
 
-    /** Cât de des se uită serverul dacă a venit răspunsul, în microsecunde. */
+    /**
+     * Cât de des se uită serverul dacă a venit răspunsul, în microsecunde.
+     *
+     * Se începe des și se rărește: răspunsul vine, de obicei, în câteva secunde,
+     * iar întrebând din 150 în 150 de milisecunde se pierdeau, în medie, 75 la
+     * fiecare comandă — la un lot de o sută de mesaje, aproape zece secunde
+     * numai din așteptat degeaba. Rărirea de după ține baza de date liniștită
+     * când chiar se lucrează îndelung.
+     */
     protected const PAS_ASTEPTARE = 150000;
+
+    /** Cât de des se întreabă în prima secundă, cât răspunsul e aproape. */
+    protected const PAS_LA_INCEPUT = 25000;
+
+    /** Cât ține pasul mărunt, în microsecunde. */
+    protected const RAGAZ_PAS_MARUNT = 3000000;
+
+    /** Pasul potrivit pentru cât s-a așteptat până acum. */
+    protected static function pasul(float $deCand): int
+    {
+        return (microtime(true) - $deCand) * 1000000 < self::RAGAZ_PAS_MARUNT
+            ? self::PAS_LA_INCEPUT
+            : self::PAS_ASTEPTARE;
+    }
 
     protected $licente;
 
@@ -268,7 +290,8 @@ class Punte
     /** Așteaptă răspunsul agentului. Null înseamnă că n-a venit la timp. */
     public function asteapta(BridgeComanda $comanda, ?int $secunde = null): ?BridgeComanda
     {
-        $pana = microtime(true) + ($secunde ?: self::ASTEPTARE_SECUNDE);
+        $deCand = microtime(true);
+        $pana = $deCand + ($secunde ?: self::ASTEPTARE_SECUNDE);
 
         while (microtime(true) < $pana) {
             $proaspata = $comanda->fresh();
@@ -281,7 +304,7 @@ class Punte
                 return $proaspata;
             }
 
-            usleep(self::PAS_ASTEPTARE);
+            usleep(self::pasul($deCand));
         }
 
         $comanda->curata();
@@ -310,7 +333,8 @@ class Punte
             ->whereIn('id', $iduri)
             ->update(['agent_vazut_la' => now()]);
 
-        $pana = microtime(true) + ($secunde ?: self::PANDA_SECUNDE);
+        $deCand = microtime(true);
+        $pana = $deCand + ($secunde ?: self::PANDA_SECUNDE);
 
         do {
             $comanda = BridgeComanda::query()
@@ -325,7 +349,13 @@ class Punte
                 return $comanda;
             }
 
-            usleep(self::PAS_ASTEPTARE);
+            /*
+             * Mărunt la început, rar după aceea: într-un lot de descărcări
+             * comanda următoare vine îndată după cea dinainte, iar agentul o ia
+             * cu 25 de milisecunde întârziere în loc de 150. Într-o zi liniștită,
+             * pânda se rărește singură și nu mai bate baza de date degeaba.
+             */
+            usleep(self::pasul($deCand));
         } while (microtime(true) < $pana);
 
         return null;
