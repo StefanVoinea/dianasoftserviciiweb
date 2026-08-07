@@ -1799,72 +1799,18 @@ export default {
 
       this.explicatieEroare = ''
 
-      const antete = this.$http.defaults.headers.common
-      // Adresa API vine din window.api_url (definit în pagină); instanța axios
-      // nu are baseURL propriu, așa că nu se poate citi de acolo.
-      const baza = (window.api_url || this.$http.defaults.baseURL || '').replace(/\/+$/, '')
-      const adresa = `${baza}/declaratii/${declaratie.id}/erori`
-
-      fetch(adresa, {
-        headers: {
-          // „application/json" trebuie să apară: fără el, la o sesiune expirată
-          // Laravel redirecționează spre login în loc să răspundă 401, iar
-          // fluxul ar părea gol în loc de eșuat.
-          Accept: 'application/json, application/x-ndjson',
-          Authorization: antete.Authorization,
-          AuthorizationHeader: antete.AuthorizationHeader,
-        },
-      })
-        .then(raspuns => {
-          if (!raspuns.ok) throw new Error(`HTTP ${raspuns.status}`)
-
-          return this.citesteFluxul(raspuns.body.getReader())
-        })
+      citesteFluxul(`declaratii/${declaratie.id}/erori`, pas => this.adaugaPas(pas))
         .catch(err => {
           // Eșecul se arată în fereastră, nu în spatele ei: altfel utilizatorul
           // vede doar o fereastră goală și nu știe ce s-a întâmplat.
+          this.explicatieEroare = `Explicația nu a putut fi obținută: ${err.message}.`
+        })
+        .finally(() => {
           this.explicatieInCurs = false
-          this.explicatieEroare = `Explicația nu a putut fi obținută (${err.message}).`
         })
     },
 
-    /** Citește răspunsul rând cu rând și adaugă fiecare problemă cum sosește. */
-    citesteFluxul(cititor) {
-      const decodor = new TextDecoder('utf-8')
-      let ramas = ''
-
-      const urmatorul = () => cititor.read().then(({ done, value }) => {
-        if (done) {
-          this.explicatieInCurs = false
-
-          return null
-        }
-
-        ramas += decodor.decode(value, { stream: true })
-
-        const randuri = ramas.split('\n')
-        // Ultimul poate fi incomplet: rămâne pentru bucata următoare.
-        ramas = randuri.pop()
-
-        randuri.forEach(rand => this.adaugaPas(rand))
-
-        return urmatorul()
-      })
-
-      return urmatorul()
-    },
-
-    adaugaPas(rand) {
-      if (!rand.trim()) return
-
-      let pas
-
-      try {
-        pas = JSON.parse(rand)
-      } catch (e) {
-        return
-      }
-
+    adaugaPas(pas) {
       if (pas.tip === 'inceput') {
         this.explicatieTotal = pas.total
       } else if (pas.tip === 'problema') {

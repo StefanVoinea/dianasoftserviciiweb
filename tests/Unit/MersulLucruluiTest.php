@@ -127,6 +127,43 @@ class MersulLucruluiTest extends TestCase
     }
 
     /**
+     * Esecul se spune pe sleau, nu prin numar.
+     *
+     * „HTTP 404" nu spune nimanui nimic — si cel mai adesea nu inseamna ca
+     * lipseste ceva din datele omului, ci ca serverul nu cunoaste ruta: are cod
+     * mai vechi, sau i-au ramas rutele in cache de dinainte ca ea sa fie
+     * adaugata. Cat timp scria doar numarul, aflarea pricinii costa un drum.
+     */
+    public function test_esecurile_legaturii_se_spun_in_cuvinte(): void
+    {
+        $ajutorul = file_get_contents(base_path('resources/js/src/libs/flux.js'));
+
+        $this->assertStringContainsString('eroareaLegaturii', $ajutorul);
+
+        foreach ([401, 403, 404, 500, 504] as $status) {
+            $this->assertStringContainsString(
+                $status . ': ',
+                $ajutorul,
+                'starea ' . $status . ' n-are talmacire'
+            );
+        }
+
+        $this->assertStringContainsString('route:clear', $ajutorul, '404 trebuie sa spuna si unde se cauta');
+    }
+
+    /**
+     * SPV Wizard citeste fluxul cu acelasi ajutor ca celelalte file: doua citiri
+     * scrise deosebit se abat una de la alta, si numai una se indreapta.
+     */
+    public function test_wizardul_foloseste_acelasi_ajutor(): void
+    {
+        $fila = file_get_contents(base_path('resources/js/src/views/app_pages/spv/Declaratii.vue'));
+
+        $this->assertStringContainsString('citesteFluxul(`declaratii/${declaratie.id}/erori`', $fila);
+        $this->assertStringNotContainsString('getReader()', $fila, 'wizardul nu-și mai citește singur fluxul');
+    }
+
+    /**
      * Browserele fara fetch cu flux raman pe calea dinainte: mai bine fara mers
      * decat fara descarcare.
      */

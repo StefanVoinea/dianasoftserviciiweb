@@ -22,6 +22,32 @@ function adresa(cale) {
 }
 
 /**
+ * Ce înseamnă, pe șleau, un răspuns care n-a mers.
+ *
+ * „HTTP 404" nu spune nimănui nimic — și cel mai adesea nu înseamnă că lipsește
+ * ceva din datele omului, ci că serverul nu cunoaște ruta: ori are cod mai
+ * vechi, ori i-au rămas rutele în cache de dinainte ca ea să fie adăugată.
+ * Scris așa, se știe de la prima citire unde să se caute.
+ */
+function eroareaLegaturii(status) {
+  const talcuri = {
+    401: 'sesiunea a expirat — intrați din nou în aplicație',
+    403: 'contul acesta nu are drept la operația cerută',
+    404: 'serverul nu cunoaște această adresă — are cod mai vechi sau rutele rămase în cache'
+      + ' (pe server: php artisan route:clear)',
+    419: 'sesiunea a expirat — reîncărcați pagina',
+    500: 'serverul a întâmpinat o eroare — vedeți jurnalul aplicației',
+    502: 'serverul din față n-a primit răspuns',
+    504: 'răspunsul a întârziat prea mult',
+  }
+
+  const eroare = new Error(talcuri[status] || `răspuns neașteptat de la server (HTTP ${status})`)
+  eroare.status = status
+
+  return eroare
+}
+
+/**
  * Cere ruta și dă fiecare rând primit, pe măsură ce sosește.
  *
  * @param {string} cale ruta din API, fără adresa de bază
@@ -42,7 +68,7 @@ export default function citesteFluxul(cale, laFiecarePas) {
     },
   })
     .then(raspuns => {
-      if (!raspuns.ok) throw new Error(`HTTP ${raspuns.status}`)
+      if (!raspuns.ok) throw eroareaLegaturii(raspuns.status)
 
       const cititor = raspuns.body.getReader()
       const decodor = new TextDecoder('utf-8')
