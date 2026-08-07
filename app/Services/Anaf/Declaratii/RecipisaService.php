@@ -81,6 +81,80 @@ class RecipisaService
         ];
     }
 
+    /**
+     * Aceeasi verificare, dar spusa pe masura ce se face.
+     *
+     * O sesiune cu cateva zeci de declaratii tine minute: pentru fiecare se
+     * intreaba ANAF de starea ei, iar recipisa gasita se aduce. Cu un raspuns
+     * obisnuit, omul vede o rotita si atat. Aici afla dupa fiecare declaratie a
+     * cata e din cate si a cui e.
+     *
+     * @return \Generator randurile trimise filei, in ordinea lucrului
+     */
+    public function pasCuPas(int $zile = 60): \Generator
+    {
+        $declaratii = AnafDeclaratie::asteaptaRecipisa()->get();
+
+        yield ['tip' => 'inceput', 'total' => $declaratii->count()];
+
+        if ($declaratii->isEmpty()) {
+            yield ['tip' => 'gata', 'verificate' => 0, 'descarcate' => 0, 'descarcate_id' => [], 'erori' => []];
+
+            return;
+        }
+
+        $mesaje = [];
+        $erori = [];
+
+        try {
+            $lista = $this->spvClient->listaMesaje($zile);
+            $mesaje = isset($lista['mesaje']) && is_array($lista['mesaje']) ? $lista['mesaje'] : [];
+        } catch (SpvException $e) {
+            // SPV indisponibil sau fara mesaje — continuam doar cu StareD112.
+            $erori[] = 'SPV: ' . $e->getMessage();
+        }
+
+        $descarcate = [];
+        $facute = 0;
+
+        foreach ($declaratii as $declaratie) {
+            // Fiecare declaratie isi cere ragazul ei, socotit de la capat.
+            if (function_exists('set_time_limit')) {
+                @set_time_limit(120);
+            }
+
+            $adusa = false;
+
+            try {
+                $adusa = $this->verificaDeclaratie($declaratie, $mesaje);
+
+                if ($adusa) {
+                    $descarcate[] = $declaratie->id;
+                }
+            } catch (\Exception $e) {
+                $erori[] = $declaratie->index_recipisa . ': ' . $e->getMessage();
+            }
+
+            $facute++;
+
+            yield [
+                'tip' => 'pas',
+                'facute' => $facute,
+                'total' => $declaratii->count(),
+                'adus' => $adusa,
+                'ce' => trim($declaratie->tip . ' ' . $declaratie->cui),
+            ];
+        }
+
+        yield [
+            'tip' => 'gata',
+            'verificate' => $declaratii->count(),
+            'descarcate' => count($descarcate),
+            'descarcate_id' => $descarcate,
+            'erori' => $erori,
+        ];
+    }
+
     public function verificaDeclaratie(AnafDeclaratie $declaratie, array $mesaje = []): bool
     {
         $mesaj = $this->potrivesteMesaj($declaratie, $mesaje);

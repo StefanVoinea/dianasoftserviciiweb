@@ -237,6 +237,26 @@
         </b-col>
       </b-row>
 
+      <!--
+        Cât timp se lucrează se spune la ce răspuns s-a ajuns: o preluare de
+        zeci de documente ține minute, iar o rotiță singură nu deosebește
+        lucrul de împotmolire.
+      -->
+      <div
+        v-if="preiaInCurs && mersul"
+        class="text-muted mb-3"
+      >
+        {{ mersul }}
+        <b-progress
+          v-if="deAdus"
+          :value="aduse"
+          :max="deAdus"
+          variant="primary"
+          height="6px"
+          class="mt-1"
+        />
+      </div>
+
       <b-alert
         v-if="eroare"
         show
@@ -408,6 +428,7 @@
 
 <script>
 import vSelect from 'vue-select'
+import citesteFluxul, { areFlux } from '@/libs/flux'
 
 export default {
   name: 'SpvSolicitariTab',
@@ -446,6 +467,10 @@ export default {
       listaInCurs: false,
       trimiteInCurs: false,
       preiaInCurs: false,
+      // Mersul lucrului, cat timp se preia: „3 din 7 — Fisa rol 15208744"
+      mersul: '',
+      aduse: 0,
+      deAdus: 0,
 
       // Preluarea repetată, ca la recipise: ANAF răspunde după un timp
       automat: { activ: false, minute: 10 },
@@ -661,14 +686,15 @@ export default {
     preia(tacut = false) {
       this.eroare = ''
       this.preiaInCurs = true
+      this.mersul = ''
+      this.aduse = 0
+      this.deAdus = 0
 
       // Ce era deja preluat înainte: la sfârșit se tipăresc doar noutățile.
       const inainte = this.solicitari.filter(s => this.areDocument(s)).map(s => s.id)
 
-      return this.$http.post('/spv/solicitari/preia')
-        .then(raspuns => {
-          const rezultat = raspuns.data.data
-
+      return this.cereRaspunsurile()
+        .then(rezultat => {
           this.ultimaPreluare = this.acum()
           this.ultimaPreluareNumar = rezultat.preluate || 0
           window.localStorage.setItem('solicitari_ultima_preluare', JSON.stringify({
@@ -702,7 +728,60 @@ export default {
         })
         .finally(() => {
           this.preiaInCurs = false
+          this.mersul = ''
+          this.aduse = 0
+          this.deAdus = 0
         })
+    },
+    /**
+     * Cere răspunsurile, spunând la fiecare al câtelea e din câte.
+     *
+     * Răspunsul curge — câte un rând pe măsură ce se lucrează —, așa că omul
+     * vede mersul, nu doar o rotiță: fiecare document are pauza cerută de ANAF
+     * și drumul până la tokenul clientului, iar din afară lucrul și
+     * împotmolirea arată la fel.
+     *
+     * Se numără cele care chiar au ce aduce, nu toate solicitările în
+     * așteptare: „3 din 3" spune adevărul, „3 din 120" ar părea că s-a oprit.
+     *
+     * @returns {Promise<object>} rezultatul, în forma răspunsului obișnuit
+     */
+    cereRaspunsurile() {
+      // Browserele fără fetch cu flux rămân pe calea dinainte, fără numărătoare.
+      if (!areFlux()) {
+        return this.$http.post('/spv/solicitari/preia').then(raspuns => raspuns.data.data)
+      }
+
+      let rezultat = {
+        verificate: 0,
+        preluate: 0,
+        ramase: 0,
+        erori: [],
+      }
+
+      return citesteFluxul('spv/solicitari/preia/flux', pas => {
+        if (pas.tip === 'inceput') {
+          this.deAdus = pas.total
+          this.aduse = 0
+
+          if (pas.total) this.mersul = `0 din ${pas.total} răspunsuri aduse...`
+
+          return
+        }
+
+        if (pas.tip === 'pas') {
+          this.aduse = pas.facute
+
+          const care = pas.ce ? ` — ${pas.ce}` : ''
+          const cazut = pas.reusit ? '' : ' (nu s-a putut aduce)'
+
+          this.mersul = `${pas.facute} din ${pas.total} răspunsuri aduse${care}${cazut}`
+
+          return
+        }
+
+        if (pas.tip === 'gata') rezultat = pas
+      }).then(() => rezultat)
     },
     /**
      * Trimite documentele la imprimanta utilizatorului.

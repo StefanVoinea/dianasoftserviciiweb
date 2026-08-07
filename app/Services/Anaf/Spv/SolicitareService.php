@@ -231,6 +231,98 @@ class SolicitareService
     }
 
     /**
+     * Aceeasi preluare, dar spusa pe masura ce se face.
+     *
+     * Fiecare raspuns are pauza ceruta de ANAF si drumul pana la tokenul
+     * clientului, deci o preluare cu zeci de raspunsuri tine minute. Cu un
+     * raspuns obisnuit, omul vede o rotita si atat.
+     *
+     * Se numara cele care chiar au ce aduce, nu toate solicitarile in asteptare:
+     * „3 din 3" spune adevarul, „3 din 120" ar parea ca s-a oprit la inceput.
+     *
+     * @return \Generator randurile trimise filei, in ordinea lucrului
+     */
+    public function pasCuPasRaspunsuri(int $zile = 60): \Generator
+    {
+        $solicitari = SpvSolicitare::inAsteptare()->get();
+
+        if ($solicitari->isEmpty()) {
+            yield ['tip' => 'inceput', 'total' => 0];
+            yield ['tip' => 'gata', 'verificate' => 0, 'preluate' => 0, 'ramase' => 0, 'erori' => []];
+
+            return;
+        }
+
+        try {
+            $lista = $this->client->listaMesaje($zile);
+            $mesaje = isset($lista['mesaje']) && is_array($lista['mesaje']) ? $lista['mesaje'] : [];
+        } catch (SpvException $e) {
+            yield ['tip' => 'inceput', 'total' => 0];
+            yield [
+                'tip' => 'gata',
+                'verificate' => $solicitari->count(),
+                'preluate' => 0,
+                'ramase' => $solicitari->count(),
+                'erori' => ['SPV: ' . $e->getMessage()],
+            ];
+
+            return;
+        }
+
+        // Intai se vede cine are raspuns, ca numaratoarea sa porneasca de la un
+        // total adevarat; abia pe urma se aduc, unul cate unul.
+        $deAdus = [];
+
+        foreach ($solicitari as $solicitare) {
+            $mesaj = $this->potrivesteMesaj($solicitare, $mesaje);
+
+            if ($mesaj !== null) {
+                $deAdus[] = [$solicitare, $mesaj];
+            }
+        }
+
+        $total = count($deAdus);
+
+        yield ['tip' => 'inceput', 'total' => $total];
+
+        $preluate = 0;
+        $erori = [];
+
+        foreach ($deAdus as $i => [$solicitare, $mesaj]) {
+            // Fiecare raspuns isi cere ragazul lui, socotit de la capat.
+            if (function_exists('set_time_limit')) {
+                @set_time_limit(120);
+            }
+
+            $reusit = true;
+
+            try {
+                $this->preia($solicitare, $mesaj);
+                $preluate++;
+            } catch (\Exception $e) {
+                $erori[] = $solicitare->cif . ' / ' . $solicitare->tip_document . ': ' . $e->getMessage();
+                $reusit = false;
+            }
+
+            yield [
+                'tip' => 'pas',
+                'facute' => $i + 1,
+                'total' => $total,
+                'reusit' => $reusit,
+                'ce' => trim($solicitare->tip_document . ' ' . $solicitare->cif),
+            ];
+        }
+
+        yield [
+            'tip' => 'gata',
+            'verificate' => $solicitari->count(),
+            'preluate' => $preluate,
+            'ramase' => SpvSolicitare::inAsteptare()->count(),
+            'erori' => $erori,
+        ];
+    }
+
+    /**
      * Reinterpreteaza documentele deja descarcate — utila cand registrul de
      * societati e populat dupa ce raspunsurile au fost preluate.
      *

@@ -22,6 +22,7 @@ use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\CertificatService;
 use App\Support\ContextUtilizator;
+use App\Support\Flux;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -605,6 +606,38 @@ class DeclaratiiController extends Controller
         );
 
         return response()->json(['success' => true, 'data' => $rezultat]);
+    }
+
+    /**
+     * Aceeasi verificare, cu numaratoarea la vedere.
+     *
+     * Raspunsul curge: dupa fiecare declaratie cercetata, fila afla a cata e
+     * din cate. Fara asta, o sesiune cu zeci de declaratii arata la fel cu una
+     * impotmolita — o rotita care se invarte.
+     */
+    public function verificaRecipiseFlux(Request $request, RecipisaService $recipise)
+    {
+        $zile = (int) $request->query('zile', 60);
+
+        return Flux::raspunde(function () use ($recipise, $zile) {
+            foreach ($recipise->pasCuPas($zile) as $pas) {
+                if ($pas['tip'] === 'gata') {
+                    Jurnal::scrie(
+                        'declaratie_recipise',
+                        sprintf(
+                            'A verificat recipisele: %d declarații verificate, %d recipise noi',
+                            $pas['verificate'],
+                            $pas['descarcate']
+                        ),
+                        $pas,
+                        null,
+                        $pas['erori'] === []
+                    );
+                }
+
+                yield $pas;
+            }
+        });
     }
 
     /**

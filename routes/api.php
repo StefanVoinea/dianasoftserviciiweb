@@ -124,6 +124,8 @@ Route::middleware(['auth:api', 'companie.anaf', 'modul:spv'])->group(function ()
     Route::get('/spv/stocate', 'Api\SpvController@stocate');
     // Urmatorul lot de documente lipsa: fila il cere pana nu mai ramane nimic
     Route::get('/spv/descarca-lipsa', 'Api\SpvController@descarcaLipsa');
+    // Aceleasi documente, aduse cu numaratoarea la vedere (flux NDJSON)
+    Route::get('/spv/descarca-lipsa/flux', 'Api\SpvController@descarcaLipsaFlux');
     Route::get('/spv/history', 'Api\SpvHistoryController@index');
     Route::get('/spv/download', 'Api\SpvFileController@download');
     Route::get('/spv/fisier', 'Api\SpvFileController@open');
@@ -133,6 +135,8 @@ Route::middleware(['auth:api', 'companie.anaf', 'modul:spv'])->group(function ()
     Route::get('/spv/solicitari/{solicitare}/fisier', 'Api\SpvSolicitariController@fisier');
     Route::post('/spv/solicitari', 'Api\SpvSolicitariController@store');
     Route::post('/spv/solicitari/preia', 'Api\SpvSolicitariController@preia');
+    // Aceeasi preluare, spusa pas cu pas cat timp se lucreaza
+    Route::get('/spv/solicitari/preia/flux', 'Api\SpvSolicitariController@preiaFlux');
     Route::post('/spv/solicitari/tipareste', 'Api\SpvSolicitariController@tipareste');
     Route::delete('/spv/solicitari/{solicitare}', 'Api\SpvSolicitariController@destroy');
 
@@ -140,6 +144,8 @@ Route::middleware(['auth:api', 'companie.anaf', 'modul:spv'])->group(function ()
     Route::get('/declaratii', 'Api\DeclaratiiController@index');
     Route::post('/declaratii', 'Api\DeclaratiiController@store');
     Route::post('/declaratii/recipise', 'Api\DeclaratiiController@verificaRecipise');
+    // Aceeasi verificare, spusa pas cu pas cat timp se lucreaza
+    Route::get('/declaratii/recipise/flux', 'Api\DeclaratiiController@verificaRecipiseFlux');
     // Un singur PDF cu declaratiile semnate, pentru tiparire
     Route::post('/declaratii/concateneaza', 'Api\DeclaratiiController@concateneaza');
     Route::post('/declaratii/{declaratie}/valideaza', 'Api\DeclaratiiController@valideazaDeclaratie');

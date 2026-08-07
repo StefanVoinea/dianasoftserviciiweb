@@ -11,6 +11,7 @@ use App\Services\Anaf\Spv\SocietatiService;
 use App\Services\Anaf\Spv\SolicitareService;
 use App\Services\Anaf\Spv\SpvException;
 use App\Services\Anaf\Spv\SpvStorage;
+use App\Support\Flux;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -140,22 +141,7 @@ class SpvController extends Controller
      */
     public function descarcaLipsa(Request $request, SpvStorage $storage)
     {
-        /*
-         * Se scot din interogare cele aduse deja si cele care au esuat de prea
-         * multe ori: altfel s-ar citi tot tabelul, la fiecare lot, ca pe urma
-         * sa fie aruncat aproape intreg. Ce ramane de cantarit in PHP e doar
-         * fisierul care s-ar putea sa fi disparut de pe disc.
-         */
-        $mesaje = SpvMesaj::query()
-            ->whereNull('arhiva_cale')
-            ->where('incercari', '<', (int) config('anaf.spv.incercari_max'))
-            ->when($request->filled('cif'), function ($intrebare) use ($request) {
-                return $intrebare->where('cif', 'like', '%' . $request->query('cif') . '%');
-            })
-            ->orderByDesc('data_creare')
-            ->orderByDesc('id')
-            ->get()
-            ->all();
+        $mesaje = $this->neaduse($request);
 
         try {
             $rezultat = $this->descarcaFisiereLipsa($mesaje, $storage);
@@ -170,6 +156,103 @@ class SpvController extends Controller
             'data' => ['mesaje' => $this->istoric($request)],
             'descarcare' => $rezultat,
         ]);
+    }
+
+    /**
+     * Aceleasi documente, aduse cu numaratoarea la vedere.
+     *
+     * Aducerea a zeci de documente tine minute — fiecare are pauza ceruta de
+     * ANAF si drumul pana la tokenul clientului. Cu un raspuns obisnuit, omul
+     * vede o rotita si atat: nu stie daca merge, unde s-a ajuns, sau daca s-a
+     * impotmolit. Aici raspunsul curge, si dupa fiecare document se spune al
+     * catelea e din cate.
+     *
+     * Cum se stie de la bun inceput cate sunt, nu mai e nevoie de loturi: se
+     * aduc toate intr-o singura apasare, iar legatura nu tace niciodata destul
+     * cat sa para cazuta.
+     */
+    public function descarcaLipsaFlux(Request $request, SpvStorage $storage)
+    {
+        $deDescarcat = $this->deDescarcat($this->neaduse($request));
+
+        return Flux::raspunde(function () use ($deDescarcat, $storage, $request) {
+            $total = count($deDescarcat);
+
+            yield ['tip' => 'inceput', 'total' => $total];
+
+            $descarcate = 0;
+            $erori = [];
+
+            foreach ($deDescarcat as $i => $mesaj) {
+                // Fiecare document isi cere ragazul lui, socotit de la capat.
+                if (function_exists('set_time_limit')) {
+                    @set_time_limit(120);
+                }
+
+                $reusit = true;
+
+                try {
+                    // Documentul merge de la ANAF drept in dosarul firmei, la client.
+                    $storage->aduce($mesaj);
+
+                    $descarcate++;
+                } catch (SpvException $e) {
+                    $mesaj->update([
+                        'incercari' => $mesaj->incercari + 1,
+                        'ultima_eroare' => $e->getMessage(),
+                    ]);
+
+                    $erori[] = $mesaj->mesaj_id . ': ' . $e->getMessage();
+                    $reusit = false;
+                }
+
+                yield [
+                    'tip' => 'pas',
+                    'facute' => $i + 1,
+                    'total' => $total,
+                    'reusit' => $reusit,
+                    'ce' => trim(($mesaj->tip ?: 'Document') . ' ' . $mesaj->cif),
+                ];
+            }
+
+            Jurnal::scrie(
+                'mesaje_descarcare',
+                sprintf('A adus documentele lipsă: %d din %d', $descarcate, $total),
+                ['descarcate' => $descarcate, 'erori' => $erori],
+                $request->query('cif') ?: null,
+                $erori === []
+            );
+
+            yield [
+                'tip' => 'gata',
+                'descarcate' => $descarcate,
+                'ramase' => max(0, $total - $descarcate - count($erori)),
+                'erori' => $erori,
+                'mesaje' => $this->istoric($request),
+            ];
+        });
+    }
+
+    /**
+     * Mesajele al caror document n-a fost adus inca, dupa cat se poate sti din
+     * baza de date. Se scot de aici cele aduse deja si cele care au esuat de
+     * prea multe ori: altfel s-ar citi tot tabelul ca pe urma sa fie aruncat
+     * aproape intreg.
+     *
+     * @return SpvMesaj[]
+     */
+    protected function neaduse(Request $request): array
+    {
+        return SpvMesaj::query()
+            ->whereNull('arhiva_cale')
+            ->where('incercari', '<', (int) config('anaf.spv.incercari_max'))
+            ->when($request->filled('cif'), function ($intrebare) use ($request) {
+                return $intrebare->where('cif', 'like', '%' . $request->query('cif') . '%');
+            })
+            ->orderByDesc('data_creare')
+            ->orderByDesc('id')
+            ->get()
+            ->all();
     }
 
     /**
@@ -226,18 +309,8 @@ class SpvController extends Controller
     protected function descarcaFisiereLipsa(array $mesaje, SpvStorage $storage): array
     {
         $limita = (int) config('anaf.spv.limita_descarcari');
-        $incercariMax = (int) config('anaf.spv.incercari_max');
 
-        $deDescarcat = array_values(array_filter($mesaje, function (SpvMesaj $mesaj) use ($incercariMax) {
-            // Recipisele si raspunsurile la solicitari se aduc din filele lor,
-            // unde se si leaga de documentul la care raspund. Cerute si de aici,
-            // ar consuma de doua ori din limita de apeluri catre ANAF.
-            if ($this->filaCareAduce($mesaj) !== null) {
-                return false;
-            }
-
-            return $this->lipsesteFisierul($mesaj) && $mesaj->incercari < $incercariMax;
-        }));
+        $deDescarcat = $this->deDescarcat($mesaje);
 
         $lot = array_slice($deDescarcat, 0, $limita);
 
@@ -271,6 +344,28 @@ class SpvController extends Controller
             'ramase' => max(0, count($deDescarcat) - count($lot)),
             'erori' => $erori,
         ];
+    }
+
+    /**
+     * Care dintre mesaje mai au un document de adus.
+     *
+     * @param  SpvMesaj[]  $mesaje
+     * @return SpvMesaj[]
+     */
+    protected function deDescarcat(array $mesaje): array
+    {
+        $incercariMax = (int) config('anaf.spv.incercari_max');
+
+        return array_values(array_filter($mesaje, function (SpvMesaj $mesaj) use ($incercariMax) {
+            // Recipisele si raspunsurile la solicitari se aduc din filele lor,
+            // unde se si leaga de documentul la care raspund. Cerute si de aici,
+            // ar consuma de doua ori din limita de apeluri catre ANAF.
+            if ($this->filaCareAduce($mesaj) !== null) {
+                return false;
+            }
+
+            return $this->lipsesteFisierul($mesaj) && $mesaj->incercari < $incercariMax;
+        }));
     }
 
     /**

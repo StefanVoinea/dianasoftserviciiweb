@@ -285,11 +285,24 @@
         </div>
       </b-modal>
 
+      <!--
+        Cât timp se lucrează se spune la ce document s-a ajuns: o descărcare de
+        zeci de documente ține minute, iar o rotiță singură nu deosebește
+        lucrul de împotmolire.
+      -->
       <div
         v-if="loading"
         class="text-muted"
       >
-        Se încarcă mesajele SPV și se descarcă fișierele...
+        {{ mersul || 'Se încarcă mesajele SPV și se descarcă fișierele...' }}
+        <b-progress
+          v-if="deAdus"
+          :value="aduse"
+          :max="deAdus"
+          variant="success"
+          height="6px"
+          class="mt-1"
+        />
       </div>
       <div
         v-else-if="error"
@@ -400,6 +413,7 @@
 
 <script>
 import vSelect from 'vue-select'
+import citesteFluxul, { areFlux } from '@/libs/flux'
 
 export default {
   name: 'SpvMesaje',
@@ -415,6 +429,10 @@ export default {
       pagina: 1,
       pePagina: 25,
       infoDescarcare: '',
+      // Mersul lucrului, cat timp se descarca: „7 din 42 — DECIZIE 15208744"
+      mersul: '',
+      aduse: 0,
+      deAdus: 0,
 
       // Filtre pe coloanele tabelului; lucrează pe ce e deja adus
       filtre: {
@@ -752,7 +770,16 @@ export default {
       this.loading = true
       this.error = ''
 
-      const params = { zile: this.zile }
+      this.mersul = ''
+      this.aduse = 0
+      this.deAdus = 0
+
+      /*
+       * Lista se cere fără documente: ea vine repede și se vede pe loc, iar
+       * documentele se aduc pe urmă, cu numărătoarea la vedere. Într-o singură
+       * cerere, tabelul ar fi apărut abia după ultimul document.
+       */
+      const params = { zile: this.zile, descarca: 0 }
 
       // O singură firmă se poate cere direct de la ANAF; pentru mai multe,
       // interogarea merge pe toate și se filtrează la afișare.
@@ -778,19 +805,9 @@ export default {
              * găsit nimic. Altfel butonul pare că nu face nimic, iar omul crede
              * pe bună dreptate că e stricat.
              */
-            const descarcare = response.data.descarcare || {}
             const arata = !(tacut && !payload.noi)
 
-            if (!descarcare.ramase) this.infoDescarcare = arata ? this.rezumatCitire(payload, descarcare) : ''
-
-            /*
-             * O cerere aduce cel mult un lot de documente — fiecare are pauza
-             * cerută de ANAF și drumul până la tokenul clientului, iar un lot
-             * prea mare ar depăși răbdarea serverului de web. Ce a rămas se
-             * cere mai departe de aici, lot după lot: omul apasă o dată, nu de
-             * cinci ori pentru o sută de mesaje.
-             */
-            return descarcare.ramase ? this.aduceRestul(payload, descarcare, arata) : Promise.resolve()
+            return this.aduceDocumentele(payload, arata)
           }
 
           this.error = response.data.message || 'Nu s-au putut încărca datele SPV'
@@ -804,6 +821,72 @@ export default {
         })
         .finally(() => {
           this.loading = false
+        })
+    },
+    /**
+     * Aduce documentele lipsă, spunând la fiecare al câtelea e din câte.
+     *
+     * Răspunsul curge — câte un rând pe măsură ce se lucrează —, așa că omul
+     * vede mersul, nu doar o rotiță. O descărcare de zeci de documente ține
+     * minute: fiecare are pauza cerută de ANAF și drumul până la tokenul
+     * clientului, iar din afară lucrul și împotmolirea arată la fel.
+     *
+     * @param {object} payload ce a răspuns ANAF la citirea listei
+     * @param {boolean} arata se scrie mersul lucrului pe ecran?
+     */
+    aduceDocumentele(payload, arata) {
+      const intrebare = this.listaCif.length === 1 ? `?cif=${encodeURIComponent(this.listaCif[0])}` : ''
+
+      // Browserele fără fetch cu flux rămân pe calea dinainte: loturi, fără
+      // numărătoare. Mai bine fără mers decât fără descărcare.
+      if (!areFlux()) {
+        return this.$http.get('/spv/descarca-lipsa', { params: this.listaCif.length === 1 ? { cif: this.listaCif[0] } : {} })
+          .then(raspuns => this.aduceRestul(payload, (raspuns.data && raspuns.data.descarcare) || {}, arata))
+      }
+
+      const rezultat = { descarcate: 0, ramase: 0, erori: [] }
+
+      return citesteFluxul(`spv/descarca-lipsa/flux${intrebare}`, pas => {
+        if (pas.tip === 'inceput') {
+          this.deAdus = pas.total
+          this.aduse = 0
+
+          if (arata && pas.total) this.mersul = `0 din ${pas.total} documente aduse...`
+
+          return
+        }
+
+        if (pas.tip === 'pas') {
+          this.aduse = pas.facute
+
+          if (arata) {
+            const care = pas.ce ? ` — ${pas.ce}` : ''
+            const cazut = pas.reusit ? '' : ' (nu s-a putut aduce)'
+
+            this.mersul = `${pas.facute} din ${pas.total} documente aduse${care}${cazut}`
+          }
+
+          return
+        }
+
+        if (pas.tip === 'gata') {
+          rezultat.descarcate = pas.descarcate || 0
+          rezultat.ramase = pas.ramase || 0
+          rezultat.erori = pas.erori || []
+
+          if (Array.isArray(pas.mesaje)) this.messages = pas.mesaje
+        }
+      })
+        .then(() => {
+          if (arata) this.infoDescarcare = this.rezumatCitire(payload, rezultat)
+        })
+        .catch(err => {
+          this.error = `Aducerea documentelor s-a oprit (${err.message}).`
+        })
+        .finally(() => {
+          this.mersul = ''
+          this.aduse = 0
+          this.deAdus = 0
         })
     },
     /**

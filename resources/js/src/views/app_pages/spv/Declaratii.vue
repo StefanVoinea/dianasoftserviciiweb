@@ -423,6 +423,26 @@
       </small>
     </div>
 
+    <!--
+      Cât timp se cercetează se spune la ce declarație s-a ajuns: pentru fiecare
+      se întreabă ANAF de starea ei, iar o sesiune cu zeci de declarații ține
+      minute. O rotiță singură nu deosebește lucrul de împotmolire.
+    -->
+    <div
+      v-if="recipiseInCurs && mersul"
+      class="text-muted mb-2"
+    >
+      {{ mersul }}
+      <b-progress
+        v-if="deCercetat"
+        :value="cercetate"
+        :max="deCercetat"
+        variant="success"
+        height="6px"
+        class="mt-1"
+      />
+    </div>
+
     <b-alert
       v-if="eroare"
       show
@@ -833,6 +853,8 @@
 </template>
 
 <script>
+import citesteFluxul, { areFlux } from '@/libs/flux'
+
 export default {
   name: 'SpvDeclaratii',
   data() {
@@ -889,6 +911,10 @@ export default {
       listaInCurs: false,
       incarcaInCurs: false,
       recipiseInCurs: false,
+      // Mersul lucrului, cat timp se cerceteaza: „7 din 42 — D112 15208744"
+      mersul: '',
+      cercetate: 0,
+      deCercetat: 0,
       ocupat: null,
       filtre: {
         tip: '', cui: '', den_firma: '', luna: '', anul: '', index_recipisa: '', pas: null,
@@ -1600,11 +1626,12 @@ export default {
     verificaRecipise(tacut = false) {
       this.eroare = ''
       this.recipiseInCurs = true
+      this.mersul = ''
+      this.cercetate = 0
+      this.deCercetat = 0
 
-      this.$http.post('/declaratii/recipise')
-        .then(raspuns => {
-          const rezultat = raspuns.data.data
-
+      this.cereRecipisele()
+        .then(rezultat => {
           this.ultimaDescarcare = this.acum()
           this.ultimaDescarcareNumar = rezultat.descarcate || 0
 
@@ -1639,7 +1666,58 @@ export default {
         })
         .finally(() => {
           this.recipiseInCurs = false
+          this.mersul = ''
+          this.cercetate = 0
+          this.deCercetat = 0
         })
+    },
+    /**
+     * Cere recipisele, spunând la fiecare a câta declarație e din câte.
+     *
+     * Răspunsul curge — câte un rând pe măsură ce se lucrează —, așa că omul
+     * vede mersul, nu doar o rotiță: pentru fiecare declarație se întreabă ANAF
+     * de starea ei, iar recipisa găsită se aduce prin tokenul clientului. O
+     * sesiune cu zeci de declarații ține minute, iar din afară lucrul și
+     * împotmolirea arată la fel.
+     *
+     * @returns {Promise<object>} rezultatul, în forma răspunsului obișnuit
+     */
+    cereRecipisele() {
+      // Browserele fără fetch cu flux rămân pe calea dinainte, fără numărătoare.
+      if (!areFlux()) {
+        return this.$http.post('/declaratii/recipise').then(raspuns => raspuns.data.data)
+      }
+
+      let rezultat = {
+        verificate: 0,
+        descarcate: 0,
+        descarcate_id: [],
+        erori: [],
+      }
+
+      return citesteFluxul('declaratii/recipise/flux', pas => {
+        if (pas.tip === 'inceput') {
+          this.deCercetat = pas.total
+          this.cercetate = 0
+
+          if (pas.total) this.mersul = `0 din ${pas.total} declarații cercetate...`
+
+          return
+        }
+
+        if (pas.tip === 'pas') {
+          this.cercetate = pas.facute
+
+          const care = pas.ce ? ` — ${pas.ce}` : ''
+          const adusa = pas.adus ? ' (recipisă adusă)' : ''
+
+          this.mersul = `${pas.facute} din ${pas.total} declarații cercetate${care}${adusa}`
+
+          return
+        }
+
+        if (pas.tip === 'gata') rezultat = pas
+      }).then(() => rezultat)
     },
     sterge(declaratie) {
       this.$bvModal.msgBoxConfirm(`Ștergeți declarația ${declaratie.tip} pentru CUI ${declaratie.cui}?`, {

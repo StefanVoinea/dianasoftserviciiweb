@@ -15,6 +15,7 @@ use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\CertificatService;
 use App\Services\Anaf\Spv\SolicitareService;
 use App\Services\Anaf\Spv\SpvException;
+use App\Support\Flux;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -151,6 +152,38 @@ class SpvSolicitariController extends Controller
         );
 
         return response()->json(['success' => true, 'data' => $rezultat]);
+    }
+
+    /**
+     * Aceeasi preluare, cu numaratoarea la vedere.
+     *
+     * Raspunsul curge: dupa fiecare document adus, fila afla al catelea e din
+     * cate. Fara asta, o preluare de zeci de raspunsuri arata la fel cu una
+     * impotmolita — o rotita care se invarte.
+     */
+    public function preiaFlux(Request $request, SolicitareService $serviciu)
+    {
+        $zile = (int) $request->query('zile', 60);
+
+        return Flux::raspunde(function () use ($serviciu, $zile) {
+            foreach ($serviciu->pasCuPasRaspunsuri($zile) as $pas) {
+                if ($pas['tip'] === 'gata') {
+                    Jurnal::scrie(
+                        'solicitare_preluare',
+                        sprintf(
+                            'A preluat răspunsurile din SPV: %d solicitări verificate, %d răspunsuri noi',
+                            $pas['verificate'],
+                            $pas['preluate']
+                        ),
+                        $pas,
+                        null,
+                        $pas['erori'] === []
+                    );
+                }
+
+                yield $pas;
+            }
+        });
     }
 
     /**
