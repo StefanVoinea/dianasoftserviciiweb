@@ -40,11 +40,13 @@
           md="6"
           class="d-flex align-items-center"
         >
+          <!-- Implicit se arata doar cele in lucru: ele sunt firmele clientului.
+               Cele scoase din uz si cele fara drepturi se cer anume. -->
           <b-form-checkbox
-            v-model="doarActive"
+            v-model="arataToate"
             @change="incarcaLista"
           >
-            Doar cele active
+            Arată și cele scoase din uz sau fără drepturi
           </b-form-checkbox>
         </b-col>
       </b-row>
@@ -166,9 +168,39 @@
           {{ rand.item.tip === 'pf' ? 'Persoană fizică' : 'Persoană juridică' }}
         </template>
 
+        <!--
+          Starea e buton, nu doar insignă: un client are adesea în certificat
+          firme pe care nu le mai ține, iar ele încărcau degeaba fiecare
+          interogare și fiecare listă de ales.
+
+          „Fără drepturi" nu se apasă: acolo vorbește ANAF, nu noi — entitatea
+          se întoarce singură când drepturile revin.
+        -->
         <template #cell(activ)="rand">
-          <b-badge :variant="rand.item.activ ? 'success' : 'secondary'">
-            {{ rand.item.activ ? 'Activă' : 'Fără drepturi' }}
+          <b-button
+            v-if="rand.item.activ"
+            size="sm"
+            :variant="rand.item.scos_din_uz ? 'outline-secondary' : 'success'"
+            :disabled="schimbaStarea === rand.item.id"
+            :title="rand.item.scos_din_uz
+              ? 'Este ignorată peste tot. Apăsați ca să fie iar luată în seamă.'
+              : 'Se lucrează cu ea. Apăsați ca să fie ignorată peste tot.'"
+            @click="schimbaUzul(rand.item)"
+          >
+            <b-spinner
+              v-if="schimbaStarea === rand.item.id"
+              small
+              class="mr-50"
+            />
+            {{ rand.item.scos_din_uz ? 'Scoasă din uz' : 'În lucru' }}
+          </b-button>
+
+          <b-badge
+            v-else
+            variant="secondary"
+            title="ANAF nu mai dă drepturi pe această entitate acestui certificat"
+          >
+            Fără drepturi
           </b-badge>
         </template>
 
@@ -234,7 +266,10 @@ export default {
   data() {
     return {
       societati: [],
-      doarActive: false,
+      // Implicit se arata doar entitatile in lucru — ele sunt firmele clientului
+      arataToate: false,
+      // Entitatea careia i se schimba starea chiar acum
+      schimbaStarea: null,
       eroare: '',
       info: '',
       pagina: 1,
@@ -298,13 +333,45 @@ export default {
     etichetaSursa(sursa) {
       return { vector: 'vector fiscal', date_identificare: 'date identificare', manual: 'manual' }[sursa] || sursa
     },
+    /**
+     * Scoate din uz o entitate, sau o pune iar în lucru.
+     *
+     * Un client are adesea în certificat firme pe care nu le mai ține: ele
+     * încărcau degeaba fiecare interogare la ANAF și fiecare listă de ales.
+     * Scoasă din uz, entitatea e ignorată peste tot — la mesaje, la solicitări,
+     * la alerte — dar rămâne în evidență, cu documentele ei.
+     *
+     * Alegerea aceasta stă deoparte de „activ", care e cuvântul ANAF-ului:
+     * altfel prima sincronizare ar șterge-o.
+     */
+    schimbaUzul(societate) {
+      this.eroare = ''
+      this.schimbaStarea = societate.id
+
+      const scoasa = !societate.scos_din_uz
+
+      this.$http.put(`/anaf-societati/${societate.id}`, { scos_din_uz: scoasa })
+        .then(() => {
+          this.info = scoasa
+            ? `${societate.denumire || societate.cif} a fost scoasă din uz și va fi ignorată peste tot.`
+            : `${societate.denumire || societate.cif} este iar în lucru.`
+
+          return this.incarcaLista()
+        })
+        .catch(err => {
+          this.eroare = this.mesajEroare(err, 'Starea entității nu a putut fi schimbată')
+        })
+        .finally(() => {
+          this.schimbaStarea = null
+        })
+    },
     incarcaLista() {
       this.listaInCurs = true
       // Filtrarea pe CIF, denumire si tip se face pe coloanele tabelului.
       const params = {}
-      if (this.doarActive) params.doar_active = 1
+      if (!this.arataToate) params.doar_active = 1
 
-      this.$http.get('/anaf-societati', { params })
+      return this.$http.get('/anaf-societati', { params })
         .then(raspuns => {
           this.societati = raspuns.data.data || []
         })
@@ -353,7 +420,8 @@ export default {
       this.solicitareInCurs = true
       this.erori = []
 
-      const cifuri = this.societati.filter(s => s.activ).map(s => s.cif)
+      // Pe entitatile scoase din uz nu se cheltuie apeluri la ANAF.
+      const cifuri = this.societati.filter(s => s.in_lucru).map(s => s.cif)
 
       this.progres = {
         pas: 'mesaje', facut: 0, total: 1, text: 'Se caută documentele venite deja...',

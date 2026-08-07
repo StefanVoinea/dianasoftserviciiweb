@@ -18,14 +18,26 @@ class AnafSocietatiController extends Controller
 {
     public function index(Request $request)
     {
-        $query = AnafSocietate::with('certificat')->orderByDesc('activ')->orderBy('denumire')->orderBy('cif');
+        $query = AnafSocietate::with('certificat')
+            ->orderByDesc('activ')
+            ->orderBy('scos_din_uz')
+            ->orderBy('denumire')
+            ->orderBy('cif');
 
         if ($request->filled('cif')) {
             $query->where('cif', 'like', '%' . $request->query('cif') . '%');
         }
 
+        /*
+         * „doar_active" inseamna acum „cu care se si lucreaza": si drepturile de
+         * la ANAF, si voia omului. Filele care cer firme de ales n-au ce face cu
+         * o entitate scoasa din uz — ar incurca lista fara sa aduca nimic.
+         *
+         * Fila entitatilor cere altfel: ea le arata pe toate cand se apasa
+         * „Arată și cele scoase din uz".
+         */
         if ($request->boolean('doar_active')) {
-            $query->active();
+            $query->inLucru();
         }
 
         return response()->json([
@@ -38,6 +50,8 @@ class AnafSocietatiController extends Controller
                     'denumire_sursa' => $societate->denumire_sursa,
                     'tip' => $societate->tip,
                     'activ' => $societate->activ,
+                    'scos_din_uz' => $societate->scos_din_uz,
+                    'in_lucru' => $societate->esteInLucru(),
                     'vector_la' => Format::dataOra($societate->vector_la),
                     'date_identificare_la' => Format::dataOra($societate->date_identificare_la),
                     'sincronizat_la' => Format::dataOra($societate->sincronizat_la),
@@ -118,6 +132,7 @@ class AnafSocietatiController extends Controller
         $date = $request->validate([
             'denumire' => 'nullable|string|max:255',
             'activ' => 'nullable|boolean',
+            'scos_din_uz' => 'nullable|boolean',
         ]);
 
         if (array_key_exists('denumire', $date)) {
@@ -128,12 +143,30 @@ class AnafSocietatiController extends Controller
             $societate->update(['activ' => $date['activ']]);
         }
 
-        Jurnal::scrie(
-            'entitate_redenumire',
-            'A modificat entitatea ' . $societate->cif . ': ' . ($societate->denumire ?: 'fără denumire'),
-            $date,
-            $societate->cif
-        );
+        /*
+         * Scoaterea din uz e hotararea omului si sta deoparte de „activ", care e
+         * cuvantul ANAF-ului: altfel prima sincronizare i-ar sterge alegerea.
+         */
+        if (array_key_exists('scos_din_uz', $date)) {
+            $societate->update(['scos_din_uz' => (bool) $date['scos_din_uz']]);
+
+            Jurnal::scrie(
+                'entitate_stare',
+                ($date['scos_din_uz'] ? 'A scos din uz entitatea ' : 'A pus iar în lucru entitatea ')
+                    . $societate->cif . ($societate->denumire ? ' (' . $societate->denumire . ')' : ''),
+                ['scos_din_uz' => (bool) $date['scos_din_uz']],
+                $societate->cif
+            );
+        }
+
+        if (array_key_exists('denumire', $date)) {
+            Jurnal::scrie(
+                'entitate_redenumire',
+                'A modificat entitatea ' . $societate->cif . ': ' . ($societate->denumire ?: 'fără denumire'),
+                $date,
+                $societate->cif
+            );
+        }
 
         return response()->json(['success' => true, 'data' => $societate->fresh()]);
     }

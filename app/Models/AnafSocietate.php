@@ -15,6 +15,7 @@ class AnafSocietate extends Model
 
     protected $casts = [
         'activ' => 'boolean',
+        'scos_din_uz' => 'boolean',
         'date_identificare_la' => 'datetime',
         'vector_la' => 'datetime',
         'sincronizat_la' => 'datetime',
@@ -31,6 +32,30 @@ class AnafSocietate extends Model
     public function scopeActive($query)
     {
         return $query->where('activ', true);
+    }
+
+    /**
+     * Entitatile cu care se lucreaza cu adevarat.
+     *
+     * Doua lucruri trebuie sa fie amandoua bune: ANAF sa dea drepturi pe ea
+     * („activ", pus de sincronizare) si omul s-o vrea („scos_din_uz", pus de el).
+     * Un client are adesea in certificat firme pe care nu le mai tine — ele
+     * incarcau degeaba fiecare interogare si fiecare lista.
+     */
+    public function scopeInLucru($query)
+    {
+        return $query->where('activ', true)->where('scos_din_uz', false);
+    }
+
+    /**
+     * E luata in seama? Aceeasi judecata, pentru un singur rand.
+     *
+     * Se numeste altfel decat filtrul dinadins: cu acelasi nume, „AnafSocietate::inLucru()"
+     * ar fi chemat metoda asta ca statica, in loc sa ajunga la filtru.
+     */
+    public function esteInLucru(): bool
+    {
+        return (bool) $this->activ && !$this->scos_din_uz;
     }
 
     /** Un CNP are 13 cifre; restul sunt persoane juridice. */

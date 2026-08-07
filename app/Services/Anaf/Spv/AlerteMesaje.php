@@ -89,7 +89,8 @@ class AlerteMesaje
         }
 
         if (!array_key_exists($certificatId, $this->inrolate)) {
-            $this->inrolate[$certificatId] = AnafSocietate::where('certificat_id', $certificatId)
+            $this->inrolate[$certificatId] = AnafSocietate::inLucru()
+                ->where('certificat_id', $certificatId)
                 ->pluck('cif')
                 ->map(function ($cif) {
                     return trim((string) $cif);

@@ -89,6 +89,12 @@ class SocietatiService
             $societate = AnafSocietate::firstOrNew(['cif' => $cif]);
             $noi += $societate->exists ? 0 : 1;
 
+            /*
+             * „activ" e cuvantul ANAF-ului, si numai al lui. Scoaterea din uz,
+             * hotarata de om, sta in alta coloana si nu se atinge aici — altfel
+             * prima sincronizare i-ar sterge alegerea, iar entitatea ar invia
+             * singura, ca certificatele dezactivate odinioara.
+             */
             $societate->fill([
                 'tip' => AnafSocietate::tipDupaCif($cif),
                 'activ' => true,
@@ -185,7 +191,8 @@ class SocietatiService
         $sarite = 0;
         $erori = [];
 
-        $firme = AnafSocietate::active()
+        // Numai cele in lucru: pe cele scoase din uz nu se cheltuie apeluri la ANAF.
+        $firme = AnafSocietate::inLucru()
             ->when($cifuri !== [], function ($intrebare) use ($cifuri) {
                 return $intrebare->whereIn('cif', $cifuri);
             })

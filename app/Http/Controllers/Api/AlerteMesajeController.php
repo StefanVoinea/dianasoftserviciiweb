@@ -35,7 +35,7 @@ class AlerteMesajeController extends Controller
                 // alerte facute mai demult, iar altfel ar aparea fara nume.
                 return ['id' => $certificat->id, 'cn' => $certificat->cn, 'activ' => (bool) $certificat->activ];
             }),
-            'societati' => AnafSocietate::orderBy('denumire')->get()->map(function (AnafSocietate $societate) {
+            'societati' => AnafSocietate::inLucru()->orderBy('denumire')->get()->map(function (AnafSocietate $societate) {
                 return [
                     'cif' => $societate->cif,
                     'denumire' => $societate->denumire,
