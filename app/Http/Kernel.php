@@ -46,6 +46,34 @@ class Kernel extends HttpKernel
     ];
 
     /**
+     * Ordinea in care se aseaza middleware-ele, oricum ar fi scrise pe ruta.
+     *
+     * Cel mai important rand e „companie.anaf" inaintea legarii din rute.
+     *
+     * Legarea („SubstituteBindings") cauta modelul dupa id-ul din adresa. Cat
+     * timp ea se facea mai devreme, cautarea se facea fara context de client,
+     * iar filtrul pe companie — cel care tine datele clientilor despartite — nu
+     * se aplica: orice utilizator putea cere, cu un id ghicit, declaratia,
+     * solicitarea sau certificatul altui client, iar controlerul le primea de-a
+     * gata si nu mai avea de unde sti ca nu sunt ale lui.
+     *
+     * Asezate asa, contextul e pus inainte, iar un id strain nu mai gaseste
+     * nimic: cererea se incheie cu 404, adica exact ce scrie in App\Models     * Concerns\ApartineCompaniei — pana acum scria acolo ceva ce nu era adevarat.
+     */
+    protected $middlewarePriority = [
+        \Illuminate\Cookie\Middleware\EncryptCookies::class,
+        \Illuminate\Session\Middleware\StartSession::class,
+        \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+        \Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests::class,
+        \Illuminate\Routing\Middleware\ThrottleRequests::class,
+        \Illuminate\Routing\Middleware\ThrottleRequestsWithRedis::class,
+        \Illuminate\Session\Middleware\AuthenticateSession::class,
+        \App\Http\Middleware\CompanieAnaf::class,
+        \Illuminate\Routing\Middleware\SubstituteBindings::class,
+        \Illuminate\Auth\Middleware\Authorize::class,
+    ];
+
+    /**
      * The application's route middleware.
      *
      * These middleware may be assigned to groups or used individually.
