@@ -1,6 +1,29 @@
 import { $themeBreakpoints } from '@themeConfig'
 import axios from '@axios'
+import { moduleleMele } from '@/libs/module'
 axios.defaults.baseURL=window.api_url
+
+/**
+ * Cere probarea PIN-ului de pe tokenurile la care are acces omul intrat acum.
+ *
+ * Merge in fundal si nu opreste nimic: daca driverul are PIN-ul in minte, proba
+ * se face pe loc si nu se vede nimic; daca nu-l are, fereastra se deschide
+ * atunci, cand nu asteapta nimeni nimic dupa ea. Starea se scrie la certificat
+ * si se vede in fila „Certificate digitale".
+ *
+ * Se cere numai celor care au modulul SPV: pentru ceilalti n-ar avea ce proba.
+ */
+const deblocheazaTokenul = () => {
+  moduleleMele()
+    .then(module => {
+      if (!Array.isArray(module) || module.indexOf('spv') === -1) return null
+
+      return axios.post('/anaf-certificate/verifica-pin', {})
+    })
+    .catch(() => {
+      // Un token care nu raspunde nu are ce opri din intrarea in aplicatie.
+    })
+}
 
 export default {
   namespaced: true,
@@ -87,7 +110,21 @@ export default {
     {
            localStorage.setItem('societateaCurenta', socCurenta)
             context.commit('societateaCurenta', socCurenta)
-     
+
+           /*
+            * Tokenul se deblocheaza acum, nu la prima lucrare.
+            *
+            * Citirea certificatului nu cere niciodata PIN; el se cere abia cand
+            * cheia e chiar folosita, la semnare sau la intrarea in SPV. Pana
+            * acum asta se afla pe pielea omului: prima descarcare se impotmolea
+            * intr-o fereastra deschisa pe calculatorul cu tokenul, adesea pe alt
+            * ecran decat al lui.
+            *
+            * Aici e locul potrivit — se trece pe aici si la intrarea in
+            * aplicatie, si la schimbarea societatii, adica exact cand se stie
+            * pentru cine se lucreaza.
+            */
+           deblocheazaTokenul()
     },
      user(context,user)
     {

@@ -33,6 +33,7 @@ class ActualizareBridge
         'agent-lucreaza.php',
         'agent-actualizare.php',
         'cert-info.ps1',
+        'pin-test.ps1',
         'sign-pdf.ps1',
         'merge-pdf.ps1',
         'pdf-info.ps1',

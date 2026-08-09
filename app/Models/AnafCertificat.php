@@ -21,6 +21,8 @@ class AnafCertificat extends Model
         'avertizat_la' => 'datetime',
         'monitorizare_la' => 'datetime',
         'licenta_pana_la' => 'datetime',
+        // Cand s-a probat ultima data cheia de pe token (PIN dat sau nu)
+        'pin_verificat_la' => 'datetime',
         // Ultima dată când agentul de la client a întrebat dacă are ceva de lucru
         'agent_vazut_la' => 'datetime',
     ];

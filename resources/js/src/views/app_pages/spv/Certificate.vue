@@ -250,6 +250,27 @@
                   class="mr-25"
                 />licență până la {{ rand.item.licenta_pana_la }}
               </div>
+              <!--
+                PIN-ul de pe token. Citirea certificatului nu-l cere niciodată —
+                el se cere abia când cheia e chiar folosită, la semnare sau la
+                intrarea în SPV. Până acum asta se afla pe pielea omului: prima
+                lucrare se împotmolea într-o fereastră deschisă pe alt ecran.
+                Acum se probează la intrarea în aplicație și se vede aici.
+              -->
+              <div
+                v-if="rand.item.pin_stare"
+                class="small"
+                :class="rand.item.pin_stare === 'gata' ? 'text-success' : 'text-danger'"
+                :title="rand.item.pin_motiv
+                  || 'Verificat la ' + (rand.item.pin_verificat_la || '—')"
+              >
+                <feather-icon
+                  :icon="rand.item.pin_stare === 'gata' ? 'UnlockIcon' : 'LockIcon'"
+                  size="12"
+                  class="mr-25"
+                />{{ textulPinului(rand.item) }}
+              </div>
+
               <!-- Scos din uz: se spune primul, fiindcă schimbă înțelesul a tot
                    ce scrie alături — calculator, dosar urmărit, licență. -->
               <b-badge
@@ -874,6 +895,8 @@ export default {
   data() {
     return {
       certificate: [],
+      // Certificatul caruia i se probeaza PIN-ul chiar acum
+      pinInCurs: null,
       abonati: [],
       zileAvertizare: 30,
       // Versiunea programului local pe care o are serverul acum
@@ -953,6 +976,39 @@ export default {
     this.incarcaLista()
   },
   methods: {
+    /**
+     * Ce scrie lângă certificat despre PIN-ul de pe token.
+     *
+     * „gata" înseamnă că driverul îl are în minte și cheia se poate folosi acum
+     * — nu că l-am ști noi: PIN-ul nu trece prin aplicație și nu se păstrează
+     * nicăieri, rămâne între om și driver.
+     */
+    textulPinului(certificat) {
+      if (certificat.pin_stare === 'gata') return 'PIN introdus — tokenul e gata de lucru'
+      if (certificat.pin_stare === 'refuzat') return 'PIN neintrodus — semnarea și SPV vor eșua'
+
+      return 'tokenul nu a putut fi întrebat de PIN'
+    },
+    /**
+     * Cere probarea PIN-ului și reîncarcă lista.
+     *
+     * Se cheamă și singură, la intrarea în aplicație. Aici e pentru cazul în
+     * care omul a conectat tokenul între timp, sau a închis fereastra fără să
+     * scrie PIN-ul și vrea să încerce din nou.
+     */
+    verificaPinul(certificat) {
+      this.pinInCurs = certificat ? certificat.id : 'toate'
+
+      return this.$http.post('/anaf-certificate/verifica-pin', certificat ? { certificat: certificat.id } : {})
+        .then(() => this.incarcaLista())
+        .catch(() => {
+          // Un token care nu răspunde nu e o eroare de arătat aici: starea lui
+          // se vede oricum lângă el, scrisă de server.
+        })
+        .finally(() => {
+          this.pinInCurs = null
+        })
+    },
     scurt(text) {
       if (!text) return '-'
       const cn = text.match(/CN=([^,]+)/)

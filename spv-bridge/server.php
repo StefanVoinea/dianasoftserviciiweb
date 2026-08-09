@@ -1034,6 +1034,47 @@ if ($metoda === 'GET' && ($calea === '/certificat' || $calea === '/certificate')
 }
 
 /*
+ * GET /pin — se poate folosi acum cheia de pe token, si a cerut PIN-ul?
+ *
+ * Citirea certificatului nu atinge cheia privata, deci nu cere niciodata PIN.
+ * PIN-ul se cere abia cand cheia e chiar folosita: la semnare, sau la intrarea
+ * in SPV cu certificat. Pana acum, primul lucru care avea nevoie de el se
+ * impiedica de fereastra deschisa pe calculatorul clientului — adesea in
+ * mijlocul unei descarcari de zeci de documente, si adesea pe alt ecran decat
+ * al omului care apasase.
+ *
+ * Aici se cere o semnatura mica, dinadins: daca driverul are PIN-ul in minte,
+ * ea se face pe loc si nu se vede nimic; daca nu-l are, se deschide fereastra
+ * si omul il scrie atunci, cand nu asteapta nimic dupa el. Proba e deci si
+ * declansatorul — nu se poate afla fara sa se forteze.
+ */
+if ($metoda === 'GET' && $calea === '/pin') {
+    cere_amprenta($config);
+
+    $argumente = array(
+        'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+        '-File', escapeshellarg(__DIR__ . '\pin-test.ps1'),
+        '-Thumbprint', escapeshellarg($config['thumbprint']),
+        '2>&1',
+    );
+
+    $iesire = array();
+    $cod_iesire = 0;
+    exec(implode(' ', $argumente), $iesire, $cod_iesire);
+
+    $json = json_decode(implode('', $iesire), true);
+
+    if (!is_array($json)) {
+        raspunde_json(500, array(
+            'eroare' => 'Proba PIN-ului nu a putut fi facuta.',
+            'detalii' => mb_substr(implode(' | ', $iesire), 0, 400),
+        ));
+    }
+
+    raspunde_json(200, $json);
+}
+
+/*
  * POST /decl/login — reface sesiunea pe decl.anaf.mfinante.gov.ro:
  * GET / (302 -> my.policy), POST my.policy vhost=standard, eventual "dummy".
  * Succes cand raspunsul contine "displayFile.do".

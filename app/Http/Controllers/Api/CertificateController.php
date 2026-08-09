@@ -51,6 +51,10 @@ class CertificateController extends Controller
                     'monitorizare_depune' => (bool) $certificat->monitorizare_depune,
                     'monitorizare_la' => Format::dataOra($certificat->monitorizare_la),
                     'licenta_pana_la' => Format::dataOra($certificat->licenta_pana_la),
+                    // Starea PIN-ului la ultima proba: 'gata', 'refuzat', 'lipsa' sau gol
+                    'pin_stare' => $certificat->pin_stare,
+                    'pin_motiv' => $certificat->pin_motiv,
+                    'pin_verificat_la' => Format::dataOra($certificat->pin_verificat_la),
                     'mod_legatura' => $certificat->mod_legatura ?: 'direct',
                     'agent_vazut_la' => Format::dataOra($certificat->agent_vazut_la),
                     'agent_treaz' => app(Punte::class)->agentulEsteTreaz($certificat),
@@ -215,6 +219,132 @@ class CertificateController extends Controller
             // Tokenul e si in arhiva, dar il expunem si aici pentru interfata.
             'X-Bridge-Token' => $arhiva['token'],
         ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Cere de la token o semnatura mica, ca sa se afle daca PIN-ul e deja dat.
+     *
+     * Citirea certificatului nu atinge cheia privata, deci nu cere niciodata
+     * PIN. El se cere abia cand cheia e chiar folosita — la semnare, sau la
+     * intrarea in SPV. Pana acum, primul lucru care avea nevoie de el se
+     * impiedica de fereastra deschisa pe calculatorul clientului, adesea in
+     * mijlocul unei descarcari de zeci de documente si adesea pe alt ecran
+     * decat al omului care apasase.
+     *
+     * Aici se cere semnatura dinadins, la intrarea in aplicatie: daca driverul
+     * are PIN-ul in minte, proba se face pe loc si nu se vede nimic; daca nu-l
+     * are, fereastra se deschide atunci, cand nu asteapta nimeni nimic dupa ea.
+     * Proba e deci si declansatorul — nu se poate afla fara sa se forteze.
+     *
+     * PIN-ul nu trece prin aplicatie si nu se pastreaza nicaieri: el ramane
+     * intre om si driverul tokenului. Se tine minte doar ce s-a vazut.
+     */
+    public function verificaPin(Request $request, CertificatService $certificate)
+    {
+        $cerut = $request->input('certificat');
+
+        $deVerificat = AnafCertificat::where('activ', true)
+            ->when($cerut, function ($intrebare) use ($cerut) {
+                return $intrebare->where('id', $cerut);
+            })
+            ->get()
+            ->filter(function (AnafCertificat $certificat) {
+                $punte = app(Punte::class);
+
+                /*
+                 * Un calculator inchis nu se probeaza: cererea ar astepta pana
+                 * i-ar expira rabdarea, iar intrarea in aplicatie ar parea
+                 * incetinita fara pricina.
+                 */
+                return $punte->esteTunel($certificat)
+                    ? $punte->agentulEsteTreaz($certificat)
+                    : (bool) $certificat->bridge_url;
+            });
+
+        $stari = [];
+
+        foreach ($deVerificat as $certificat) {
+            $stari[] = ['certificat' => $certificat->id, 'cn' => $certificat->cn]
+                + $this->probaPin($certificat, $certificate);
+        }
+
+        return response()->json(['success' => true, 'data' => $stari]);
+    }
+
+    /**
+     * Proba propriu-zisa a unui certificat.
+     *
+     * Rabdarea e larga dinadins: intre cerere si raspuns sta un om care scrie
+     * PIN-ul, nu doar o masina. Un esec nu opreste nimic — se scrie starea si se
+     * merge mai departe, ca intrarea in aplicatie sa nu atarne de un token.
+     *
+     * @return array{stare: string, motiv: string, verificat_la: string|null}
+     */
+    protected function probaPin(AnafCertificat $certificat, CertificatService $certificate): array
+    {
+        $certificate->foloseste($certificat);
+        $bridge = $certificate->bridge();
+
+        if (empty($bridge['url'])) {
+            return $this->tinePin($certificat, 'lipsa', 'certificatul nu are calculator configurat');
+        }
+
+        try {
+            $raspuns = Http::withToken($bridge['token'])
+                ->withHeaders(['X-Thumbprint' => (string) $certificat->thumbprint])
+                ->timeout(150)
+                ->get(rtrim($bridge['url'], '/') . '/pin');
+        } catch (\Exception $e) {
+            return $this->tinePin($certificat, 'lipsa', 'calculatorul cu tokenul nu răspunde');
+        }
+
+        // Kiturile mai vechi nu cunosc proba; nu e o defectiune, doar nu se stie.
+        if ($raspuns->status() === 404) {
+            return $this->tinePin($certificat, '', 'programul de la client nu cunoaște încă proba PIN-ului');
+        }
+
+        if ($raspuns->failed()) {
+            $primit = json_decode($raspuns->body(), true);
+
+            return $this->tinePin($certificat, 'lipsa', $primit['detalii'] ?? $primit['eroare'] ?? 'proba a eșuat');
+        }
+
+        $date = $raspuns->json();
+
+        if (!empty($date['gata'])) {
+            /*
+             * „cerut" spune daca fereastra s-a deschis chiar acum. Se scrie in
+             * jurnal numai atunci: o proba tacuta, care se face de fiecare data
+             * la intrare, n-are ce cauta acolo.
+             */
+            if (!empty($date['cerut'])) {
+                Jurnal::scrie(
+                    'certificat_pin',
+                    'S-a introdus PIN-ul pentru certificatul ' . $certificat->cn,
+                    ['secunde' => $date['secunde'] ?? null]
+                );
+            }
+
+            return $this->tinePin($certificat, 'gata', '');
+        }
+
+        return $this->tinePin($certificat, 'refuzat', (string) ($date['motiv'] ?? 'PIN-ul nu a fost introdus'));
+    }
+
+    /** Scrie starea la certificat si o intoarce, in forma in care o asteapta fila. */
+    protected function tinePin(AnafCertificat $certificat, string $stare, string $motiv): array
+    {
+        $certificat->update([
+            'pin_stare' => $stare ?: null,
+            'pin_verificat_la' => now(),
+            'pin_motiv' => $motiv !== '' ? mb_substr($motiv, 0, 250) : null,
+        ]);
+
+        return [
+            'stare' => $stare,
+            'motiv' => $motiv,
+            'verificat_la' => now()->format('d.m.Y H:i'),
+        ];
     }
 
     /**

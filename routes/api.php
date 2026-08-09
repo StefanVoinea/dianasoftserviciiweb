@@ -177,6 +177,8 @@ Route::middleware(['auth:api', 'companie.anaf', 'modul:spv'])->group(function ()
     Route::post('/anaf-certificate/{certificat}/licenta', 'Api\CertificateController@reinnoiesteLicenta');
     // Scoaterea din uz a certificatului cu care clientul nu lucrează în SPV
     Route::post('/anaf-certificate/{certificat}/activare', 'Api\CertificateController@comutaActiv');
+    // Proba PIN-ului: afla daca tokenul e deblocat si, daca nu, deschide fereastra
+    Route::post('/anaf-certificate/verifica-pin', 'Api\CertificateController@verificaPin');
     Route::put('/anaf-certificate/{certificat}', 'Api\CertificateController@update');
     Route::post('/anaf-certificate/abonare', 'Api\CertificateController@abonare');
     Route::delete('/anaf-certificate/abonare/{abonat}', 'Api\CertificateController@dezabonare');
