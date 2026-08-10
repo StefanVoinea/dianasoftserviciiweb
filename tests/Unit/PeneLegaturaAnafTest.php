@@ -206,4 +206,57 @@ class PeneLegaturaAnafTest extends TestCase
             'starea se ține minte oricare ar fi, nu doar când cheia era deschisă'
         );
     }
+
+    /**
+     * Fereastra de PIN nu poate tine programul pe loc la nesfarsit.
+     *
+     * PowerShell asteapta cat vrea omul, iar programul serveste o cerere pe
+     * rand: o fereastra pe care n-o inchide nimeni oprea tot — si agentul, si
+     * descarcarile, si dosarul urmarit. Un calculator lasat asa peste noapte
+     * taia toata legatura cu clientul acela.
+     */
+    public function test_fereastra_de_pin_are_rabdare_marginita()
+    {
+        $server = file_get_contents(base_path('spv-bridge/server.php'));
+
+        $this->assertStringContainsString('function exec_marginit', $server);
+
+        // Proba cheii si ruta /pin sunt cele care pot deschide fereastra.
+        $inceput = strpos($server, 'function starea_cheii');
+        $sfarsit = strpos($server, 'function asigura_cheia');
+        $bucata = substr($server, $inceput, $sfarsit - $inceput);
+
+        $this->assertStringContainsString('exec_marginit(', $bucata);
+        $this->assertStringNotContainsString(
+            'exec(implode',
+            $bucata,
+            'proba cheii nu are voie să aștepte la nesfârșit'
+        );
+    }
+
+    /**
+     * Pregatirile de la pornirea agentului au rabdare scurta: nu sunt lucru, si
+     * n-au ce tine panda pe loc daca programul local e prins in altceva.
+     */
+    public function test_pregatirile_agentului_nu_tin_panda_pe_loc()
+    {
+        $functii = file_get_contents(base_path('spv-bridge/agent-functii.php'));
+
+        $this->assertStringContainsString("'rabdare' => 30", $functii);
+        $this->assertSame(
+            2,
+            substr_count($functii, "'rabdare' => 30"),
+            'și înrolarea, și licențierea trebuie să aibă răbdare scurtă'
+        );
+    }
+
+    /** Agentul spune la care pas e, ca jurnalul sa nu taca intre pornire si panda. */
+    public function test_agentul_spune_la_care_pas_e()
+    {
+        $agent = file_get_contents(base_path('spv-bridge/agent.php'));
+
+        foreach (['Ma prezint', 'Ma uit daca am licenta', 'intru in panda'] as $vorba) {
+            $this->assertStringContainsString($vorba, $agent, 'lipsește rândul „' . $vorba . '"');
+        }
+    }
 }

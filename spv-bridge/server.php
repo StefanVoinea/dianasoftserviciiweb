@@ -474,6 +474,70 @@ function executa_curl(array $config, $url, array $optiuni = array())
  * primește răspunde de ștergerea lui.
  */
 /**
+ * Ruleaza o comanda cu rabdare marginita, si o opreste daca trece de ea.
+ *
+ * „exec" asteapta cat vrea comanda. Pentru cele care pot deschide o fereastra pe
+ * ecranul clientului asta nu e o purtare buna: o fereastra de PIN pe care n-o
+ * inchide nimeni tine PowerShell-ul pe loc la nesfarsit, iar programul nostru
+ * serveste o cerere pe rand — deci se opreste tot, si agentul, si descarcarile,
+ * si dosarul urmarit. Un calculator lasat cu fereastra deschisa peste noapte
+ * oprea toata legatura cu clientul acela.
+ *
+ * @return array{iesire: string, cod: int, oprit: bool}
+ */
+function exec_marginit($comanda, $secunde)
+{
+    $descriptori = array(1 => array('pipe', 'w'), 2 => array('pipe', 'w'));
+    $tevi = array();
+
+    $proces = @proc_open($comanda, $descriptori, $tevi);
+
+    if (!is_resource($proces)) {
+        return array('iesire' => '', 'cod' => -1, 'oprit' => false);
+    }
+
+    foreach ($tevi as $teava) {
+        stream_set_blocking($teava, false);
+    }
+
+    $iesire = '';
+    $pana = microtime(true) + $secunde;
+    $oprit = false;
+
+    while (true) {
+        $stare = proc_get_status($proces);
+
+        foreach ($tevi as $teava) {
+            $bucata = stream_get_contents($teava);
+
+            if ($bucata !== false) {
+                $iesire .= $bucata;
+            }
+        }
+
+        if (!$stare['running']) {
+            break;
+        }
+
+        if (microtime(true) >= $pana) {
+            proc_terminate($proces);
+            $oprit = true;
+            break;
+        }
+
+        usleep(100000);
+    }
+
+    foreach ($tevi as $teava) {
+        @fclose($teava);
+    }
+
+    $cod = proc_close($proces);
+
+    return array('iesire' => $iesire, 'cod' => $oprit ? -1 : $cod, 'oprit' => $oprit);
+}
+
+/**
  * Se poate folosi cheia de pe token chiar acum?
  *
  * Se cheama cand o legatura cu ANAF s-a rupt: acolo, cea mai deasa banuiala e
@@ -505,11 +569,19 @@ function starea_cheii($config)
         '2>&1',
     );
 
-    $iesire = array();
-    $cod = 0;
-    exec(implode(' ', $argumente), $iesire, $cod);
+    /*
+     * Rabdare marginita: cat sa apuce omul sa scrie PIN-ul, nu cat sa ramana
+     * fereastra deschisa peste noapte si sa tina programul pe loc.
+     */
+    $rulat = exec_marginit(implode(' ', $argumente), 90);
 
-    $date = json_decode(implode('', $iesire), true);
+    if ($rulat['oprit']) {
+        scrie_eroarea('Fereastra de PIN a rămas deschisă peste 90 de secunde; am oprit proba.');
+
+        return 'blocat';
+    }
+
+    $date = json_decode($rulat['iesire'], true);
 
     if (!is_array($date) || !isset($date['gata'])) {
         return 'necunoscut';
@@ -1179,16 +1251,23 @@ if ($metoda === 'GET' && $calea === '/pin') {
         '2>&1',
     );
 
-    $iesire = array();
-    $cod_iesire = 0;
-    exec(implode(' ', $argumente), $iesire, $cod_iesire);
+    $rulat = exec_marginit(implode(' ', $argumente), 90);
 
-    $json = json_decode(implode('', $iesire), true);
+    if ($rulat['oprit']) {
+        raspunde_json(200, array(
+            'gata' => false,
+            'cerut' => true,
+            'motiv' => 'fereastra de PIN a rămas deschisă peste 90 de secunde, fără să scrie nimeni codul',
+            'secunde' => 90,
+        ));
+    }
+
+    $json = json_decode($rulat['iesire'], true);
 
     if (!is_array($json)) {
         raspunde_json(500, array(
             'eroare' => 'Proba PIN-ului nu a putut fi facuta.',
-            'detalii' => mb_substr(implode(' | ', $iesire), 0, 400),
+            'detalii' => mb_substr($rulat['iesire'], 0, 400),
         ));
     }
 

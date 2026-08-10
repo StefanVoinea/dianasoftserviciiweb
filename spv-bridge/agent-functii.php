@@ -215,7 +215,7 @@ function agent_curl($config, $optiuni)
     $linii = array(
         'silent',
         'show-error',
-        'max-time = 300',
+        'max-time = ' . (isset($optiuni['rabdare']) ? (int) $optiuni['rabdare'] : 300),
         /*
          * Deschiderea legaturii are vremea ei, mai scurta decat a raspunsului:
          * un pachet de deschidere pierdut pe drum ar tine Windows-ul in loc
@@ -388,9 +388,11 @@ function agent_desluseste_panda($rezultat, &$motiv = null)
 function agent_licentiaza($config)
 {
     // Intai se intreaba programul de langa noi: cine e si daca are licenta.
+    // Tot pregatire, deci tot rabdare scurta — vezi agent_inroleaza().
     $identitate = agent_curl($config, array(
         'url' => $config['local'] . '/identitate',
         'antete' => array('Authorization: Bearer ' . $config['token']),
+        'rabdare' => 30,
     ));
 
     if ($identitate['cod'] !== 0 || $identitate['status'] !== 200) {
@@ -576,9 +578,17 @@ function agent_inroleaza($config)
         return;
     }
 
+    /*
+     * Rabdare scurta, nu cea obisnuita: astea sunt pregatiri, nu lucru. Programul
+     * de langa noi serveste o cerere pe rand, iar daca e prins in altceva — o
+     * descarcare lunga, o fereastra de PIN — cinci minute de asteptare aici ar
+     * tine panda pe loc si agentul ar parea inghetat. Mai bine se sare peste
+     * pregatire si se incearca la pornirea urmatoare.
+     */
     $local = agent_curl($config, array(
         'url' => $config['local'] . '/certificate',
         'antete' => array('Authorization: Bearer ' . $config['token']),
+        'rabdare' => 30,
     ));
 
     if ($local['cod'] !== 0 || $local['status'] !== 200) {

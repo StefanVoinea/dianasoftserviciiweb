@@ -37,6 +37,15 @@ agent_scrie($config, 'Pornit. Întreb ' . $config['server'] . ' dacă are ceva d
  * fără ca omul să tasteze nimic. Dacă tokenul nu e conectat acum, nu-i nimic —
  * se încearcă din nou la următoarea pornire.
  */
+/*
+ * Pasii dinaintea pandei isi spun numele.
+ *
+ * Amandoi vorbesc cu programul de langa noi, iar el serveste o cerere pe rand:
+ * daca e prins in altceva, raspunsul intarzie. Fara randurile astea, jurnalul
+ * ramanea la „Pornit" si nu se putea sti daca agentul lucreaza sau a inghetat —
+ * si nici la care dintre pasi.
+ */
+agent_scrie($config, 'Ma prezint: citesc certificatele de pe tokenul de aici.');
 agent_inroleaza($config);
 
 /*
@@ -44,7 +53,9 @@ agent_inroleaza($config);
  * comanda, iar omul vede in aplicatie „Programul nu are licenta valida pe acest
  * calculator" desi totul e pornit si legat.
  */
+agent_scrie($config, 'Ma uit daca am licenta pentru calculatorul acesta.');
 agent_licentiaza($config);
+agent_scrie($config, 'Gata pregatirile; intru in panda.');
 
 $pauzaLaEroare = 5;
 $motiv = '';
