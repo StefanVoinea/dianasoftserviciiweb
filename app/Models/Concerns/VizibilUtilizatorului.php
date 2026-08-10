@@ -14,6 +14,18 @@ use Illuminate\Database\Eloquent\Builder;
  * gaseste nimic si se incheie cu 404.
  *
  * Administratorul firmei si administratorul serviciului vad tot.
+ *
+ * Documentele fara stapan sunt insa ale firmei, nu ale nimanui.
+ *
+ * Dosarul urmarit lucreaza singur, fara om in spate: declaratia pusa acolo se
+ * inregistreaza cu „user_id" gol, fiindca nu e nimeni caruia sa i se puna in
+ * seama. Cerand potrivire pe id, filtrul le ascundea de toata lumea in afara
+ * administratorului — iar instiintarea trimisa pe email spunea totusi „detaliile
+ * se vad in aplicatie, la Declaratii fiscale". Omul se ducea acolo si nu gasea
+ * nimic.
+ *
+ * Ele se vad deci de oricine lucreaza la firma aceea: dosarul urmarit e o
+ * inlesnire a firmei, nu a unei persoane.
  */
 trait VizibilUtilizatorului
 {
@@ -26,7 +38,12 @@ trait VizibilUtilizatorului
                 return;
             }
 
-            $query->where($query->getModel()->getTable() . '.user_id', $utilizator);
+            $tabel = $query->getModel()->getTable();
+
+            $query->where(function ($intrebare) use ($tabel, $utilizator) {
+                $intrebare->where($tabel . '.user_id', $utilizator)
+                    ->orWhereNull($tabel . '.user_id');
+            });
         });
     }
 
