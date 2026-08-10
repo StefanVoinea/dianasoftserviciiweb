@@ -242,12 +242,13 @@ class PeneLegaturaAnafTest extends TestCase
     {
         $functii = file_get_contents(base_path('spv-bridge/agent-functii.php'));
 
-        $this->assertStringContainsString("'rabdare' => 30", $functii);
-        $this->assertSame(
-            2,
-            substr_count($functii, "'rabdare' => 30"),
-            'și înrolarea, și licențierea trebuie să aibă răbdare scurtă'
-        );
+        // Rabdarea scurta sta in ajutorul prin care trec toate pregatirile.
+        $inceput = strpos($functii, 'function agent_intreaba_local');
+        $sfarsit = strpos($functii, 'function agent_talcul_local');
+        $bucata = substr($functii, $inceput, $sfarsit - $inceput);
+
+        $this->assertNotFalse($inceput, 'lipsește ajutorul prin care se cere programului local');
+        $this->assertStringContainsString("'rabdare' => 30", $bucata);
     }
 
     /** Agentul spune la care pas e, ca jurnalul sa nu taca intre pornire si panda. */

@@ -128,4 +128,51 @@ class AgentPandaTest extends TestCase
         $this->assertLessThanOrEqual(71, mb_strlen(agent_inceputul($lung)));
         $this->assertSame('(răspuns gol)', agent_inceputul("  \n\t "));
     }
+
+    /**
+     * „Nu ascultă nimeni" si „ascultă, dar tace" nu sunt acelasi lucru.
+     *
+     * Jurnalul scria doar „(0)" pentru amandoua, iar ele se indreapta cu totul
+     * altfel: prima inseamna un program oprit — se porneste; a doua, unul prins
+     * in altceva, cel mai des o fereastra de PIN pe care n-o inchide nimeni — se
+     * inchide fereastra. Cu „starea 0" scrisa in jurnal, omul cauta unde nu e.
+     */
+    public function test_programul_oprit_se_deosebeste_de_cel_prins_in_altceva()
+    {
+        $oprit = agent_talcul_local($this->raspuns(7, 0, ''));
+        $prins = agent_talcul_local($this->raspuns(28, 0, ''));
+
+        $this->assertStringContainsString('nu rulează', $oprit);
+        $this->assertStringContainsString('prins în altceva', $prins);
+        $this->assertStringContainsString('PIN', $prins, 'trebuie spusă pricina cea mai deasă');
+        $this->assertNotSame($oprit, $prins);
+    }
+
+    /** Un raspuns venit, oricare ar fi el, se spune ca atare. */
+    public function test_raspunsul_venit_se_spune_cu_starea_lui()
+    {
+        $this->assertStringContainsString('403', agent_talcul_local($this->raspuns(0, 403, '')));
+    }
+
+    /**
+     * Pregatirile bat la usa oricarei instante, nu doar a celei dintai.
+     *
+     * Programul e pornit in mai multe instante tocmai fiindca serveste o cerere
+     * pe rand. Cand cea dintai era prinsa in altceva, agentul se oprea desi
+     * vecinele erau libere — si nu se inrola, si nu-si lua licenta.
+     */
+    public function test_pregatirile_incearca_toate_instantele()
+    {
+        $functii = file_get_contents(base_path('spv-bridge/agent-functii.php'));
+
+        $this->assertStringContainsString('function agent_intreaba_local', $functii);
+
+        foreach (["'/certificate'", "'/identitate'", "'/licenta'"] as $cale) {
+            $this->assertStringContainsString(
+                'agent_intreaba_local($config, ' . $cale,
+                $functii,
+                $cale . ' trebuie cerut pe oricare instanță răspunde'
+            );
+        }
+    }
 }

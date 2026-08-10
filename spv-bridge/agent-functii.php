@@ -388,14 +388,12 @@ function agent_desluseste_panda($rezultat, &$motiv = null)
 function agent_licentiaza($config)
 {
     // Intai se intreaba programul de langa noi: cine e si daca are licenta.
-    // Tot pregatire, deci tot rabdare scurta — vezi agent_inroleaza().
-    $identitate = agent_curl($config, array(
-        'url' => $config['local'] . '/identitate',
-        'antete' => array('Authorization: Bearer ' . $config['token']),
-        'rabdare' => 30,
-    ));
+    // Tot pregatire, deci tot pe oricare instanta raspunde — vezi agent_inroleaza().
+    $identitate = agent_intreaba_local($config, '/identitate');
 
     if ($identitate['cod'] !== 0 || $identitate['status'] !== 200) {
+        agent_scrie($config, 'Nu am putut afla starea licenței: ' . agent_talcul_local($identitate) . '.');
+
         return false;
     }
 
@@ -436,9 +434,12 @@ function agent_licentiaza($config)
     $fisier = $config['dosar'] . '/agent_licenta_primita.json';
     @file_put_contents($fisier, $primita['corp']);
 
-    $pusa = agent_curl($config, array(
+    /*
+     * Licenta se scrie langa program, in dosarul pe care il impart toate
+     * instantele: pusa la oricare dintre ele, o vad toate.
+     */
+    $pusa = agent_intreaba_local($config, '/licenta', array(
         'metoda' => 'POST',
-        'url' => $config['local'] . '/licenta',
         'antete' => array(
             'Authorization: Bearer ' . $config['token'],
             'Content-Type: application/json',
@@ -449,7 +450,8 @@ function agent_licentiaza($config)
     @unlink($fisier);
 
     if ($pusa['cod'] !== 0 || $pusa['status'] !== 200) {
-        agent_scrie($config, 'Licenta a venit, dar programul local n-a primit-o (' . $pusa['status'] . ').');
+        agent_scrie($config, 'Licenta a venit, dar programul local n-a primit-o: '
+            . agent_talcul_local($pusa) . '.');
 
         return false;
     }
@@ -572,6 +574,66 @@ function agent_inceputul($corp)
  * Se încearcă la fiecare pornire: dacă se schimbă tokenul din USB, noul
  * certificat intră în evidență la următoarea repornire a programului.
  */
+/**
+ * Intreaba programul local, pe oricare instanta raspunde.
+ *
+ * Programul serveste o cerere pe rand, si e pornit in mai multe instante tocmai
+ * de aceea. Pregatirile bateau insa numai la usa celei dintai: cand ea era
+ * prinsa in altceva — o descarcare lunga, o fereastra de PIN deschisa pe ecranul
+ * clientului — agentul astepta degeaba si se oprea, desi vecinele erau libere.
+ *
+ * @return array raspunsul celei dintai instante care a raspuns; al ultimei, daca
+ *               n-a raspuns niciuna
+ */
+function agent_intreaba_local($config, $cale, $optiuni = array())
+{
+    $adrese = !empty($config['locale']) ? $config['locale'] : array($config['local']);
+    $raspuns = array('cod' => -1, 'status' => 0, 'corp' => '');
+
+    foreach ($adrese as $adresa) {
+        $raspuns = agent_curl($config, array_merge(array(
+            'url' => $adresa . $cale,
+            'antete' => array('Authorization: Bearer ' . $config['token']),
+            'rabdare' => 30,
+        ), $optiuni));
+
+        if ($raspuns['cod'] === 0 && $raspuns['status'] >= 200) {
+            return $raspuns;
+        }
+
+        agent_scrie($config, 'Instanța ' . $adresa . ' nu a răspuns la ' . $cale . ': '
+            . agent_talcul_local($raspuns) . '. Încerc pe alta.');
+    }
+
+    return $raspuns;
+}
+
+/**
+ * De ce n-a raspuns programul local, pe intelesul celui care citeste jurnalul.
+ *
+ * Deosebirea care conteaza e intre „nu asculta nimeni acolo" si „asculta, dar
+ * n-a raspuns": prima inseamna un program oprit, a doua unul prins in altceva —
+ * cel mai des o fereastra de PIN pe care n-o inchide nimeni. Se indreapta cu
+ * totul altfel, iar „starea 0" nu spunea nici una, nici alta.
+ */
+function agent_talcul_local($raspuns)
+{
+    if ((int) $raspuns['cod'] === 7) {
+        return 'nu ascultă nimeni pe portul acela — programul local nu rulează';
+    }
+
+    if ((int) $raspuns['cod'] === 28 || ((int) $raspuns['cod'] !== 0 && (int) $raspuns['status'] === 0)) {
+        return 'a acceptat legătura, dar n-a răspuns în răgazul dat — e prins în altceva'
+            . ' (cel mai des, o fereastră de PIN deschisă pe ecranul acelui calculator)';
+    }
+
+    if ((int) $raspuns['status'] > 0) {
+        return 'a răspuns cu ' . (int) $raspuns['status'];
+    }
+
+    return agent_talcul_curl((int) $raspuns['cod']);
+}
+
 function agent_inroleaza($config)
 {
     if ($config['inrolare'] === '') {
@@ -579,20 +641,16 @@ function agent_inroleaza($config)
     }
 
     /*
-     * Rabdare scurta, nu cea obisnuita: astea sunt pregatiri, nu lucru. Programul
-     * de langa noi serveste o cerere pe rand, iar daca e prins in altceva — o
-     * descarcare lunga, o fereastra de PIN — cinci minute de asteptare aici ar
-     * tine panda pe loc si agentul ar parea inghetat. Mai bine se sare peste
-     * pregatire si se incearca la pornirea urmatoare.
+     * Rabdare scurta si pe oricare instanta raspunde: astea sunt pregatiri, nu
+     * lucru. Cinci minute de asteptare aici ar tine panda pe loc si agentul ar
+     * parea inghetat; mai bine se sare peste pregatire si se incearca la
+     * pornirea urmatoare.
      */
-    $local = agent_curl($config, array(
-        'url' => $config['local'] . '/certificate',
-        'antete' => array('Authorization: Bearer ' . $config['token']),
-        'rabdare' => 30,
-    ));
+    $local = agent_intreaba_local($config, '/certificate');
 
     if ($local['cod'] !== 0 || $local['status'] !== 200) {
-        agent_scrie($config, 'Nu am putut citi certificatele de pe token (' . $local['status'] . ').');
+        agent_scrie($config, 'Nu am putut citi certificatele de pe token: '
+            . agent_talcul_local($local) . '.');
 
         return;
     }
