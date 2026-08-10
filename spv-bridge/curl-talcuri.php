@@ -20,31 +20,74 @@ function pana_trecatoare($cod)
     return in_array((int) $cod, array(35, 52, 55, 56), true);
 }
 
-/** Ce inseamna codul cu care s-a oprit curl, pe intelesul celui care citeste. */
-function talcul_curl($cod)
+/**
+ * Ce inseamna codul cu care s-a oprit curl, pe intelesul celui care citeste.
+ *
+ * La penele de fel TLS, mesajul spunea pana acum toate pricinile cu putinta si
+ * lasa omul sa le incerce pe rand — iar cea dintai, tokenul care isi asteapta
+ * PIN-ul, il trimitea de multe ori sa caute unde nu era nimic. Acum programul
+ * intreaba chiar tokenul inainte sa scrie mesajul, si spune ce a aflat.
+ *
+ * @param string $cheia 'bun' | 'blocat' | 'necunoscut' — ce a raspuns tokenul
+ */
+function talcul_curl($cod, $cheia = 'necunoscut')
 {
     $talcuri = array(
         6 => 'numele serverului ANAF nu poate fi dezlegat (DNS)',
         7 => 'legătura cu ANAF nu se poate deschide — port închis sau internet căzut',
         28 => 'ANAF nu a răspuns în timpul dat',
-        35 => 'strângerea de mână TLS cu ANAF a eșuat. Două pricini obișnuite: tokenul își cere'
-            . ' codul PIN și nu e nimeni la calculator să-l introducă, ori traficul e desfăcut'
-            . ' de antivirus',
+        35 => 'strângerea de mână TLS cu ANAF a eșuat',
         52 => 'ANAF a închis legătura fără să răspundă',
         55 => 'legătura s-a rupt în timp ce se trimitea',
         58 => 'certificatul cerut nu s-a găsit în magazinul Windows al contului sub care rulează programul:'
             . ' tokenul nu e conectat, ori amprenta cerută este a altui certificat',
         56 => 'legătura s-a rupt în timp ce se primea răspunsul; sesiunea securizată s-a stins'
-            . ' înainte de capătul răspunsului (SEC_E_CONTEXT_EXPIRED). Dacă se repetă, cea mai'
-            . ' deasă pricină nu e rețeaua, ci tokenul: fiecare legătură cu ANAF cere cheia de pe'
-            . ' el, iar dacă driverul așteaptă codul PIN într-un dialog pe care nu-l vede nimeni,'
-            . ' legătura moare de la sine. Altfel, se întâmplă și la răspunsuri mari sau când'
-            . ' lanțul de servere al ANAF închide legătura pe neașteptate',
+            . ' înainte de capătul răspunsului (SEC_E_CONTEXT_EXPIRED)',
         60 => 'certificatul serverului ANAF nu este de încredere — semn că traficul e desfăcut'
             . ' de antivirus sau de proxy',
     );
 
-    return isset($talcuri[(int) $cod])
+    $talc = isset($talcuri[(int) $cod])
         ? $talcuri[(int) $cod]
         : 'curl s-a oprit cu codul ' . (int) $cod;
+
+    return $talc . talcul_cheii($cod, $cheia);
+}
+
+/**
+ * Ce s-a aflat intreband tokenul, adaugat la talcul penei.
+ *
+ * Numai la penele de fel TLS (35, 56) are rost: acolo cheia chiar e in joc.
+ * „Necunoscut" nu adauga nimic — un rand care spune ca nu se stie nimic e mai
+ * rau decat tacerea.
+ */
+function talcul_cheii($cod, $cheia)
+{
+    if (!in_array((int) $cod, array(35, 56), true)) {
+        return '';
+    }
+
+    if ($cheia === 'bun') {
+        return '. Tokenul a fost întrebat chiar acum și cheia de pe el semnează fără piedică,'
+            . ' deci PIN-ul NU e pricina. Rămâne desfacerea traficului: scoateți webserviced.anaf.ro'
+            . ' și app.dianasoft.ro de sub filtrarea SSL/TLS a antivirusului (în ESET/NOD32:'
+            . ' Configurare avansată → Web și email → Filtrare protocoale SSL/TLS → Lista adreselor'
+            . ' excluse de la verificare)';
+    }
+
+    if ($cheia === 'blocat') {
+        return '. Tokenul a fost întrebat chiar acum și cheia de pe el NU se poate folosi: aceasta'
+            . ' este pricina. Mergeți la calculatorul cu tokenul, introduceți codul PIN în fereastra'
+            . ' deschisă acolo, apoi încercați din nou';
+    }
+
+    /*
+     * Tokenul n-a putut fi intrebat (kit vechi, sau proba n-a raspuns). Atunci
+     * se spun pricinile cu putinta, ca inainte — dar numai atunci, fiindca
+     * altfel omul le cauta pe toate degeaba.
+     */
+    return '. Fiecare legătură cu ANAF cere cheia de pe token, iar dacă driverul așteaptă codul PIN'
+        . ' într-un dialog pe care nu-l vede nimeni, legătura moare de la sine; se întâmplă însă'
+        . ' și când traficul e desfăcut de antivirus, la răspunsuri mari, sau când lanțul de'
+        . ' servere al ANAF închide legătura pe neașteptate';
 }

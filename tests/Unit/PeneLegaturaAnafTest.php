@@ -79,4 +79,62 @@ class PeneLegaturaAnafTest extends TestCase
     {
         $this->assertStringContainsString('99', talcul_curl(99));
     }
+
+    /**
+     * La pana de fel TLS nu se mai insira pricinile cu putinta: se intreaba
+     * tokenul si se spune ce a raspuns.
+     *
+     * Mesajul de dinainte incepea cu „cea mai deasa pricina nu e reteaua, ci
+     * tokenul" si trimitea omul sa caute PIN-ul — chiar si la clientii unde
+     * PIN-ul era dat de mult, iar traficul era desfacut de antivirus. O
+     * banuiala scrisa apasat costa zile de cautat unde nu e nimic.
+     */
+    public function test_cheia_buna_scoate_pinul_dintre_pricini()
+    {
+        $talc = talcul_curl(56, 'bun');
+
+        $this->assertStringContainsString('NU e pricina', $talc);
+        $this->assertStringContainsString('filtrarea SSL/TLS', $talc, 'trebuie arătat încotro se caută');
+    }
+
+    /** Cheia care nu se poate folosi e spusa raspicat, cu ce e de facut. */
+    public function test_cheia_blocata_e_spusa_raspicat()
+    {
+        $talc = talcul_curl(56, 'blocat');
+
+        $this->assertStringContainsString('aceasta este pricina', $talc);
+        $this->assertStringContainsString('PIN', $talc);
+        $this->assertStringNotContainsString('antivirus', $talc, 'nu se mai însiră pricini care au căzut');
+    }
+
+    /** Neintrebat tokenul, se spun pricinile cu putinta — ca inainte. */
+    public function test_fara_raspuns_de_la_token_se_spun_pricinile_cu_putinta()
+    {
+        $talc = talcul_curl(56, 'necunoscut');
+
+        $this->assertStringContainsString('PIN', $talc);
+        $this->assertStringContainsString('antivirus', $talc);
+        $this->assertStringNotContainsString('a fost întrebat', $talc, 'nu se pretinde ceva ce nu s-a aflat');
+    }
+
+    /**
+     * Numai la penele in care cheia chiar e in joc. La un DNS cazut, un rand
+     * despre token n-ar face decat sa incurce.
+     */
+    public function test_la_penele_fara_legatura_cu_cheia_nu_se_pomeneste_de_token()
+    {
+        foreach ([6, 7, 28, 52, 60] as $cod) {
+            $this->assertStringNotContainsString('Tokenul a fost întrebat', talcul_curl($cod, 'bun'));
+        }
+    }
+
+    /** Programul chiar intreaba tokenul cand legatura se rupe. */
+    public function test_programul_intreaba_tokenul_la_pana()
+    {
+        $server = file_get_contents(base_path('spv-bridge/server.php'));
+
+        $this->assertStringContainsString('function starea_cheii', $server);
+        $this->assertStringContainsString("array(35, 56)", $server, 'se întreabă doar la penele de fel TLS');
+        $this->assertStringContainsString("\$rezultat['cheia']", $server, 'ce s-a aflat merge până la mesaj');
+    }
 }

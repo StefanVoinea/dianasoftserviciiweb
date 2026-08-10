@@ -473,6 +473,42 @@ function executa_curl(array $config, $url, array $optiuni = array())
  * Întoarce rezultatul curl, cu corpul scris în fișierul temporar — cine îl
  * primește răspunde de ștergerea lui.
  */
+/**
+ * Se poate folosi cheia de pe token chiar acum?
+ *
+ * Se cheama cand o legatura cu ANAF s-a rupt: acolo, cea mai deasa banuiala e
+ * tokenul, dar pana acum ramanea banuiala. Un raspuns de la el o face fapt —
+ * si, daca driverul astepta PIN-ul, proba deschide fereastra si urmatoarea
+ * incercare are cu ce sa lucreze.
+ *
+ * @return string 'bun' | 'blocat' | 'necunoscut'
+ */
+function starea_cheii($config)
+{
+    if ($config['thumbprint'] === '') {
+        return 'necunoscut';
+    }
+
+    $argumente = array(
+        'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+        '-File', escapeshellarg(__DIR__ . '\pin-test.ps1'),
+        '-Thumbprint', escapeshellarg($config['thumbprint']),
+        '2>&1',
+    );
+
+    $iesire = array();
+    $cod = 0;
+    exec(implode(' ', $argumente), $iesire, $cod);
+
+    $date = json_decode(implode('', $iesire), true);
+
+    if (!is_array($date) || !isset($date['gata'])) {
+        return 'necunoscut';
+    }
+
+    return $date['gata'] ? 'bun' : 'blocat';
+}
+
 function spv_cere(array $config, $tinta)
 {
     cere_amprenta($config);
@@ -487,6 +523,9 @@ function spv_cere(array $config, $tinta)
 
     $racaz = array(1 => 3, 2 => 8);
 
+    // Ce s-a aflat despre cheia de pe token, daca s-a ajuns s-o intrebam.
+    $cheia = 'necunoscut';
+
     for ($incercare = 1; $incercare <= 3; $incercare++) {
         $rezultat = executa_curl($config, $tinta, array(
             'location',
@@ -495,17 +534,39 @@ function spv_cere(array $config, $tinta)
         ));
 
         if ($rezultat['status'] >= 100 && !pana_trecatoare($rezultat['cod_iesire'])) {
+            $rezultat['cheia'] = $cheia;
+
             return $rezultat;
         }
 
         @unlink($rezultat['fisier_corp']);
         $rezultat['fisier_corp'] = null;
 
+        /*
+         * Fiecare legatura cu ANAF cere cheia de pe token. Cand strangerea de
+         * mana cade (35) sau sesiunea securizata se stinge la mijloc (56), cea
+         * mai deasa pricina e tokenul care isi asteapta PIN-ul intr-o fereastra
+         * pe care n-o vede nimeni — dar pana acum ramanea o banuiala scrisa in
+         * mesaj, si omul o cauta cu zilele.
+         *
+         * Se intreaba deci chiar el, o singura data. Daca driverul astepta
+         * PIN-ul, proba deschide fereastra, iar incercarea urmatoare are cu ce
+         * sa lucreze; daca cheia semneaza fara sa clipeasca, banuiala pica si
+         * mesajul arata incolo — spre desfacerea traficului de antivirus.
+         */
+        if ($cheia === 'necunoscut' && in_array((int) $rezultat['cod_iesire'], array(35, 56), true)) {
+            $cheia = starea_cheii($config);
+            scrie_eroarea('Legătura cu ANAF s-a rupt (curl ' . (int) $rezultat['cod_iesire']
+                . '); cheia de pe token: ' . $cheia . '.');
+        }
+
         if (isset($racaz[$incercare])) {
             @unlink($config['cookie_jar']);
             sleep($racaz[$incercare]);
         }
     }
+
+    $rezultat['cheia'] = $cheia;
 
     /*
      * Dupa toate incercarile: daca si ultima s-a rupt la mijloc, raspunsul nu e
@@ -878,7 +939,7 @@ if ($metoda === 'GET' && preg_match('#^/spv/([A-Za-z0-9_\-/.]+)$#', $calea, $pot
     }
 
     raspunde_json(502, array(
-        'eroare'  => 'Apelul către ANAF a eșuat: ' . talcul_curl($rezultat['cod_iesire'])
+        'eroare'  => 'Apelul către ANAF a eșuat: ' . talcul_curl($rezultat['cod_iesire'], isset($rezultat['cheia']) ? $rezultat['cheia'] : 'necunoscut')
             . ' [curl ' . $rezultat['cod_iesire'] . ']',
         'detalii' => $rezultat['iesire'],
     ));
@@ -914,7 +975,7 @@ if ($metoda === 'GET' && $calea === '/spv-arhiva') {
 
     if ($rezultat['status'] < 100) {
         raspunde_json(502, array(
-            'eroare'  => 'Apelul către ANAF a eșuat: ' . talcul_curl($rezultat['cod_iesire'])
+            'eroare'  => 'Apelul către ANAF a eșuat: ' . talcul_curl($rezultat['cod_iesire'], isset($rezultat['cheia']) ? $rezultat['cheia'] : 'necunoscut')
             . ' [curl ' . $rezultat['cod_iesire'] . ']',
             'detalii' => $rezultat['iesire'],
         ));
@@ -1149,7 +1210,7 @@ if ($metoda === 'POST' && $calea === '/decl/upload') {
 
     @unlink($rezultat['fisier_corp']);
     raspunde_json(502, array(
-        'eroare'  => 'Trimiterea către ANAF a eșuat: ' . talcul_curl($rezultat['cod_iesire'])
+        'eroare'  => 'Trimiterea către ANAF a eșuat: ' . talcul_curl($rezultat['cod_iesire'], isset($rezultat['cheia']) ? $rezultat['cheia'] : 'necunoscut')
             . ' [curl ' . $rezultat['cod_iesire'] . ']',
         'detalii' => $rezultat['iesire'],
     ));
@@ -1197,7 +1258,7 @@ if (preg_match('#^/etransport/(.+)$#', $calea, $potrivire)) {
     @unlink($rezultat['fisier_corp']);
 
     raspunde_json(502, array(
-        'eroare'  => 'Apelul către e-Transport a eșuat: ' . talcul_curl($rezultat['cod_iesire'])
+        'eroare'  => 'Apelul către e-Transport a eșuat: ' . talcul_curl($rezultat['cod_iesire'], isset($rezultat['cheia']) ? $rezultat['cheia'] : 'necunoscut')
             . ' [curl ' . $rezultat['cod_iesire'] . ']',
         'detalii' => $rezultat['iesire'],
     ));
