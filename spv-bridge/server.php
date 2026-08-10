@@ -481,7 +481,16 @@ function executa_curl(array $config, $url, array $optiuni = array())
  * si, daca driverul astepta PIN-ul, proba deschide fereastra si urmatoarea
  * incercare are cu ce sa lucreze.
  *
- * @return string 'bun' | 'blocat' | 'necunoscut'
+ * Se deosebesc doua feluri de „bun", fiindca se indreapta altfel:
+ *
+ *   'bun'          — cheia a semnat pe loc, fara sa ceara nimic. Driverul tine
+ *                    PIN-ul minte, deci nu el a rupt legatura cu ANAF.
+ *   'bun_dupa_pin' — cheia a semnat, dar abia dupa ce s-a deschis fereastra.
+ *                    Driverul cere PIN-ul la fiecare folosire, deci l-a cerut si
+ *                    in mijlocul strangerii de mana cu ANAF — iar acolo nimeni
+ *                    nu asteapta dupa om.
+ *
+ * @return string 'bun' | 'bun_dupa_pin' | 'blocat' | 'necunoscut'
  */
 function starea_cheii($config)
 {
@@ -506,7 +515,51 @@ function starea_cheii($config)
         return 'necunoscut';
     }
 
-    return $date['gata'] ? 'bun' : 'blocat';
+    if (empty($date['gata'])) {
+        return 'blocat';
+    }
+
+    return empty($date['cerut']) ? 'bun' : 'bun_dupa_pin';
+}
+
+/**
+ * Deschide cheia inainte de apelul la ANAF, nu dupa ce el cade.
+ *
+ * Strangerea de mana cu ANAF are nevoie de cheia de pe token. Daca driverul
+ * cere PIN-ul chiar atunci, fereastra se deschide in mijlocul ei, iar sesiunea
+ * securizata se stinge asteptand omul: SEC_E_CONTEXT_EXPIRED. Nu se poate cere
+ * ANAF-ului sa aiba mai multa rabdare, dar se poate scoate omul din mijlocul
+ * ferestrei aceleia — cerand cheia inainte, cand nimeni nu numara secundele.
+ *
+ * Nu se face la fiecare apel: ar fi o semnare in plus de fiecare data. Ce s-a
+ * aflat se tine langa program cateva minute, si atat.
+ *
+ * @return string ce s-a aflat despre cheie ('' cand nu s-a intrebat acum)
+ */
+function asigura_cheia($config, $rastimp = 600)
+{
+    $fisier = __DIR__ . DIRECTORY_SEPARATOR . 'pin-stare.json';
+    $stiut = is_file($fisier) ? json_decode((string) @file_get_contents($fisier), true) : null;
+
+    /*
+     * Ce s-a aflat tine cateva minute, oricare ar fi fost raspunsul.
+     *
+     * Nu doar cand cheia era deschisa: la un driver care cere PIN-ul la fiecare
+     * folosire, o proba noua inaintea fiecarui apel ar deschide o fereastra in
+     * plus fata de cea pe care o deschide oricum curl — adica exact necazul, de
+     * doua ori. Acolo indreptarea nu e la noi, ci in setarile driverului, si se
+     * spune raspicat in mesajul penei.
+     */
+    if (is_array($stiut) && isset($stiut['la'], $stiut['stare'])
+        && (time() - (int) $stiut['la']) < $rastimp) {
+        return $stiut['stare'] === 'bun' ? '' : (string) $stiut['stare'];
+    }
+
+    $stare = starea_cheii($config);
+
+    @file_put_contents($fisier, json_encode(array('la' => time(), 'stare' => $stare)));
+
+    return $stare;
 }
 
 function spv_cere(array $config, $tinta)
@@ -523,8 +576,15 @@ function spv_cere(array $config, $tinta)
 
     $racaz = array(1 => 3, 2 => 8);
 
-    // Ce s-a aflat despre cheia de pe token, daca s-a ajuns s-o intrebam.
-    $cheia = 'necunoscut';
+    /*
+     * Cheia se deschide inainte, nu dupa ce apelul cade: asa fereastra de PIN,
+     * daca e nevoie de ea, se deschide cand nimeni nu numara secundele.
+     */
+    $cheia = asigura_cheia($config);
+
+    if ($cheia === '') {
+        $cheia = 'necunoscut';
+    }
 
     for ($incercare = 1; $incercare <= 3; $incercare++) {
         $rezultat = executa_curl($config, $tinta, array(

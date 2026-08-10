@@ -68,11 +68,31 @@ function talcul_cheii($cod, $cheia)
     }
 
     if ($cheia === 'bun') {
-        return '. Tokenul a fost întrebat chiar acum și cheia de pe el semnează fără piedică,'
-            . ' deci PIN-ul NU e pricina. Rămâne desfacerea traficului: scoateți webserviced.anaf.ro'
-            . ' și app.dianasoft.ro de sub filtrarea SSL/TLS a antivirusului (în ESET/NOD32:'
-            . ' Configurare avansată → Web și email → Filtrare protocoale SSL/TLS → Lista adreselor'
-            . ' excluse de la verificare)';
+        return '. Tokenul a fost întrebat chiar acum: cheia a semnat pe loc, fără să ceară nimic,'
+            . ' deci driverul ține PIN-ul minte și NU el a rupt legătura. Rămâne desfacerea'
+            . ' traficului: scoateți webserviced.anaf.ro și app.dianasoft.ro de sub filtrarea'
+            . ' SSL/TLS a antivirusului (în ESET/NOD32: Configurare avansată → Web și email →'
+            . ' Filtrare protocoale SSL/TLS → Lista adreselor excluse de la verificare)';
+    }
+
+    /*
+     * Cheia merge, dar driverul a cerut PIN-ul din nou.
+     *
+     * Asta e chiar pricina, si nu se vede din afara: fereastra se deschide si in
+     * mijlocul strangerii de mana cu ANAF, iar acolo nimeni nu asteapta dupa om.
+     * Cat scrie el PIN-ul, sesiunea securizata se stinge — SEC_E_CONTEXT_EXPIRED.
+     * Nu se poate cere ANAF-ului mai multa rabdare; se poate insa spune
+     * driverului sa ceara PIN-ul o singura data pe sesiunea Windows.
+     */
+    if ($cheia === 'bun_dupa_pin') {
+        return '. Tokenul a fost întrebat chiar acum: cheia merge, dar driverul a cerut PIN-ul din'
+            . ' nou — aceasta este pricina. El îl cere la fiecare folosire, deci îl cere și în'
+            . ' mijlocul legăturii cu ANAF, iar cât se scrie PIN-ul, sesiunea securizată se stinge;'
+            . ' ANAF nu poate fi rugat să aștepte. Îndreptarea e în driverul tokenului: deschideți'
+            . ' „SafeNet Authentication Client" → Vizualizare avansată → Setări token (Client'
+            . ' Settings) → bifați „Enable single logon" (Autentificare unică), apoi deconectați și'
+            . ' reconectați tokenul. Așa PIN-ul se cere o singură dată pe sesiunea Windows, la'
+            . ' intrarea în aplicație, și nu mai ajunge în mijlocul apelurilor';
     }
 
     if ($cheia === 'blocat') {

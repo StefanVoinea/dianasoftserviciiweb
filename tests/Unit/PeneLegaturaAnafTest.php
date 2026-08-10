@@ -93,7 +93,7 @@ class PeneLegaturaAnafTest extends TestCase
     {
         $talc = talcul_curl(56, 'bun');
 
-        $this->assertStringContainsString('NU e pricina', $talc);
+        $this->assertStringContainsString('NU el a rupt legătura', $talc);
         $this->assertStringContainsString('filtrarea SSL/TLS', $talc, 'trebuie arătat încotro se caută');
     }
 
@@ -136,5 +136,74 @@ class PeneLegaturaAnafTest extends TestCase
         $this->assertStringContainsString('function starea_cheii', $server);
         $this->assertStringContainsString("array(35, 56)", $server, 'se întreabă doar la penele de fel TLS');
         $this->assertStringContainsString("\$rezultat['cheia']", $server, 'ce s-a aflat merge până la mesaj');
+    }
+
+    /**
+     * Driverul care cere PIN-ul la fiecare folosire e chiar pricina, si se
+     * deosebeste de cel care-l tine minte.
+     *
+     * Din afara arata la fel: in amandoua cazurile cheia semneaza. Deosebirea
+     * se vede numai in cat a durat proba — iar de ea atarna incotro se cauta:
+     * la antivirus, sau in setarile tokenului.
+     */
+    public function test_driverul_care_cere_pinul_mereu_e_aratat_ca_pricina()
+    {
+        $talc = talcul_curl(56, 'bun_dupa_pin');
+
+        $this->assertStringContainsString('aceasta este pricina', $talc);
+        $this->assertStringContainsString('single logon', $talc, 'trebuie spusă îndreptarea, nu doar pricina');
+        $this->assertStringNotContainsString('antivirus', $talc, 'nu se mai însiră pricini care au căzut');
+    }
+
+    /** Cheia care se deschide pe loc arata incotro se cauta: la antivirus. */
+    public function test_cheia_deschisa_pe_loc_arata_spre_antivirus()
+    {
+        $talc = talcul_curl(56, 'bun');
+
+        $this->assertStringContainsString('filtrarea', $talc);
+        $this->assertStringNotContainsString('single logon', $talc);
+    }
+
+    /**
+     * Cheia se deschide inaintea apelului, nu dupa ce el cade — asa fereastra
+     * de PIN nu mai ajunge in mijlocul strangerii de mana cu ANAF.
+     */
+    public function test_cheia_se_deschide_inaintea_apelului()
+    {
+        $server = file_get_contents(base_path('spv-bridge/server.php'));
+
+        $this->assertStringContainsString('function asigura_cheia', $server);
+
+        $inceput = strpos($server, 'function spv_cere');
+        $sfarsit = strpos($server, 'function trimite_fisier');
+        $bucata = substr($server, $inceput, $sfarsit - $inceput);
+
+        $this->assertStringContainsString('asigura_cheia($config)', $bucata);
+        $this->assertLessThan(
+            strpos($bucata, 'executa_curl'),
+            strpos($bucata, 'asigura_cheia($config)'),
+            'cheia trebuie deschisă înainte de primul apel, nu după ce el cade'
+        );
+    }
+
+    /**
+     * Ce s-a aflat despre cheie tine cateva minute, oricare ar fi fost
+     * raspunsul: altfel, la un driver care cere PIN-ul mereu, s-ar deschide o
+     * fereastra in plus inaintea fiecarui apel — necazul, de doua ori.
+     */
+    public function test_ce_s_a_aflat_despre_cheie_se_tine_minte()
+    {
+        $server = file_get_contents(base_path('spv-bridge/server.php'));
+
+        $inceput = strpos($server, 'function asigura_cheia');
+        $sfarsit = strpos($server, 'function spv_cere');
+        $bucata = substr($server, $inceput, $sfarsit - $inceput);
+
+        $this->assertStringContainsString('pin-stare.json', $bucata);
+        $this->assertStringNotContainsString(
+            "\$stiut['stare'] === 'bun') {",
+            $bucata,
+            'starea se ține minte oricare ar fi, nu doar când cheia era deschisă'
+        );
     }
 }
