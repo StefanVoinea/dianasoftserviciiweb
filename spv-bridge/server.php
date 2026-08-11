@@ -488,6 +488,23 @@ function executa_curl(array $config, $url, array $optiuni = array())
             ? $config['tls_max']
             : '1.2'));
 
+    /*
+     * Fara refolosirea sesiunii TLS.
+     *
+     * Windows tine minte sesiunile incheiate si le reia, ca sa nu se mai faca
+     * strangerea de mana de la capat. Cand cea tinuta minte a expirat intre
+     * timp, reluarea se rupe chiar in mijlocul raspunsului — si asta e, cuvant
+     * cu cuvant, ce spune SEC_E_CONTEXT_EXPIRED: „contextul a expirat si nu mai
+     * poate fi folosit".
+     *
+     * Se pierde o strangere de mana la fiecare apel; se castiga un apel care nu
+     * mai cade. Cu certificat de pe token, tot tokenul face si munca grea, deci
+     * diferenta nu se simte.
+     */
+    if (empty($config['refoloseste_sesiunea'])) {
+        $tls[] = 'no-sessionid';
+    }
+
     $linii = array_merge(array(
         'url = ' . curl_valoare($url),
         'cert = ' . curl_valoare('CurrentUser\\MY\\' . $config['thumbprint']),
@@ -530,7 +547,9 @@ function executa_curl(array $config, $url, array $optiuni = array())
         'iesire' => implode(' | ', $iesire),
         'cod_iesire' => $cod_iesire,
         // Ce margine de TLS s-a cerut; dupa ea se stie ce cod ruleaza la client.
-        'tls' => $tls === array() ? 'TLS fara margine' : 'TLS <= 1.2',
+        'tls' => implode(', ', array_map(function ($optiune) {
+            return $optiune === 'no-sessionid' ? 'sesiune noua' : $optiune;
+        }, $tls)) ?: 'TLS fara margine',
     );
 }
 
@@ -995,6 +1014,10 @@ $config = array(
         : __DIR__ . '\\arhiva', '\\/'),
     // Cat de nou poate fi TLS-ul catre ANAF; gol = fara margine (vezi executa_curl)
     'tls_max'    => isset($env['SPV_TLS_MAX']) ? trim($env['SPV_TLS_MAX']) : '1.2',
+    // Refolosirea sesiunii TLS; oprita, fiindca reluarea unei sesiuni expirate
+    // rupe raspunsul la mijloc (SEC_E_CONTEXT_EXPIRED). Vezi executa_curl().
+    'refoloseste_sesiunea' => isset($env['SPV_REFOLOSESTE_SESIUNEA'])
+        && trim($env['SPV_REFOLOSESTE_SESIUNEA']) === '1',
     'cookie_jar' => __DIR__ . '/cookies.txt',
     'decl_jar'   => __DIR__ . '/decl_cookies.txt',
 );

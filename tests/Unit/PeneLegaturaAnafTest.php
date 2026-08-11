@@ -404,12 +404,19 @@ class PeneLegaturaAnafTest extends TestCase
         $this->assertStringContainsString('1.2', $rezultat['tls']);
     }
 
-    /** Fara margine, se spune si asta: altfel n-am sti ce a rulat. */
-    public function test_lipsa_marginii_se_spune_si_ea()
+    /**
+     * Semnele spun cu ce s-a lucrat, oricare ar fi fost alegerea.
+     *
+     * Dupa ele se stie, dintr-un mesaj lipit intr-un email, ce cod ruleaza la
+     * client — si asa s-a si aflat ca marginea de TLS nu era pricina: eroarea a
+     * venit inapoi cu „TLS <= 1.2" scris in ea.
+     */
+    public function test_semnele_spun_cu_ce_s_a_lucrat()
     {
         $sursa = file_get_contents(base_path('spv-bridge/server.php'));
 
         $this->assertStringContainsString("'TLS fara margine'", $sursa);
-        $this->assertStringContainsString("'TLS <= 1.2'", $sursa);
+        $this->assertStringContainsString("'sesiune noua'", $sursa, 'sesiunea nouă nu se vede în semne');
+        $this->assertStringContainsString('no-sessionid', $sursa);
     }
 }

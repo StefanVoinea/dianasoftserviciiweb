@@ -287,8 +287,16 @@ if ($codAcces) {
     $identitate = Cheama ($local + '/identitate') @('-H', ('Authorization: Bearer ' + $codAcces))
 
     if ($identitate.status -eq 200) {
+        <#
+            Raspunsul poate veni gol — programul a apucat sa raspunda 200, dar
+            corpul nu s-a citit. ConvertFrom-Json se opreste atunci cu o eroare
+            rosie in mijlocul raportului, care nu spune nimanui nimic.
+        #>
         $stare = $null
-        try { $stare = $identitate.corp | ConvertFrom-Json } catch { $stare = $null }
+
+        if ($identitate.corp) {
+            try { $stare = $identitate.corp | ConvertFrom-Json } catch { $stare = $null }
+        }
 
         if ($stare -and $stare.licentiat) {
             $panaLa = ''
@@ -584,6 +592,7 @@ if ($FaraSemnare) {
             desface traficul, ci Windows-ul si ANAF nu se inteleg pe 1.3.
         #>
         $peTls = @(
+            @{ nume = 'TLS 1.2, sesiune noua'; optiuni = @('--tlsv1.2', '--tls-max', '1.2', '--no-sessionid') },
             @{ nume = 'TLS 1.2'; optiuni = @('--tlsv1.2', '--tls-max', '1.2') },
             @{ nume = 'fara margine (poate 1.3)'; optiuni = @() }
         )
@@ -618,8 +627,53 @@ if ($FaraSemnare) {
             }
         }
 
-        if ($mersPe -eq 'TLS 1.2' -and $raspuns.cod -eq 0) {
-            Amanunt 'Pe TLS 1.2 merge. Programul se tine oricum pe el, deci nu aveti nimic de facut.'
+        if ($raspuns.cod -eq 0) {
+            Amanunt ('A mers pe: ' + $mersPe + '. Programul lucreaza la fel, deci nu aveti nimic de facut.')
+        } else {
+            <#
+                N-a mers pe niciunul. Atunci se cere si vorba lui curl pe
+                dinauntru: unde anume se rupe, catre ce adresa duce redirectarea
+                si ce s-a schimbat la strangerea de mana.
+
+                Fara randurile astea nu se poate merge mai departe: din afara,
+                toate incercarile arata la fel, iar noi am ghicit destul.
+            #>
+            Scrie ''
+            Scrie '  Ce spune curl pe dinauntru (de trimis la asistenta):' 'White'
+
+            $urmaFisier = Join-Path $env:TEMP ('diagnoza_urma_' + $PID + '.txt')
+
+            <#
+                Argumentele se dau prin @, nu insirate dupa virgula: asa,
+                PowerShell le-ar trimite pe toate ca un singur argument, iar
+                curl s-ar plange de o optiune lunga cat toata linia.
+            #>
+            $argumenteUrma = @(
+                '-sS', '-v', '-o', 'NUL', '--max-time', '45',
+                '--cert', "CurrentUser\MY\$($certificat.Thumbprint)",
+                '--location', '--tlsv1.2', '--tls-max', '1.2', '--no-sessionid',
+                $adresaAnaf
+            )
+
+            & $curl @argumenteUrma 2>&1 | Out-File -FilePath $urmaFisier -Encoding UTF8
+
+            if (Test-Path -LiteralPath $urmaFisier) {
+                $randuri = @(Get-Content -LiteralPath $urmaFisier -ErrorAction SilentlyContinue)
+
+                # Se pastreaza randurile care spun ceva: strangerea de mana,
+                # cererile si raspunsurile. Restul e zgomot.
+                $alese = @($randuri | Where-Object {
+                    $_ -match '^\s*[*<>]' -or $_ -match 'schannel|SSL|TLS|certificate|Location'
+                })
+
+                if ($alese.Count -gt 30) {
+                    $alese = $alese[($alese.Count - 30)..($alese.Count - 1)]
+                }
+
+                foreach ($rand in $alese) { Amanunt ($rand -replace '\s+$', '') }
+
+                Remove-Item -LiteralPath $urmaFisier -ErrorAction SilentlyContinue
+            }
         }
 
         Remove-Item -LiteralPath $prajituri -ErrorAction SilentlyContinue
