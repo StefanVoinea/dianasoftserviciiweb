@@ -28,18 +28,22 @@ class SocietatiTest extends TestCase
         ];
     }
 
-    public function test_denumirea_din_vector_are_prioritate_fata_de_date_identificare(): void
+    /**
+     * Datele de identificare trec inaintea vectorului fiscal.
+     *
+     * Asa a fost invers pana cand o firma s-a inregistrat cu numele „SRL": in
+     * vector, numele sta in antet si vine rupt in bucati de extractorul de PDF,
+     * pe cand documentul de identificare il are scris pe eticheta lui, intreg.
+     *
+     * Deosebirea nu e de nuanta: cu vectorul deasupra, un nume gresit luat de
+     * acolo nu mai putea fi indreptat de documentul care il stia bine.
+     */
+    public function test_datele_de_identificare_trec_inaintea_vectorului(): void
     {
-        $societate = new AnafSocietate(['cif' => '15208744']);
-        $societate->exists = true;
-
-        // Simulam salvarea fara baza de date
-        $societate->setRawAttributes(['cif' => '15208744', 'denumire' => null, 'denumire_sursa' => null], true);
-
         $prioritati = AnafSocietate::PRIORITATE_SURSE;
 
-        $this->assertGreaterThan($prioritati['date_identificare'], $prioritati['vector']);
-        $this->assertGreaterThan($prioritati['vector'], $prioritati['manual']);
+        $this->assertGreaterThan($prioritati['vector'], $prioritati['date_identificare']);
+        $this->assertGreaterThan($prioritati['date_identificare'], $prioritati['manual']);
     }
 
     /**

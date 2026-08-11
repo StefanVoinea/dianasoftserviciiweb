@@ -445,13 +445,20 @@ class SolicitareService
             }
 
             if (strpos($tip, 'SITUATIE SINTETICA') !== false || strpos($tip, 'SITUAȚIE SINTETICĂ') !== false) {
-                return $this->parser->areObligatiiRestante($calePdf)
+                /*
+                 * Textul, nu o cale: aici scria „$calePdf", o variabila care nu
+                 * exista. Situatia sintetica raspundea deci mereu „nu sunt
+                 * obligatii restante", iar datele de identificare nu dadeau
+                 * niciodata denumirea — de unde si firmele ramase cu numele
+                 * citit din vectorul fiscal, uneori doar „SRL".
+                 */
+                return $this->parser->areObligatiiRestante($text)
                     ? 'ATENȚIE! SUNT OBLIGAȚII DE PLATĂ RESTANTE'
                     : 'Nu sunt obligații de plată restante.';
             }
 
             if (strpos($tip, 'DATE IDENTIFICARE') !== false) {
-                $denumire = $this->parser->citesteDenumire($calePdf, $solicitare->cif);
+                $denumire = $this->parser->citesteDenumire($text, $solicitare->cif);
 
                 $this->actualizeazaSocietatea($solicitare->cif, [
                     'denumire' => $denumire,

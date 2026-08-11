@@ -22,7 +22,18 @@ class AnafSocietate extends Model
     ];
 
     /** Denumirea din vectorul fiscal are prioritate fata de cea din date identificare. */
-    public const PRIORITATE_SURSE = ['manual' => 3, 'vector' => 2, 'date_identificare' => 1];
+    /**
+     * Cat de multa incredere are fiecare izvor al denumirii.
+     *
+     * Datele de identificare o au scrisa pe eticheta ei — un rand cu „Denumire"
+     * si numele intreg alaturi. In vectorul fiscal, numele sta in antet si vine
+     * rupt in bucati de extractorul de PDF; de acolo s-a si inregistrat o firma
+     * cu numele „SRL". De aceea documentul de identificare trece inaintea lui:
+     * el poate indrepta un nume gresit, nu doar sa completeze unul lipsa.
+     *
+     * Ce a scris omul ramane deasupra tuturor.
+     */
+    public const PRIORITATE_SURSE = ['manual' => 3, 'date_identificare' => 2, 'vector' => 1];
 
     public function certificat()
     {

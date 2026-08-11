@@ -291,6 +291,25 @@ function arhiva_destinatie($dosar, $nume, $inlocuieste = '')
  * Întoarce câte fișiere s-au mutat, sau false dacă vreunul n-a putut fi mutat —
  * atunci nu se șterge nimic, ca omul să vadă ce a rămas.
  */
+/**
+ * Uneste un dosar in altul: il redenumeste, daca celalalt nu exista, altfel ii
+ * muta cuprinsul si il lasa gol.
+ *
+ * @return int|false cate fisiere s-au mutat, sau false la nereusita
+ */
+function arhiva_uneste_doua($caleVeche, $caleNoua)
+{
+    if (!is_dir($caleVeche) || $caleVeche === $caleNoua) {
+        return 0;
+    }
+
+    if (!is_dir($caleNoua)) {
+        return @rename($caleVeche, $caleNoua) ? 0 : false;
+    }
+
+    return arhiva_muta_cuprinsul($caleVeche, $caleNoua);
+}
+
 function arhiva_muta_cuprinsul($din, $in)
 {
     $cuprins = @scandir($din);
@@ -2190,6 +2209,59 @@ if (strpos($calea, '/arhiva') === 0) {
     if ($metoda === 'POST' && $calea === '/arhiva/uneste-dosarul') {
         $vechi = arhiva_bucata(isset($_POST['din']) ? $_POST['din'] : '');
         $nou = arhiva_bucata(isset($_POST['in']) ? $_POST['in'] : '');
+        $cui = arhiva_bucata(isset($_POST['cui']) ? $_POST['cui'] : '');
+
+        /*
+         * Cu codul fiscal dat, se strang toate dosarele firmei, oricum s-ar
+         * chema.
+         *
+         * Dosarele poarta numele „DENUMIRE (CUI)", iar denumirea se afla pe
+         * parcurs: din vectorul fiscal, din datele de identificare, sau scrisa
+         * de om. Pana atunci, documentele au apucat sa intre in dosare cu numele
+         * de-atunci — inclusiv unul citit gresit, „SRL (22489650)". Ramaneau
+         * asa, imprastiate, iar omul le cauta prin trei locuri.
+         *
+         * Codul nu se schimba niciodata, deci dupa el se recunosc.
+         */
+        if ($cui !== '' && $nou !== '') {
+            $deUnit = array();
+
+            foreach ((array) @scandir($config['arhiva']) as $intrare) {
+                if ($intrare === '.' || $intrare === '..' || $intrare === $nou) {
+                    continue;
+                }
+
+                if (!is_dir($config['arhiva'] . DIRECTORY_SEPARATOR . $intrare)) {
+                    continue;
+                }
+
+                // Dosarul codului singur, sau oricare „<ceva> (CUI)".
+                if ($intrare === $cui || substr($intrare, -strlen('(' . $cui . ')')) === '(' . $cui . ')') {
+                    $deUnit[] = $intrare;
+                }
+            }
+
+            $mutateTot = 0;
+            $uniteTot = 0;
+
+            foreach ($deUnit as $dosarVechi) {
+                $rezultat = arhiva_uneste_doua(
+                    $config['arhiva'] . DIRECTORY_SEPARATOR . $dosarVechi,
+                    $config['arhiva'] . DIRECTORY_SEPARATOR . $nou
+                );
+
+                if ($rezultat !== false) {
+                    $mutateTot += $rezultat;
+                    $uniteTot++;
+                }
+            }
+
+            raspunde_json(200, array(
+                'mutate' => $mutateTot,
+                'unit' => $uniteTot > 0,
+                'dosare' => $uniteTot,
+            ));
+        }
 
         if ($vechi === '' || $nou === '' || $vechi === $nou) {
             raspunde_json(400, array('eroare' => 'Lipsește dosarul de unit sau cel în care se unește.'));

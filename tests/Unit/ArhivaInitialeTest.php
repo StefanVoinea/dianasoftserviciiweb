@@ -107,4 +107,65 @@ class ArhivaInitialeTest extends TestCase
         $this->assertStringContainsString('ArhivaService::curata($declaratie->tip)', $bucata);
         $this->assertStringNotContainsString('dosarInitiale', $bucata);
     }
+
+    /**
+     * Dosarele firmei se strang dupa cod, oricum s-ar chema.
+     *
+     * Denumirea se afla pe parcurs — din vectorul fiscal, din datele de
+     * identificare, sau scrisa de om —, iar pana atunci documentele apuca sa
+     * intre in dosare cu numele de-atunci. Inclusiv unul citit gresit: o firma a
+     * ajuns cu dosarul „SRL (22489650)". Ramaneau asa, imprastiate, iar omul le
+     * cauta prin trei locuri.
+     *
+     * Codul nu se schimba niciodata, deci dupa el se recunosc.
+     */
+    public function test_dosarele_se_strang_dupa_cod(): void
+    {
+        $server = file_get_contents(base_path('spv-bridge/server.php'));
+
+        $inceput = strpos($server, "\$calea === '/arhiva/uneste-dosarul'");
+        $bucata = substr($server, $inceput, 2500);
+
+        $this->assertStringContainsString("\$_POST['cui']", $bucata, 'unirea nu primește codul');
+        $this->assertStringContainsString("'(' . \$cui . ')'", $bucata, 'nu recunoaște dosarele după cod');
+        $this->assertStringContainsString('arhiva_uneste_doua', $bucata);
+
+        // Iar aplicatia chiar il trimite.
+        $arhiva = file_get_contents(app_path('Services/Anaf/Arhiva/ArhivaService.php'));
+
+        $this->assertStringContainsString("'cui' => \$cui,", $arhiva);
+    }
+
+    /** Dosarul altei firme nu se atinge: se cere potrivire pe cod intreg. */
+    public function test_dosarul_altei_firme_nu_se_atinge(): void
+    {
+        $server = file_get_contents(base_path('spv-bridge/server.php'));
+
+        $inceput = strpos($server, "\$calea === '/arhiva/uneste-dosarul'");
+        $bucata = substr($server, $inceput, 2500);
+
+        // Nu „contine codul", ci „se termina cu (cod)" sau „e chiar codul".
+        $this->assertStringContainsString("\$intrare === \$cui ||", $bucata);
+        $this->assertStringNotContainsString('strpos($intrare, $cui)', $bucata);
+    }
+
+    /**
+     * Documentele deja descarcate se recitesc, iar denumirile se indreapta —
+     * fara sa se ceara nimic de la ANAF.
+     */
+    public function test_recitirea_indreapta_denumirile_fara_sa_intrebe_anaf(): void
+    {
+        $sursa = file_get_contents(app_path('Services/Anaf/Spv/SolicitareService.php'));
+
+        $inceput = strpos($sursa, 'public function reinterpreteaza');
+        $bucata = substr($sursa, $inceput, 900);
+
+        // Citeste de pe disc si interpreteaza; nu cheama clientul si nici ANAF.
+        $this->assertStringContainsString('textulRaspunsului', $bucata);
+        $this->assertStringNotContainsString('listaMesaje', $bucata);
+        $this->assertStringNotContainsString('->client->', $bucata);
+
+        // Iar interpretarea chiar foloseste textul, nu o variabila inexistenta.
+        $this->assertStringNotContainsString('$calePdf,', $sursa, 'a rămas variabila care nu există');
+    }
 }

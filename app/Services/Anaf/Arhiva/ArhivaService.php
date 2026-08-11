@@ -124,6 +124,7 @@ class ArhivaService
             return;
         }
 
+
         if (isset($this->unite[$cui])) {
             return;
         }
@@ -144,6 +145,13 @@ class ArhivaService
                 ->post($this->url('/arhiva/uneste-dosarul'), [
                     'din' => $cui,
                     'in' => $firma,
+                    /*
+                     * Cu codul se strang toate dosarele firmei, oricum s-ar
+                     * chema: denumirea se afla pe parcurs, iar documentele au
+                     * apucat sa intre in dosare cu numele de-atunci — inclusiv
+                     * unul citit gresit. Codul nu se schimba niciodata.
+                     */
+                    'cui' => $cui,
                 ]);
         } catch (\Exception $e) {
             Jurnal::esec(
