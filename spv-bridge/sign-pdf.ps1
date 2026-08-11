@@ -148,7 +148,20 @@ function Extrage-CN([string]$numeDistinctiv) {
 function Stampileaza-Caseta($intrare, $iesire, [int]$numarPagina, [hashtable]$date) {
     $reader = New-Object iTextSharp.text.pdf.PdfReader($intrare)
     $fs = [System.IO.File]::Create($iesire)
-    $stamper = New-Object iTextSharp.text.pdf.PdfStamper($reader, $fs)
+    <#
+        Adaugare, nu rescriere (ultimul argument, $true).
+
+        Documentul ANAF vine deja semnat de ei, iar semnatura acopera octetii
+        fisierului asa cum sunt. Rescris de la capat, ea nu mai are ce acoperi:
+        Adobe o arata rosu, "documentul a fost modificat de la semnare". Pe
+        deasupra, declaratiile sunt formulare XFA, iar rescrierea le strica
+        legatura dintre formular si desen — de unde pagina care ramane la
+        "Please wait...".
+
+        In adaugare, fisierul dinainte ramane neatins octet cu octet, iar ce
+        punem noi se scrie in coada lui.
+    #>
+    $stamper = New-Object iTextSharp.text.pdf.PdfStamper($reader, $fs, [char]0, $true)
 
     $panza = $stamper.GetOverContent($numarPagina)
     $sablon = $panza.CreateTemplate($Latime, $Inaltime)
@@ -222,7 +235,12 @@ try {
 
     $reader = New-Object iTextSharp.text.pdf.PdfReader($intermediar)
     $fs = [System.IO.File]::Create($OutPath)
-    $stamper = [iTextSharp.text.pdf.PdfStamper]::CreateSignature($reader, $fs, [char]0)
+    <#
+        Si semnatura se adauga, nu rescrie — vezi Stampileaza-Caseta. Fisierul
+        temporar ii trebuie lui iTextSharp ca sa poata lucra in adaugare.
+    #>
+    $temporarSemnare = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), [Guid]::NewGuid().ToString() + '.tmp')
+    $stamper = [iTextSharp.text.pdf.PdfStamper]::CreateSignature($reader, $fs, [char]0, $temporarSemnare, $true)
     $sap = $stamper.SignatureAppearance
 
     # Rectangle(llx, lly, urx, ury) — coltul din stanga-jos si cel din dreapta-sus
