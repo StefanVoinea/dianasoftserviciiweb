@@ -99,8 +99,32 @@ class KitBridgeTest extends TestCase
             $this->assertStringStartsWith("\xEF\xBB\xBF", $zip->getFromName($fisier), $fisier . ' nu are BOM');
         }
 
-        // Fisierele .bat trebuie sa ramana fara BOM.
-        $this->assertStringStartsNotWith("\xEF\xBB\xBF", $zip->getFromName('porneste-manual.bat'));
+        /*
+         * Fisierele .bat si .vbs trebuie sa ramana fara BOM.
+         *
+         * cmd.exe l-ar afisa ca text parazit, iar motorul VBScript se opreste de
+         * tot din primul caracter: "Invalid character (1, 1)". Sarcina programata
+         * iese atunci cu codul 1 fara sa porneasca nimic, iar in jurnalul
+         * agentului scrie doar ca "nu asculta nimeni pe portul acela" - asa a
+         * ramas un calculator intreg fara program local, dupa o instalare care
+         * paruse ca a mers.
+         */
+        foreach (['porneste-manual.bat', 'opreste-manual.bat', 'porneste-ascuns.vbs'] as $fisier) {
+            $this->assertStringStartsNotWith(
+                "ï»¿",
+                $zip->getFromName($fisier),
+                $fisier . ' n-are voie cu BOM'
+            );
+        }
+
+        /*
+         * Si numai semne obisnuite: citit ca ANSI, un fisier cu diacritice isi
+         * schimba octetii, iar unul dintre ei poate fi luat drept ghilimea.
+         */
+        $this->assertTrue(
+            mb_check_encoding($zip->getFromName('porneste-ascuns.vbs'), 'ASCII'),
+            'lansatorul fara fereastra trebuie scris numai cu semne obisnuite'
+        );
 
         $zip->close();
     }

@@ -160,10 +160,23 @@ class KitBridge
 
             $continut = file_get_contents($sursa);
 
-            // Fisierele .bat raman fara BOM: cmd.exe l-ar afisa ca text parazit.
+            /*
+             * Nu toate fisierele suporta BOM-ul.
+             *
+             *   .bat — cmd.exe l-ar afisa ca text parazit, la fiecare rulare;
+             *   .vbs — motorul VBScript se opreste din primul caracter, cu
+             *          „Invalid character (1, 1)", iar sarcina programata iese
+             *          cu codul 1 fara sa porneasca nimic. Asa a ramas un
+             *          calculator intreg fara program local, si in jurnal scria
+             *          doar „nu asculta nimeni pe portul acela".
+             */
+            $faraBom = ['bat', 'vbs'];
+
             $zip->addFromString(
                 $fisier,
-                pathinfo($fisier, PATHINFO_EXTENSION) === 'bat' ? $continut : $this->cuBom($continut)
+                in_array(pathinfo($fisier, PATHINFO_EXTENSION), $faraBom, true)
+                    ? $continut
+                    : $this->cuBom($continut)
             );
         }
 
