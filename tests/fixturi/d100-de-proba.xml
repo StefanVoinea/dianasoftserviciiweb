@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<declaratie100  luna="07" an="2026" d_anulare="0" d_succ="0" d_dizolv="0" d_modif="0" nume_declar="PROBA" prenume_declar="PROBA" functie_declar="ADMINISTRATOR" cui="15208744" den="DIANA SOFT SRL" adresa="CONSTANTA" telefon="0700000000" mail="proba@example.test" totalPlata_A="37700" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="mfp:anaf:dgti:d100:declaratie:v2 D100.xsd" xmlns="mfp:anaf:dgti:d100:declaratie:v2">
+	<obligatie  cod_oblig="604" cod_bugetar="5503XXXXXX" scadenta="25.08.2026" nr_evid="10604010726250826000050" bifa_impozit_minim="0" suma_dat="18850" suma_ded="0" suma_plata="18850" suma_rest="0" suma_redu="0" />
+</declaratie100>

@@ -367,10 +367,24 @@ class MonitorizareFolder
             [$caleXml, $calePdf]
         );
 
-        // PDF-ul scos de validator se arunca; se tine minte doar ca a trecut.
         $caleGenerat = Storage::path($trunchi . '_duk.pdf');
 
         $this->valideaza($declaratie, $caleGenerat);
+
+        /*
+         * Cel semnat se pastreaza asa cum a venit: semnatura e pe el. Cel
+         * nesemnat se inlocuieste cu PDF-ul scos de DUKIntegrator din acelasi
+         * XML — vezi lamurirea din DeclaratiiController::dinPdf().
+         */
+        if (!$info['semnat'] && is_file($caleGenerat)) {
+            $declaratie->update([
+                'pas' => 'validat',
+                'cale_pdf' => $trunchi . '_duk.pdf',
+                'erori_validare' => null,
+            ]);
+
+            return $declaratie->fresh();
+        }
 
         if (is_file($caleGenerat)) {
             @unlink($caleGenerat);

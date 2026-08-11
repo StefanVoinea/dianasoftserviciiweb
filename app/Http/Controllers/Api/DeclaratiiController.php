@@ -216,15 +216,41 @@ class DeclaratiiController extends Controller
             return $declaratie->fresh();
         }
 
-        // PDF-ul generat de DUKIntegrator se aruncă: se păstrează cel primit,
-        // pentru că el poartă semnătura (când există).
-        if ($rezultat['cale_pdf'] && is_file($rezultat['cale_pdf'])) {
-            @unlink($rezultat['cale_pdf']);
+        /*
+         * PDF-ul primit poarta semnatura, cand are una: acela se pastreaza, si
+         * nu se atinge cu nimic.
+         *
+         * Cel nesemnat se inlocuieste insa cu PDF-ul scos de DUKIntegrator din
+         * acelasi XML. Programele de contabilitate dau un „PDF inteligent" —
+         * formular XFA, a carui pagina e doar un paravan cu „Please wait...",
+         * iar declaratia se deseneaza abia in Adobe. Semnat, un asemenea
+         * document nu poate purta caseta de semnatura (ea cade pe paravan), si
+         * nu se poate tipari decat prin Adobe.
+         *
+         * PDF-ul lui DUKIntegrator e o foaie obisnuita, cu XML-ul atasat, de
+         * zece ori mai mica: se vede in orice program, se tipareste oriunde, si
+         * poarta caseta. E tot documentul oficial — chiar cel pe care il face
+         * aplicatia ANAF cand apesi „Validare + creare PDF".
+         */
+        $pastreazaPrimitul = $info['semnat'] || !$rezultat['cale_pdf'] || !is_file($rezultat['cale_pdf']);
+
+        if ($pastreazaPrimitul) {
+            if ($rezultat['cale_pdf'] && is_file($rezultat['cale_pdf'])) {
+                @unlink($rezultat['cale_pdf']);
+            }
+
+            $declaratie->update($info['semnat']
+                ? ['pas' => 'semnat', 'cale_pdf' => $calePdf, 'cale_pdf_semnat' => $calePdf, 'erori_validare' => null]
+                : ['pas' => 'validat', 'cale_pdf' => $calePdf, 'erori_validare' => null]);
+
+            return $declaratie->fresh();
         }
 
-        $declaratie->update($info['semnat']
-            ? ['pas' => 'semnat', 'cale_pdf' => $calePdf, 'cale_pdf_semnat' => $calePdf, 'erori_validare' => null]
-            : ['pas' => 'validat', 'cale_pdf' => $calePdf, 'erori_validare' => null]);
+        $declaratie->update([
+            'pas' => 'validat',
+            'cale_pdf' => preg_replace('/\.pdf$/i', '', $calePdf) . '_duk.pdf',
+            'erori_validare' => null,
+        ]);
 
         return $declaratie->fresh();
     }
