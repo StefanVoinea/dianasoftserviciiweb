@@ -187,6 +187,16 @@ Scrie ('Diagnoza acces token ANAF - ' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 Scrie ('Calculator: ' + $env:COMPUTERNAME + '   Utilizator Windows: ' + $env:USERNAME)
 Scrie ('Dosar: ' + $dosar)
 
+<#
+  Ce s-a aflat pe drum si conteaza mai tarziu.
+
+  Pricinile de la pasul 6 se insira dupa ele: cand traficul e curat si semnarea
+  merge, n-are rost sa fie trimis omul la antivirus si la PIN, unde nu e nimic
+  de indreptat.
+#>
+$traficulCurat = $false
+$semnareaAMers = $false
+
 $config = CitesteEnv (Join-Path $dosar 'configurare.env')
 
 if ($config.Count -eq 0) {
@@ -408,6 +418,7 @@ if ($emitentAnaf) {
         )
     } else {
         Bine ('certificatul ANAF vine de la: ' + $emitentAnaf)
+        $traficulCurat = $true
     }
 }
 
@@ -508,6 +519,7 @@ if ($FaraSemnare) {
         [void]$cms.Encode()
 
         Bine 'semnarea a reusit: cheia de pe token se poate folosi'
+        $semnareaAMers = $true
     } catch {
         $motiv = $_.Exception.Message
         Rau ('semnarea a esuat: ' + $motiv)
@@ -558,16 +570,57 @@ if ($FaraSemnare) {
         #>
         $prajituri = Join-Path $env:TEMP ('diagnoza_spv_' + $PID + '_' + $certificat.Thumbprint + '.txt')
 
-        $raspuns = CheamaCuCorp $adresaAnaf @(
-            # Bara dintre magazin si amprenta se scrie prin interpolare: lipita
-            # de mana, se pierde usor la o editare, iar curl raspunde atunci
-            # 'Failed to get certificate location" — o eroare care pare a fi a
-            # tokenului, desi e a noastra.
-            '--cert', "CurrentUser\MY\$($certificat.Thumbprint)",
-            '--location',
-            '--cookie-jar', $prajituri,
-            '--cookie', $prajituri
+        <#
+            Se incearca pe rand cele doua feluri de TLS.
+
+            Cu certificat de pe token, Schannel-ul Windows si TLS 1.3 se inteleg
+            prost: cheile se schimba in mijlocul raspunsului, iar sesiunea se
+            stinge inainte de capatul lui - SEC_E_CONTEXT_EXPIRED. Programul se
+            tine dinadins pe 1.2, asa ca si proba trebuie sa faca la fel; altfel
+            diagnoza ar spune ca nu merge nimic, iar aplicatia ar lucra linistita.
+
+            Se incearca totusi si fara margine, ca sa se afle care din doua e
+            pricina: daca pe 1.2 merge si fara margine nu, atunci nu antivirusul
+            desface traficul, ci Windows-ul si ANAF nu se inteleg pe 1.3.
+        #>
+        $peTls = @(
+            @{ nume = 'TLS 1.2'; optiuni = @('--tlsv1.2', '--tls-max', '1.2') },
+            @{ nume = 'fara margine (poate 1.3)'; optiuni = @() }
         )
+
+        $raspuns = $null
+        $mersPe = ''
+
+        foreach ($fel in $peTls) {
+            $incercare = CheamaCuCorp $adresaAnaf (@(
+                # Bara dintre magazin si amprenta se scrie prin interpolare: lipita
+                # de mana, se pierde usor la o editare, iar curl raspunde atunci
+                # 'Failed to get certificate location" - o eroare care pare a fi a
+                # tokenului, desi e a noastra.
+                '--cert', "CurrentUser\MY\$($certificat.Thumbprint)",
+                '--location',
+                '--cookie-jar', $prajituri,
+                '--cookie', $prajituri
+            ) + $fel.optiuni)
+
+            if ($null -eq $raspuns) { $raspuns = $incercare; $mersPe = $fel.nume }
+
+            if ($incercare.cod -eq 0 -and $incercare.status -eq 200) {
+                $raspuns = $incercare
+                $mersPe = $fel.nume
+                break
+            }
+
+            if ($incercare.cod -ne 0) {
+                Amanunt ('pe ' + $fel.nume + ': ' + (Talcul $incercare.cod))
+            } else {
+                Amanunt ('pe ' + $fel.nume + ': raspuns ' + $incercare.status)
+            }
+        }
+
+        if ($mersPe -eq 'TLS 1.2' -and $raspuns.cod -eq 0) {
+            Amanunt 'Pe TLS 1.2 merge. Programul se tine oricum pe el, deci nu aveti nimic de facut.'
+        }
 
         Remove-Item -LiteralPath $prajituri -ErrorAction SilentlyContinue
 
@@ -599,11 +652,33 @@ if ($FaraSemnare) {
 
     if ($primite -eq 0) {
         Rau 'Niciun certificat de pe acest calculator nu a fost primit de ANAF.'
-        Pricini @(
-            'traficul catre ANAF e desfacut de antivirus: cu el desfacut, niciun certificat nu ajunge intreg (vezi pasul 3)',
-            'tokenul cere codul PIN si nu-l introduce nimeni (vezi pasul 5)',
-            'niciunul dintre certificate nu e inrolat in SPV pentru vreo firma'
-        )
+
+        <#
+            Pricinile se insira dupa ce s-a aflat pana aici, nu dupa cat de des
+            se intampla in general.
+
+            Cand pasul 3 a aratat un certificat ANAF adevarat, traficul nu e
+            desfacut de nimeni si n-are ce cauta in capul listei: omul s-ar duce
+            sa umble prin antivirus, unde nu e nimic de indreptat. La fel cu
+            PIN-ul, daca pasul 5 a semnat fara sa se planga.
+        #>
+        $deCautat = @()
+
+        if (-not $traficulCurat) {
+            $deCautat += 'traficul catre ANAF e desfacut de antivirus: cu el desfacut, niciun certificat nu ajunge intreg (vezi pasul 3)'
+        }
+
+        if (-not $semnareaAMers) {
+            $deCautat += 'tokenul cere codul PIN si nu-l introduce nimeni (vezi pasul 5)'
+        }
+
+        $deCautat += 'niciunul dintre certificate nu e inrolat in SPV pentru vreo firma'
+
+        if ($traficulCurat) {
+            $deCautat += 'certificatul ANAF e in regula si semnarea merge, deci nu e nici antivirusul, nici PIN-ul: ramane felul in care ANAF primeste certificatul - luati legatura cu asistenta, cu raportul acesta'
+        }
+
+        Pricini $deCautat
     } else {
         Bine ('Certificate primite de ANAF: ' + $primite + ' din ' + $deIncercat.Count + '.')
 

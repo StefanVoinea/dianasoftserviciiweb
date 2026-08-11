@@ -425,6 +425,31 @@ function pdf_text($dosar, $fisier)
  * Intre ghilimele, curl citeste "\" ca inceput de secventa de evitare, asa ca
  * fiecare se dubleaza. La fel face si agentul - vezi agent_pentru_config().
  */
+/**
+ * Semnele dupa care se stie cu ce s-a lucrat: TLS-ul vorbit si versiunea
+ * programului de aici.
+ *
+ * Fara ele, doua pene arata la fel oricare le-ar fi pricina, iar dintr-un mesaj
+ * lipit intr-un email nu se poate sti nici macar daca indreptarea a ajuns pe
+ * calculatorul acela. Cu ele, se vede din prima.
+ */
+function semnele_legaturii(array $rezultat)
+{
+    $bucati = array();
+
+    if (!empty($rezultat['tls'])) {
+        $bucati[] = $rezultat['tls'];
+    }
+
+    $versiune = __DIR__ . DIRECTORY_SEPARATOR . 'versiune.txt';
+
+    if (is_file($versiune)) {
+        $bucati[] = 'program ' . trim((string) @file_get_contents($versiune));
+    }
+
+    return $bucati === array() ? '' : ' [' . implode(' | ', $bucati) . ']';
+}
+
 function curl_valoare($valoare)
 {
     $escapate = str_replace(chr(92), chr(92) . chr(92), $valoare);
@@ -467,6 +492,15 @@ function executa_curl(array $config, $url, array $optiuni = array())
         'dump-header = ' . curl_valoare($fisier_antete),
         'silent',
         'show-error',
+        /*
+         * Ce TLS s-a vorbit de fapt, si cu ce versiune de curl.
+         *
+         * Fara randul asta, o pana arata la fel oricare i-ar fi pricina si
+         * oricat de vechi ar fi programul de la client — si nu se poate sti,
+         * dintr-un mesaj lipit intr-un email, daca indreptarea a ajuns acolo.
+         * Iese pe iesirea obisnuita, care e libera: raspunsul merge in fisier.
+         */
+        'write-out = ' . curl_valoare(chr(10) . '%{ssl_version} | curl %{version}'),
     ), $tls, $optiuni);
 
     file_put_contents($fisier_config, implode("\n", $linii) . "\n");
@@ -475,6 +509,21 @@ function executa_curl(array $config, $url, array $optiuni = array())
 
     exec($comanda, $iesire, $cod_iesire);
     @unlink($fisier_config);
+
+    /*
+     * Ultimul rand e al nostru (write-out), restul e vorba lui curl. Se ia
+     * deoparte, ca sa nu se amestece cu talcul erorii.
+     */
+    $tot = implode("
+", $iesire);
+    $taiat = strrpos($tot, "
+");
+    $despreTls = $taiat === false ? '' : trim(substr($tot, $taiat + 1));
+
+    if ($taiat !== false) {
+        $iesire = explode("
+", substr($tot, 0, $taiat));
+    }
 
     $status = 0;
     $tip_continut = 'application/octet-stream';
@@ -500,6 +549,7 @@ function executa_curl(array $config, $url, array $optiuni = array())
         'fisier_corp' => $fisier_corp,
         'iesire' => implode(' | ', $iesire),
         'cod_iesire' => $cod_iesire,
+        'tls' => $despreTls,
     );
 }
 
@@ -1132,7 +1182,7 @@ if ($metoda === 'GET' && preg_match('#^/spv/([A-Za-z0-9_\-/.]+)$#', $calea, $pot
 
     raspunde_json(502, array(
         'eroare'  => 'Apelul către ANAF a eșuat: ' . talcul_curl($rezultat['cod_iesire'], isset($rezultat['cheia']) ? $rezultat['cheia'] : 'necunoscut')
-            . ' [curl ' . $rezultat['cod_iesire'] . ']',
+            . ' [curl ' . $rezultat['cod_iesire'] . ']' . semnele_legaturii($rezultat),
         'detalii' => $rezultat['iesire'],
     ));
 }
@@ -1168,7 +1218,7 @@ if ($metoda === 'GET' && $calea === '/spv-arhiva') {
     if ($rezultat['status'] < 100) {
         raspunde_json(502, array(
             'eroare'  => 'Apelul către ANAF a eșuat: ' . talcul_curl($rezultat['cod_iesire'], isset($rezultat['cheia']) ? $rezultat['cheia'] : 'necunoscut')
-            . ' [curl ' . $rezultat['cod_iesire'] . ']',
+            . ' [curl ' . $rezultat['cod_iesire'] . ']' . semnele_legaturii($rezultat),
             'detalii' => $rezultat['iesire'],
         ));
     }
@@ -1410,7 +1460,7 @@ if ($metoda === 'POST' && $calea === '/decl/upload') {
     @unlink($rezultat['fisier_corp']);
     raspunde_json(502, array(
         'eroare'  => 'Trimiterea către ANAF a eșuat: ' . talcul_curl($rezultat['cod_iesire'], isset($rezultat['cheia']) ? $rezultat['cheia'] : 'necunoscut')
-            . ' [curl ' . $rezultat['cod_iesire'] . ']',
+            . ' [curl ' . $rezultat['cod_iesire'] . ']' . semnele_legaturii($rezultat),
         'detalii' => $rezultat['iesire'],
     ));
 }
@@ -1458,7 +1508,7 @@ if (preg_match('#^/etransport/(.+)$#', $calea, $potrivire)) {
 
     raspunde_json(502, array(
         'eroare'  => 'Apelul către e-Transport a eșuat: ' . talcul_curl($rezultat['cod_iesire'], isset($rezultat['cheia']) ? $rezultat['cheia'] : 'necunoscut')
-            . ' [curl ' . $rezultat['cod_iesire'] . ']',
+            . ' [curl ' . $rezultat['cod_iesire'] . ']' . semnele_legaturii($rezultat),
         'detalii' => $rezultat['iesire'],
     ));
 }
