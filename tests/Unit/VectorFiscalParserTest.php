@@ -235,4 +235,64 @@ LA DATA DE
             'Sediul Social',
         ]);
     }
+
+    /**
+     * Etichetele documentului nu sunt nume de firma.
+     *
+     * Ele stau pe randuri singure, exact ca valorile, iar cautarea „randul de
+     * deasupra etichetei" poate cadea pe alta eticheta cand extractorul aseaza
+     * altfel coloanele. La un client, o firma s-a inregistrat cu numele „Organ
+     * fiscal competent" — se vedea in lista, printre firmele adevarate.
+     */
+    public function test_etichetele_documentului_nu_trec_drept_nume(): void
+    {
+        $parser = new VectorFiscalParser();
+        $metoda = new \ReflectionMethod($parser, 'pareDenumire');
+        $metoda->setAccessible(true);
+
+        foreach ([
+            'Organ fiscal competent',
+            'Domiciliul Fiscal',
+            'Sediul Social',
+            'Forma de organizare',
+            'Grupa contribuabil',
+            'LA DATA DE',
+        ] as $eticheta) {
+            $this->assertFalse(
+                $metoda->invoke($parser, $eticheta),
+                '„' . $eticheta . '" e o etichetă, nu un nume'
+            );
+        }
+
+        // Iar numele adevarate trec mai departe.
+        foreach (['CRISTI & DANA INSTAL SRL', 'ÎNTREPRINDERE FAMILIALĂ POPESCU'] as $nume) {
+            $this->assertTrue($metoda->invoke($parser, $nume), '„' . $nume . '" e un nume');
+        }
+    }
+
+    /**
+     * Ghilimelele din jur nu fac parte din nume.
+     *
+     * ANAF le pune la asociatii si fundatii; ele ajungeau in denumire si de
+     * acolo in numele dosarului din arhiva. Cele dinauntru raman: fac parte din
+     * nume.
+     */
+    public function test_ghilimelele_din_jur_nu_raman_in_nume(): void
+    {
+        $parser = new VectorFiscalParser();
+
+        $this->assertSame(
+            'ASOCIATIA GAZETA LOCALA ARAD',
+            $parser->citesteDenumire("\"ASOCIATIA GAZETA LOCALA ARAD\"
+Denumire
+", '41004123')
+        );
+
+        $this->assertSame(
+            'ASOCIATIA "NIEMALS ALLEIN"',
+            $parser->citesteDenumire("ASOCIATIA \"NIEMALS ALLEIN\"
+Denumire
+", '36972557')
+        );
+    }
 }

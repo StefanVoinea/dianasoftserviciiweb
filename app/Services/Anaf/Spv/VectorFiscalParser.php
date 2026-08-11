@@ -311,8 +311,37 @@ class VectorFiscalParser
             return false;
         }
 
+        /*
+         * Nici etichetele documentului nu sunt nume.
+         *
+         * Ele stau pe randuri singure, exact ca valorile, iar cautarea „randul
+         * de deasupra etichetei" poate cadea pe alta eticheta cand extractorul
+         * aseaza altfel coloanele. Asa s-a inregistrat o firma cu numele „Organ
+         * fiscal competent".
+         */
+        $etichete = array(
+            'DENUMIRE', 'DOMICILIUL FISCAL', 'SEDIUL SOCIAL', 'ORGAN FISCAL COMPETENT',
+            'GRUPA CONTRIBUABIL', 'STARE', 'TIP SEDIU', 'SEDIU CENTRAL', 'FORMA DE ORGANIZARE',
+            'PLATITOR TVA', 'DATA ATRIBUIRE CIF', 'CAEN', 'LA DATA DE', 'DATE PRIVIND SOCIETATEA',
+            'ULTIMA DECLARATIE DE', 'INREGISTRARE / MENTIUNI', 'PERSOANA JURIDICA',
+        );
+
+        if (in_array($this->faraDiacritice($fara), $etichete, true)) {
+            return false;
+        }
+
         // Nici datele, nici numerele singure nu sunt nume de firma.
         return mb_strlen($fara) >= 3 && preg_match('/\p{L}{3}/u', $valoare) === 1;
+    }
+
+    /** Acelasi text, cu diacriticele romanesti aduse la literele lor. */
+    protected function faraDiacritice(string $valoare): string
+    {
+        return str_replace(
+            array('Ă', 'Â', 'Î', 'Ș', 'Ş', 'Ț', 'Ţ'),
+            array('A', 'A', 'I', 'S', 'S', 'T', 'T'),
+            $valoare
+        );
     }
 
     /** Textul documentului, strans la un singur spatiu, pentru pastrare ca referinta. */
@@ -324,6 +353,17 @@ class VectorFiscalParser
     protected function curata(string $valoare): ?string
     {
         $valoare = trim(preg_replace('/\s+/u', ' ', $valoare));
+
+        /*
+         * Ghilimelele din jur nu fac parte din nume. ANAF le pune la asociatii
+         * si fundatii — „ASOCIAŢIA GAZETA LOCALĂ ARAD" —, iar ele ajungeau in
+         * denumire si de acolo in numele dosarului din arhiva.
+         *
+         * Cele dinauntru raman: „ASOCIAŢIA «NIEMALS ALLEIN»" e chiar numele.
+         */
+        if (mb_substr($valoare, 0, 1) === '"' && mb_substr($valoare, -1) === '"') {
+            $valoare = trim(mb_substr($valoare, 1, -1));
+        }
 
         return $valoare !== '' ? $valoare : null;
     }

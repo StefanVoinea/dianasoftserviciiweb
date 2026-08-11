@@ -119,10 +119,52 @@ class DenumiriDinIdentificare extends Command
             $inainte = AnafSocietate::pluck('denumire', 'cif')->all();
 
             if ($this->option('pe-uscat')) {
+                /*
+                 * Se citeste cu adevarat documentul si se arata ce nume ar iesi.
+                 * Fara asta, proba pe uscat spunea doar cum se cheama firma acum
+                 * — adica tocmai ce se stie deja — si nu se putea vedea dinainte
+                 * daca indreptarea o face mai buna sau mai rea.
+                 */
+                $serviciu = app(SolicitareService::class);
+                $citire = new \ReflectionMethod($serviciu, 'textulRaspunsului');
+                $citire->setAccessible(true);
+
+                $parser = app(\App\Services\Anaf\Spv\VectorFiscalParser::class);
+
                 foreach ($cuFisier->unique('cif') as $solicitare) {
-                    $this->line('  ' . $solicitare->cif . ': s-ar citi documentul din '
-                        . ($solicitare->cale_fisier ? 'server' : 'arhiva clientului')
-                        . ', acum se numește „' . ($inainte[$solicitare->cif] ?? '—') . '"');
+                    $text = null;
+
+                    try {
+                        $text = $citire->invoke($serviciu, $solicitare);
+                    } catch (\Throwable $e) {
+                        // Se spune mai jos ca n-a putut fi citit.
+                    }
+
+                    $vechi = $inainte[$solicitare->cif] ?? null;
+
+                    if ($text === null) {
+                        $this->warn('  ' . $solicitare->cif . ': documentul nu s-a putut citi ('
+                            . ($solicitare->cale_fisier ? 'server' : 'arhiva clientului') . ')');
+
+                        continue;
+                    }
+
+                    $nou = $parser->citesteDenumire($text, $solicitare->cif);
+
+                    if ($nou === null) {
+                        $this->warn('  ' . $solicitare->cif . ': „' . ($vechi ?: '—')
+                            . '" -> nu s-a putut citi niciun nume');
+
+                        continue;
+                    }
+
+                    if ($nou === $vechi) {
+                        $this->line('  ' . $solicitare->cif . ': „' . $nou . '" (neschimbat)');
+
+                        continue;
+                    }
+
+                    $this->info('  ' . $solicitare->cif . ': „' . ($vechi ?: '—') . '" -> „' . $nou . '"');
                 }
 
                 return;
