@@ -259,7 +259,21 @@ class KitBridgeTest extends TestCase
         $agent = $zip->getFromName('porneste-agent.bat');
         $zip->close();
 
-        $this->assertStringContainsString('-WindowStyle Hidden', $pornire, 'instanțele trebuie să pornească ascunse');
+        /*
+         * Pornirea de mana trece prin acelasi lansator ca sarcinile.
+         *
+         * Nu doar de dragul unui singur fel de a porni: cu Start-Process,
+         * procesele ramaneau legate de consola din care plecasera, iar la
+         * inchiderea ei se opreau si ele — omul inchidea fereastra crezand ca a
+         * terminat, si odata cu ea se opreau descarcarile si dosarul urmarit.
+         * Wscript le desprinde: el iese indata, iar programul ramane singur.
+         */
+        $this->assertStringContainsString('porneste-ascuns.vbs', $pornire, 'instanțele trebuie desprinse de fereastră');
+        $this->assertStringNotContainsString(
+            'Start-Process',
+            $pornire,
+            'Start-Process lasă procesele legate de consola din care au plecat'
+        );
         $this->assertStringNotContainsString(
             'start "Acces token ANAF',
             $pornire,
@@ -290,7 +304,7 @@ class KitBridgeTest extends TestCase
         $zip->close();
 
         $this->assertStringContainsString(
-            "'%~dp0server.php'",
+            '"%~dp0server.php"',
             $pornire,
             'calea întreagă e semnul după care se recunosc'
         );
