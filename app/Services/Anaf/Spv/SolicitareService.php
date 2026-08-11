@@ -290,9 +290,7 @@ class SolicitareService
 
         foreach ($deAdus as $i => [$solicitare, $mesaj]) {
             // Fiecare raspuns isi cere ragazul lui, socotit de la capat.
-            if (function_exists('set_time_limit')) {
-                @set_time_limit(120);
-            }
+            ragaz(120);
 
             $reusit = true;
 

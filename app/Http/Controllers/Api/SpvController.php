@@ -185,9 +185,7 @@ class SpvController extends Controller
 
             foreach ($deDescarcat as $i => $mesaj) {
                 // Fiecare document isi cere ragazul lui, socotit de la capat.
-                if (function_exists('set_time_limit')) {
-                    @set_time_limit(120);
-                }
+                ragaz(120);
 
                 $reusit = true;
 
@@ -316,8 +314,8 @@ class SpvController extends Controller
 
         // Fiecare descarcare asteapta pauza impusa de ANAF, deci un lot intreg
         // poate depasi limita implicita de executie.
-        if ($lot !== [] && function_exists('set_time_limit')) {
-            @set_time_limit(60 + count($lot) * 15);
+        if ($lot !== []) {
+            ragaz(60 + count($lot) * 15);
         }
 
         $descarcate = 0;

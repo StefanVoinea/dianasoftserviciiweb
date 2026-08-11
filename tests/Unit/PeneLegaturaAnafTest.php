@@ -199,7 +199,8 @@ class PeneLegaturaAnafTest extends TestCase
         $sfarsit = strpos($server, 'function spv_cere');
         $bucata = substr($server, $inceput, $sfarsit - $inceput);
 
-        $this->assertStringContainsString('pin-stare.json', $bucata);
+        // Insemnarea e a fiecarui token in parte: vezi DouaTokenuriTest.
+        $this->assertStringContainsString('pin-stare-', $bucata);
         $this->assertStringNotContainsString(
             "\$stiut['stare'] === 'bun') {",
             $bucata,

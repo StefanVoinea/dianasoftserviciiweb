@@ -2704,3 +2704,33 @@ function sirfaraspeciale($string)
 
     return str_replace($rem, $add, $string);
 }
+
+/**
+ * Cere mai mult ragaz pentru o lucrare lunga — dar niciodata mai putin.
+ *
+ * „set_time_limit" nu ridica plafonul, ci il pune: chemat cu 105 acolo unde
+ * ragazul era nelimitat, il face de 105 secunde. La linia de comanda ragazul e
+ * tocmai nelimitat, asa ca un apel pus pentru cererile din browser taia din
+ * greseala comenzile planificate si suita de probe — care cadeau apoi in cu
+ * totul alta parte, unde se nimerea sa fie clipa aceea.
+ *
+ * De aceea se cere aici numai in sus: cand ragazul e nelimitat, nu se atinge
+ * nimic; cand e marginit, se ridica la cat trebuie lucrarii.
+ */
+function ragaz(int $secunde): void
+{
+    if (!function_exists('set_time_limit')) {
+        return;
+    }
+
+    $acum = (int) ini_get('max_execution_time');
+
+    // Nelimitat: nu se strica ce e deja bun.
+    if ($acum === 0) {
+        return;
+    }
+
+    if ($secunde > $acum) {
+        @set_time_limit($secunde);
+    }
+}

@@ -610,7 +610,21 @@ function starea_cheii($config)
  */
 function asigura_cheia($config, $rastimp = 600)
 {
-    $fisier = __DIR__ . DIRECTORY_SEPARATOR . 'pin-stare.json';
+    if ($config['thumbprint'] === '') {
+        return '';
+    }
+
+    /*
+     * Ce s-a aflat se tine minte pentru fiecare token in parte.
+     *
+     * Pe un calculator cu doua tokene, o singura insemnare le amesteca: deschisa
+     * cheia celui dintai, al doilea parea si el deschis, iar apelul lui la ANAF
+     * pleca fara ca PIN-ul sa fi fost cerut — asa ca fereastra se deschidea
+     * tocmai in mijlocul strangerii de mana, unde nimeni nu asteapta dupa om.
+     * Din afara semana cu „merge numai certificatul implicit".
+     */
+    $fisier = __DIR__ . DIRECTORY_SEPARATOR . 'pin-stare-'
+        . substr($config['thumbprint'], 0, 16) . '.json';
     $stiut = is_file($fisier) ? json_decode((string) @file_get_contents($fisier), true) : null;
 
     /*

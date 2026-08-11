@@ -2,6 +2,7 @@
 
 namespace App\Services\Anaf\Spv;
 
+use App\Models\AnafCertificat;
 use App\Models\AnafDeclaratie;
 use App\Models\AnafSocietate;
 use App\Models\SpvMesaj;
@@ -38,6 +39,32 @@ class SpvStorage
     }
 
     /**
+     * Documentul se cere cu certificatul lui, nu cu cel implicit.
+     *
+     * ANAF da documentul numai celui care are drepturi pe firma aceea, iar
+     * mesajul stie de la care certificat a venit. Cat timp se lucra cu cel
+     * implicit, pe un calculator cu doua tokene jumatate din documente nu se
+     * puteau aduce: cererea pleca cu certificatul celuilalt token. Din afara
+     * semana cu „merge numai daca schimb certificatul implicit" — si chiar asa
+     * se si dezlega, mutand implicitul dintr-o parte in alta.
+     *
+     * Mesajele mai vechi, ramase fara certificat, merg mai departe pe cel
+     * hotarat de aplicatie: nu e nimic mai bun de pus in loc.
+     */
+    protected function folosesteCertificatulMesajului(SpvMesaj $mesaj): void
+    {
+        if (!$this->certificate || !$mesaj->certificat_id) {
+            return;
+        }
+
+        $alLui = AnafCertificat::where('activ', true)->find($mesaj->certificat_id);
+
+        if ($alLui) {
+            $this->certificate->foloseste($alLui);
+        }
+    }
+
+    /**
      * Aduce documentul mesajului pe drumul cel mai scurt cu putinta.
      *
      * Intai se incearca drumul scurt: programul local il ia de la ANAF si il
@@ -53,6 +80,8 @@ class SpvStorage
      */
     public function aduce(SpvMesaj $mesaj, bool $vreaText = false, string $subdosar = 'downloads'): array
     {
+        $this->folosesteCertificatulMesajului($mesaj);
+
         try {
             $rezultat = $this->aduceInArhiva($mesaj, $vreaText);
 
@@ -146,6 +175,8 @@ class SpvStorage
      */
     public function aduceInArhiva(SpvMesaj $mesaj, bool $vreaText = false): array
     {
+        $this->folosesteCertificatulMesajului($mesaj);
+
         if (!$this->client) {
             throw new ProgramLocalVechiException('Nu este configurată legătura cu programul local.');
         }

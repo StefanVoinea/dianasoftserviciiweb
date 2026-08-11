@@ -119,9 +119,7 @@ class RecipisaService
 
         foreach ($declaratii as $declaratie) {
             // Fiecare declaratie isi cere ragazul ei, socotit de la capat.
-            if (function_exists('set_time_limit')) {
-                @set_time_limit(120);
-            }
+            ragaz(120);
 
             $adusa = false;
 
