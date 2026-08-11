@@ -71,7 +71,46 @@ class DenumiriDinIdentificare extends Command
                 . ', dintre care cu document adus: ' . $cuFisier->count());
 
             if ($cuFisier->isEmpty()) {
-                $this->warn('  Nu e nimic de citit: documentele n-au ajuns pe server și nici în arhiva clientului.');
+                $this->warn('  Nu e nimic de citit pe tipul „DATE IDENTIFICARE".');
+
+                /*
+                 * Cand nu se gaseste nimic, se arata ce ESTE: altfel omul se uita
+                 * in fila, vede documentele acolo, si nu are cum sa afle de ce
+                 * cautarea nu le prinde — alt cod de client, sau alt fel de scris
+                 * al tipului.
+                 */
+                $tipuri = SpvSolicitare::selectRaw('tip_document, count(*) as cate')
+                    ->groupBy('tip_document')
+                    ->orderByDesc('cate')
+                    ->limit(15)
+                    ->get();
+
+                if ($tipuri->isEmpty()) {
+                    $this->line('  Clientul acesta n-are nicio solicitare. Codul lui e cel bun?');
+
+                    $altii = SpvSolicitare::query()->toateCompaniile()
+                        ->selectRaw('company_id, count(*) as cate')
+                        ->groupBy('company_id')
+                        ->orderByDesc('cate')
+                        ->limit(5)
+                        ->get();
+
+                    if ($altii->isNotEmpty()) {
+                        $this->line('  Clienți care au solicitări:');
+
+                        foreach ($altii as $rand) {
+                            $this->line('    ' . $rand->company_id . ': ' . $rand->cate);
+                        }
+                    }
+
+                    return;
+                }
+
+                $this->line('  Ce tipuri de solicitări are clientul:');
+
+                foreach ($tipuri as $rand) {
+                    $this->line('    „' . $rand->tip_document . '" — ' . $rand->cate);
+                }
 
                 return;
             }
