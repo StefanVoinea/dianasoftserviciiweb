@@ -67,7 +67,7 @@
           </h6>
 
           <small class="text-muted d-block mb-2">
-            Dezarhivați kitul în folderul <code>C:\DianaSoft_SPV_Curier</code> și rulați
+            Dezarhivați kitul în folderul <code>C:\DianaSoft_SPV_Curier</code> și rulați cu Run As Administrator
             <code>instaleaza.bat</code> din kit pe acel calculator: programul pornește
             apoi automat la fiecare autentificare. Fiecare kit are cod de acces propriu.
           </small>
@@ -90,7 +90,7 @@
                aceeași pricină, iar ea se dezleagă pe calculatorul clientului:
                ajutorul stă aici, lângă kit, unde se uită omul când instalează. -->
           <b-button
-            variant="flat-secondary"
+            variant="flat-warning"
             size="sm"
             class="mt-1"
             @click="ajutorVizibil = true"
