@@ -123,10 +123,13 @@ VERIFICARE
   - Stare:    Get-ScheduledTask "Acces token ANAF"
   - Test:     curl -H "Authorization: Bearer {{TOKEN}}" http://127.0.0.1:{{PORT}}/certificate
               (întoarce lista certificatelor conectate acum)
-  - Manual:   dublu-clic pe porneste-manual.bat — ridică toate instanțele,
-              fiecare în fereastra ei, pe porturile din configurare.env;
-              apoi pe porneste-agent.bat (agentul, în altă fereastră).
-              Ca să le opriți, închideți toate ferestrele deschise atunci.
+  - Manual:   dublu-clic pe porneste-manual.bat — ridică toate instanțele, fără
+              fereastră, pe porturile din configurare.env; apoi pe
+              porneste-agent.bat, care rămâne cu fereastra lui.
+              Instanțele n-au nimic de arătat: scriu doar rândurile serverului
+              de web. Ce merită privit e jurnalul agentului.
+              Oprire: opreste-manual.bat pentru program, iar pentru agent,
+              închiderea ferestrei lui.
 
 DEZINSTALARE
 ------------
@@ -157,7 +160,8 @@ FIȘIERE
   diagnoza.bat        verificarea a tot ce trebuie să meargă (dublu clic)
   instaleaza.bat      instalarea pornirii automate (dublu clic)
   dezinstaleaza.bat   scoaterea ei (dublu clic)
-  porneste-manual.bat pornirea programului cu fereastră, pentru verificări
+  porneste-manual.bat pornirea programului, fără fereastră
+  opreste-manual.bat  oprirea lui
   porneste-agent.bat  pornirea agentului cu fereastră, pentru verificări
   instaleaza.ps1      scriptul chemat de instaleaza.bat
   dezinstaleaza.ps1   scriptul chemat de dezinstaleaza.bat

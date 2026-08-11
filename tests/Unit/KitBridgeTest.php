@@ -216,6 +216,65 @@ class KitBridgeTest extends TestCase
         );
     }
 
+    /**
+     * Numai agentul are fereastra; programul local lucreaza in fundal.
+     *
+     * Instantele lui n-au nimic de aratat: scriu doar randurile serverului de
+     * web, cate unul la fiecare cerere. Trei ferestre cu asa ceva incarcau bara
+     * de sarcini si se inchideau din greseala — iar odata inchise, se opreau si
+     * descarcarile, si dosarul urmarit. Ce merita privit e jurnalul agentului.
+     */
+    public function test_programul_local_porneste_fara_fereastra(): void
+    {
+        $kit = $this->construieste();
+
+        $zip = new ZipArchive();
+        $zip->open($kit['cale']);
+        $pornire = $zip->getFromName('porneste-manual.bat');
+        $oprire = $zip->getFromName('opreste-manual.bat');
+        $agent = $zip->getFromName('porneste-agent.bat');
+        $zip->close();
+
+        $this->assertStringContainsString('-WindowStyle Hidden', $pornire, 'instanțele trebuie să pornească ascunse');
+        $this->assertStringNotContainsString(
+            'start "Acces token ANAF',
+            $pornire,
+            'nicio instanță nu mai deschide fereastra ei'
+        );
+
+        // Agentul ramane cu fereastra lui: acolo se citeste jurnalul.
+        $this->assertStringNotContainsString('-WindowStyle Hidden', $agent);
+        $this->assertNotFalse($oprire, 'lipsește oprirea: instanțele ascunse nu se pot închide cu mouse-ul');
+    }
+
+    /**
+     * Oprirea le gaseste dupa dosarul din care au pornit.
+     *
+     * De aceea calea intreaga a lui server.php sta in linia de comanda: fara ea,
+     * in lista proceselor Windows apare doar „php.exe -S 127.0.0.1:8099
+     * server.php", la fel pentru orice dosar, si s-ar opri si ce n-a pornit
+     * de aici — pe un calculator cu mai multe instalari, ale altcuiva.
+     */
+    public function test_oprirea_le_gaseste_dupa_dosarul_lor(): void
+    {
+        $kit = $this->construieste();
+
+        $zip = new ZipArchive();
+        $zip->open($kit['cale']);
+        $pornire = $zip->getFromName('porneste-manual.bat');
+        $oprire = $zip->getFromName('opreste-manual.bat');
+        $zip->close();
+
+        $this->assertStringContainsString(
+            "'%~dp0server.php'",
+            $pornire,
+            'calea întreagă e semnul după care se recunosc'
+        );
+
+        $this->assertStringContainsString('$folder', $oprire);
+        $this->assertStringContainsString('server.php', $oprire);
+    }
+
     /** Arhiva poarta numele modulului, ca omul sa stie ce a descarcat. */
     public function test_arhiva_se_numeste_dupa_modul(): void
     {

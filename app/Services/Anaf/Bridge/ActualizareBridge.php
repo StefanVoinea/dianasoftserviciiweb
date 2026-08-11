@@ -46,6 +46,7 @@ class ActualizareBridge
         'diagnoza.bat',
         'diagnoza.ps1',
         'porneste-manual.bat',
+        'opreste-manual.bat',
         'porneste-agent.bat',
     ];
 
