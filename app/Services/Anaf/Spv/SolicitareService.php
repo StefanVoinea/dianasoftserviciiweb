@@ -321,6 +321,92 @@ class SolicitareService
     }
 
     /**
+     * Ia denumirea firmelor din documentele de identificare deja descarcate.
+     *
+     * Pentru fiecare cod fiscal se cauta ULTIMUL document de tipul „DATE
+     * IDENTIFICARE" care are fisier — pe server sau in arhiva clientului —, se
+     * citeste, si de acolo se ia denumirea. Apoi dosarele firmei se strang la un
+     * loc, dupa cod: pana se afla numele, documentele au apucat sa intre in
+     * dosare purtand ce nume era atunci.
+     *
+     * Nu se cere nimic de la ANAF. Se umbla numai prin ce e deja adus, si numai
+     * prin documentele de acest fel: recitirea tuturor solicitarilor, de orice
+     * tip, tinea minute intregi si nu aducea nimic in plus pentru denumire.
+     *
+     * @param array<int, string> $cifuri numai aceste firme; gol = toate
+     *
+     * @return array{citite: int, denumiri: int, cu_document: array<int, string>}
+     */
+    public function citesteDenumirileDinIdentificare(array $cifuri = []): array
+    {
+        $solicitari = SpvSolicitare::where('tip_document', 'like', '%DATE IDENTIFICARE%')
+            ->where(function ($intrebare) {
+                $intrebare->whereNotNull('cale_fisier')->orWhereNotNull('arhiva_cale');
+            })
+            ->when($cifuri !== [], function ($intrebare) use ($cifuri) {
+                return $intrebare->whereIn('cif', $cifuri);
+            })
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
+
+        $citite = 0;
+        $denumiri = 0;
+        $cuDocument = [];
+
+        foreach ($solicitari as $solicitare) {
+            $cif = trim((string) $solicitare->cif);
+
+            // Numai cel mai nou al fiecarei firme: restul sunt istoric.
+            if ($cif === '' || isset($cuDocument[$cif])) {
+                continue;
+            }
+
+            $text = $this->textulRaspunsului($solicitare);
+
+            if ($text === null) {
+                continue;
+            }
+
+            $cuDocument[$cif] = true;
+            $citite++;
+
+            $denumire = $this->parser->citesteDenumire($text, $cif);
+
+            $this->actualizeazaSocietatea($cif, [
+                'denumire' => $denumire,
+                'sursa' => 'date_identificare',
+                'campuri' => [
+                    'date_identificare' => mb_substr($this->parser->textDocument($text), 0, 5000),
+                    'date_identificare_la' => now(),
+                ],
+            ]);
+
+            $societate = AnafSocietate::where('cif', $cif)->first();
+
+            if ($denumire !== null && $societate && $societate->denumire) {
+                $denumiri++;
+
+                // Dosarele purtand numele de dinainte se strang la cel de acum.
+                if ($this->arhiva) {
+                    $this->arhiva->uneste($cif, ArhivaService::dosarFirma($societate->denumire, $cif));
+                }
+            }
+        }
+
+        return [
+            'citite' => $citite,
+            'denumiri' => $denumiri,
+            /*
+             * Codurile raman siruri: PHP preface in numere cheile care arata a
+             * numar, iar un cod fiscal ramas numar s-ar potrivi altfel decat cel
+             * din tabel, unde e text.
+             */
+            'cu_document' => array_map('strval', array_keys($cuDocument)),
+        ];
+    }
+
+    /**
      * Reinterpreteaza documentele deja descarcate — utila cand registrul de
      * societati e populat dupa ce raspunsurile au fost preluate.
      *

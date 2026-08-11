@@ -46,7 +46,8 @@ class PreluareDateFirmeTest extends TestCase
             $cerute = [];
 
             $this->mock(SolicitareService::class, function ($mock) use (&$cerute) {
-                $mock->shouldReceive('reinterpreteaza')->andReturn(0);
+                $mock->shouldReceive('citesteDenumirileDinIdentificare')
+                    ->andReturn(['citite' => 0, 'denumiri' => 0, 'cu_document' => []]);
                 $mock->shouldReceive('solicita')->andReturnUsing(function ($cif) use (&$cerute) {
                     $cerute[] = $cif;
 
@@ -81,7 +82,8 @@ class PreluareDateFirmeTest extends TestCase
             $cerute = [];
 
             $this->mock(SolicitareService::class, function ($mock) use (&$cerute) {
-                $mock->shouldReceive('reinterpreteaza')->andReturn(0);
+                $mock->shouldReceive('citesteDenumirileDinIdentificare')
+                    ->andReturn(['citite' => 0, 'denumiri' => 0, 'cu_document' => []]);
                 $mock->shouldReceive('solicita')->andReturnUsing(function ($cif) use (&$cerute) {
                     $cerute[] = $cif;
 
@@ -115,7 +117,8 @@ class PreluareDateFirmeTest extends TestCase
             $cerute = [];
 
             $this->mock(SolicitareService::class, function ($mock) use (&$cerute) {
-                $mock->shouldReceive('reinterpreteaza')->andReturn(0);
+                $mock->shouldReceive('citesteDenumirileDinIdentificare')
+                    ->andReturn(['citite' => 0, 'denumiri' => 0, 'cu_document' => []]);
                 $mock->shouldReceive('solicita')->andReturnUsing(function ($cif, $tip) use (&$cerute) {
                     $cerute[] = $tip;
 
@@ -133,18 +136,25 @@ class PreluareDateFirmeTest extends TestCase
         });
     }
 
-    /** Recitirea documentelor vechi se cere anume, nu la fiecare transa. */
+    /**
+     * Recitirea documentelor vechi se cere anume, nu la fiecare transa.
+     *
+     * Nu se mai recitesc toate solicitarile, ci numai ultimul document „DATE
+     * IDENTIFICARE" al fiecarei firme: recitirea tuturor tinea minute intregi si
+     * nu aducea nimic in plus pentru denumire.
+     */
     public function test_documentele_vechi_se_recitesc_o_singura_data(): void
     {
         ContextCompanie::pentru(self::COMPANIE, function () {
             $recitiri = 0;
 
             $this->mock(SolicitareService::class, function ($mock) use (&$recitiri) {
-                $mock->shouldReceive('reinterpreteaza')->andReturnUsing(function () use (&$recitiri) {
-                    $recitiri++;
+                $mock->shouldReceive('citesteDenumirileDinIdentificare')
+                    ->andReturnUsing(function () use (&$recitiri) {
+                        $recitiri++;
 
-                    return 7;
-                });
+                        return ['citite' => 7, 'denumiri' => 3, 'cu_document' => []];
+                    });
             });
 
             $serviciu = $this->app->make(SocietatiService::class);

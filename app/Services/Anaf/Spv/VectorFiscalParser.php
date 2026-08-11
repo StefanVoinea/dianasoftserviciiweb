@@ -205,7 +205,12 @@ class VectorFiscalParser
 
         // Date identificare: un rand de forma "Denumire <nume>" (fara separator)
         foreach ($linii as $linie) {
-            if (preg_match('/^\s*(?:denumire|denumire contribuabil|nume)\s*[:\-]?\s+(\S.*)$/iu', $linie, $m)) {
+            /*
+             * „nume" nu mai e printre etichete: e un cuvant prea scurt si prea
+             * obisnuit. O firma numita „NUME NOU SRL" isi pierdea primul cuvant,
+             * fiindca randul ei parea o eticheta urmata de valoare.
+             */
+            if (preg_match('/^\s*denumire(?: contribuabil)?\s*[:\-]?\s+(\S.*)$/iu', $linie, $m)) {
                 return $this->curata($m[1]);
             }
         }

@@ -181,11 +181,25 @@ class SocietatiService
         bool $reinterpreteaza = true
     ): array {
         /*
-         * Documentele deja descarcate completeaza registrul inainte de cereri noi.
-         * Se cere doar la primul lot: pe urmatoarele n-ar mai avea ce afla, iar
-         * recitirea tuturor documentelor la fiecare transa ar fi timp pierdut.
+         * Intai se citeste ce e deja adus, si abia pe urma se cere de la ANAF.
+         *
+         * Pentru fiecare firma se ia ULTIMUL document „DATE IDENTIFICARE" care
+         * are fisier, se scoate din el denumirea si se string dosarele. Asa se
+         * indreapta si numele citite gresit inainte, fara sa se ceara nimic.
+         *
+         * Nu se mai recitesc toate solicitarile, de orice tip: tinea minute
+         * intregi si nu aducea nimic in plus pentru denumire.
+         *
+         * Se face doar la primul lot: pe urmatoarele n-ar mai avea ce afla.
          */
-        $reinterpretate = $reinterpreteaza ? $this->solicitari->reinterpreteaza() : 0;
+        $recitite = $reinterpreteaza
+            ? $this->solicitari->citesteDenumirileDinIdentificare($cifuri)
+            : ['citite' => 0, 'denumiri' => 0, 'cu_document' => []];
+
+        $reinterpretate = $recitite['citite'];
+
+        // Firmele care au deja documentul: de la ele nu se mai cere nimic.
+        $auDocument = array_flip($recitite['cu_document']);
 
         $trimise = 0;
         $sarite = 0;
@@ -207,6 +221,15 @@ class SocietatiService
             }
 
             foreach ($tipuri as $tip) {
+                /*
+                 * Documentul de identificare adus deja se citeste, nu se cere
+                 * inca o data: butonul cere datele lipsa, nu pe cele avute.
+                 */
+                if (strcasecmp($tip, 'DATE IDENTIFICARE') === 0 && isset($auDocument[$societate->cif])) {
+                    $sarite++;
+                    continue;
+                }
+
                 // Ce s-a aflat deja nu se mai cere: butonul cere datele lipsă.
                 if ($this->areDeja($societate, $tip)) {
                     $sarite++;
@@ -231,6 +254,7 @@ class SocietatiService
             'trimise' => $trimise,
             'sarite' => $sarite,
             'reinterpretate' => $reinterpretate,
+            'denumiri' => $recitite['denumiri'],
             'erori' => $erori,
         ];
     }
