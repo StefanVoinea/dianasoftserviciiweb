@@ -24,6 +24,7 @@ use App\Services\Anaf\Spv\CertificatService;
 use App\Support\ContextUtilizator;
 use App\Support\Flux;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 class DeclaratiiController extends Controller
@@ -336,8 +337,14 @@ class DeclaratiiController extends Controller
              * „inteligent" al programului de contabilitate se inlocuieste cu cel
              * scos de DUKIntegrator, dar nu se pierde.
              */
+            /*
+             * Coloana se cere abia dupa migrare. Pe un server care n-a rulat-o
+             * inca, scrisul in ea ar opri toata arhivarea — si, pana adineauri,
+             * chiar semnarea. Mai bine fara insemnarea caii decat fara nimic.
+             */
             if ($declaratie->cale_pdf
                 && $declaratie->cale_pdf !== $declaratie->cale_pdf_semnat
+                && self::areColoanaInitial()
                 && Storage::exists($declaratie->cale_pdf)) {
                 $cai['arhiva_initial'] = $arhiva->pune(
                     Storage::get($declaratie->cale_pdf),
@@ -347,7 +354,11 @@ class DeclaratiiController extends Controller
                     $declaratie->arhiva_initial
                 );
             }
-        } catch (ArhivaException $e) {
+        } catch (\Throwable $e) {
+            /*
+             * Nu doar esecurile arhivei: si o coloana lipsa, si orice
+             * altceva. Ce s-a reusit pana aici nu se desface.
+             */
             Jurnal::esec(
                 'declaratie_arhivare',
                 'Arhivarea locală a declarației ' . $declaratie->tip . ' pentru ' . $declaratie->cui
@@ -393,6 +404,23 @@ class DeclaratiiController extends Controller
 
             $declaratie->update($sterse);
         }
+    }
+
+    /**
+     * Exista coloana in care se tine calea documentului dat spre lucru?
+     *
+     * Se intreaba o singura data pe cerere: pe un server care n-a rulat inca
+     * migrarea, raspunsul e nu, iar arhivarea merge mai departe fara ea.
+     */
+    protected static function areColoanaInitial(): bool
+    {
+        static $are = null;
+
+        if ($are === null) {
+            $are = Schema::hasColumn('anaf_declaratii', 'arhiva_initial');
+        }
+
+        return $are;
     }
 
     /** Dupa depunere, numele documentului arhivat poarta indicele de incarcare. */
@@ -566,7 +594,29 @@ class DeclaratiiController extends Controller
             'certificat_id' => app(CertificatService::class)->idCurent(),
         ]);
 
-        $this->arhiveaza($declaratie);
+        /*
+         * Arhivarea nu are voie sa strice semnarea.
+         *
+         * Ea e o inlesnire: documentul e semnat, iar daca nu ajunge acum la
+         * client, ajunge mai tarziu, din fila de declaratii. Orice s-ar
+         * intampla acolo — calculatorul inchis, arhiva plina, o coloana lipsa
+         * fiindca pe server n-a rulat inca migrarea — nu trebuie sa se intoarca
+         * omului ca „Server Error" peste o semnatura care a reusit.
+         *
+         * S-a intamplat: o coloana adaugata azi lipsea pe serverul aplicatiei,
+         * iar semnarea cadea cu 500 desi documentul era semnat si arhivat.
+         */
+        try {
+            $this->arhiveaza($declaratie);
+        } catch (\Throwable $e) {
+            Jurnal::esec(
+                'declaratie_arhivare',
+                'Arhivarea declarației ' . $declaratie->tip . ' pentru ' . $declaratie->cui
+                    . ' a eșuat după semnare: ' . $e->getMessage(),
+                [],
+                $declaratie->cui
+            );
+        }
 
         Jurnal::scrie(
             'declaratie_semnare',

@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -543,8 +544,13 @@ class MonitorizareFolder
                 );
             }
 
+            /*
+             * Coloana se cere abia dupa migrare — vezi DeclaratiiController.
+             * Mai bine fara insemnarea caii decat cu toata arhivarea cazuta.
+             */
             if ($declaratie->cale_pdf
                 && $declaratie->cale_pdf !== $declaratie->cale_pdf_semnat
+                && Schema::hasColumn('anaf_declaratii', 'arhiva_initial')
                 && Storage::exists($declaratie->cale_pdf)) {
                 $cai['arhiva_initial'] = $this->arhiva->pune(
                     Storage::get($declaratie->cale_pdf),
@@ -554,10 +560,11 @@ class MonitorizareFolder
                     $declaratie->arhiva_initial
                 );
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             /*
-             * Orice esec — arhiva plina, calculatorul inchis intre timp — nu
-             * are voie sa desfaca ce s-a reusit: declaratia ramane semnata, iar
+             * Orice esec — arhiva plina, calculatorul inchis intre timp, o
+             * coloana lipsa fiindca pe server n-a rulat inca migrarea — nu are
+             * voie sa desfaca ce s-a reusit: declaratia ramane semnata, iar
              * documentul poate fi arhivat mai tarziu, din fila de declaratii.
              */
             Jurnal::esec(
