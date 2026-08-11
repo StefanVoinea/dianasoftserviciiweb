@@ -350,4 +350,66 @@ class PeneLegaturaAnafTest extends TestCase
         $this->assertStringContainsString("SPV_TLS_MAX", $server, 'nu se poate schimba din configurare');
         $this->assertStringContainsString('SPV_TLS_MAX=1.2', $kit, 'configurarea trimisă la client n-o pomenește');
     }
+
+    /**
+     * Nicio valoare din configurarea lui curl nu se intinde peste doua randuri.
+     *
+     * Curl citeste fisierul rand cu rand: o valoare intre ghilimele care sare pe
+     * randul urmator face tot fisierul necitibil, iar apelurile la ANAF cad
+     * toate, dintr-o data, cu „option -K: error encountered when reading a
+     * file". S-a intamplat pentru un simplu rand nou pus in „write-out".
+     *
+     * Se cantareste chiar configurarea pe care o scrie programul.
+     */
+    public function test_configurarea_lui_curl_nu_sare_peste_randuri()
+    {
+        $sursa = file_get_contents(base_path('spv-bridge/server.php'));
+
+        $inceput = strpos($sursa, 'function curl_valoare');
+        $sfarsit = strpos($sursa, 'function trimite_fisier');
+
+        eval(substr($sursa, $inceput, $sfarsit - $inceput));
+
+        $config = [
+            'curl' => 'curl',
+            'thumbprint' => str_repeat('A', 40),
+            'timeout' => 5,
+            'tls_max' => '1.2',
+        ];
+
+        // Se prinde configurarea scrisa, fara sa se cheme curl cu adevarat.
+        $scrise = [];
+        $inainte = glob(sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'spvc*');
+
+        $rezultat = executa_curl($config, 'https://exemplu.test/');
+        @unlink($rezultat['fisier_corp']);
+
+        /*
+         * Fisierul de configurare se sterge singur, asa ca se cantareste altfel:
+         * fiecare valoare intre ghilimele trebuie sa se inchida pe randul ei.
+         */
+        $bucata = substr($sursa, $inceput, $sfarsit - $inceput);
+
+        preg_match_all("/'[^']*write-out[^']*'/", $bucata, $potriviri);
+
+        foreach ($potriviri[0] as $rand) {
+            $this->assertStringNotContainsString(
+                "\n",
+                $rand,
+                'o valoare din configurarea lui curl sare pe rândul următor'
+            );
+        }
+
+        // Iar marginea de TLS ajunge in rezultat, ca sa se stie ce cod ruleaza.
+        $this->assertStringContainsString('1.2', $rezultat['tls']);
+    }
+
+    /** Fara margine, se spune si asta: altfel n-am sti ce a rulat. */
+    public function test_lipsa_marginii_se_spune_si_ea()
+    {
+        $sursa = file_get_contents(base_path('spv-bridge/server.php'));
+
+        $this->assertStringContainsString("'TLS fara margine'", $sursa);
+        $this->assertStringContainsString("'TLS <= 1.2'", $sursa);
+    }
 }
