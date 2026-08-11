@@ -439,6 +439,26 @@ function executa_curl(array $config, $url, array $optiuni = array())
     $fisier_antete = tempnam(sys_get_temp_dir(), 'spvh');
     $fisier_config = tempnam(sys_get_temp_dir(), 'spvc');
 
+    /*
+     * Legatura cu ANAF se tine pe TLS 1.2, nu pe 1.3.
+     *
+     * Cu certificat de pe token, Schannel-ul Windows si TLS 1.3 se inteleg
+     * prost: cheile se schimba in mijlocul raspunsului, iar sesiunea se stinge
+     * inainte de capatul lui — SEC_E_CONTEXT_EXPIRED, adica exact eroarea de
+     * care ne lovim. Pe 1.2 nu se intampla, iar ANAF il vorbeste de ani de zile.
+     *
+     * Nu inseamna ca celalalt drum — traficul desfacut de antivirus — nu mai
+     * exista; inseamna doar ca se scoate din discutie unul dintre doua, fara sa
+     * fie nevoie de nimeni la calculatorul clientului.
+     *
+     * Se poate schimba din configurare, daca ANAF trece candva numai pe 1.3.
+     */
+    $tls = isset($config['tls_max']) && $config['tls_max'] === ''
+        ? array()
+        : array('tlsv1.2', 'tls-max = ' . (isset($config['tls_max']) && $config['tls_max'] !== ''
+            ? $config['tls_max']
+            : '1.2'));
+
     $linii = array_merge(array(
         'url = ' . curl_valoare($url),
         'cert = ' . curl_valoare('CurrentUser\\MY\\' . $config['thumbprint']),
@@ -447,7 +467,7 @@ function executa_curl(array $config, $url, array $optiuni = array())
         'dump-header = ' . curl_valoare($fisier_antete),
         'silent',
         'show-error',
-    ), $optiuni);
+    ), $tls, $optiuni);
 
     file_put_contents($fisier_config, implode("\n", $linii) . "\n");
 
@@ -942,6 +962,8 @@ $config = array(
     'arhiva'     => rtrim(isset($env['ARHIVA_CALE']) && $env['ARHIVA_CALE'] !== ''
         ? $env['ARHIVA_CALE']
         : __DIR__ . '\\arhiva', '\\/'),
+    // Cat de nou poate fi TLS-ul catre ANAF; gol = fara margine (vezi executa_curl)
+    'tls_max'    => isset($env['SPV_TLS_MAX']) ? trim($env['SPV_TLS_MAX']) : '1.2',
     'cookie_jar' => __DIR__ . '/cookies.txt',
     'decl_jar'   => __DIR__ . '/decl_cookies.txt',
 );

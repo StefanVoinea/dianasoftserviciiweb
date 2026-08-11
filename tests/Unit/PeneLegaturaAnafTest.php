@@ -320,4 +320,34 @@ class PeneLegaturaAnafTest extends TestCase
         $this->assertStringContainsString('chr(92) . chr(92)', $bucata, 'barele trebuie dublate');
         $this->assertStringContainsString('chr(92) . \'"\'', $bucata, 'și ghilimelele dinăuntru');
     }
+
+    /**
+     * Legatura cu ANAF se tine pe TLS 1.2.
+     *
+     * Cu certificat de pe token, Schannel-ul Windows si TLS 1.3 se inteleg
+     * prost: cheile se schimba in mijlocul raspunsului, iar sesiunea se stinge
+     * inainte de capatul lui - SEC_E_CONTEXT_EXPIRED. Pana acum se dadea vina
+     * pe antivirus, care si el desface traficul; erau doua pricini care arata
+     * la fel, si numai una se putea indrepta de la noi.
+     */
+    public function test_legatura_cu_anaf_se_tine_pe_tls_1_2()
+    {
+        $server = file_get_contents(base_path('spv-bridge/server.php'));
+
+        $inceput = strpos($server, 'function executa_curl');
+        $bucata = substr($server, $inceput - 1400, 2600);
+
+        $this->assertStringContainsString("'tlsv1.2'", $bucata);
+        $this->assertStringContainsString("'tls-max = '", $bucata);
+    }
+
+    /** Se poate schimba din configurare, daca ANAF trece candva numai pe 1.3. */
+    public function test_marginea_lui_tls_se_poate_schimba()
+    {
+        $server = file_get_contents(base_path('spv-bridge/server.php'));
+        $kit = file_get_contents(app_path('Services/Anaf/Spv/KitBridge.php'));
+
+        $this->assertStringContainsString("SPV_TLS_MAX", $server, 'nu se poate schimba din configurare');
+        $this->assertStringContainsString('SPV_TLS_MAX=1.2', $kit, 'configurarea trimisă la client n-o pomenește');
+    }
 }
