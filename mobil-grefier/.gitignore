@@ -1,0 +1,16 @@
+*.iml
+.gradle/
+local.properties
+.idea/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Cheia Firebase a proiectului: se ia din consola, nu se tine in depozit.
+google-services.json
+
+# Cheia de semnare a aplicatiei si parolele ei.
+*.jks
+*.keystore
+semnare.properties

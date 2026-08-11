@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Violetul aplicatiei web, ca telefonul sa arate a acelasi program. -->
+    <color name="accent">#7367F0</color>
+    <color name="fundal_icoana">#2C2A5A</color>
+</resources>

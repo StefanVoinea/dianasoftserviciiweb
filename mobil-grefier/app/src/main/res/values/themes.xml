@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Fereastra e goala pe dinafara: tot ce se vede vine din pagina, deci nu-i
+        trebuie nici bara de sus, nici altceva care sa mai fure din inaltime.
+    -->
+    <style name="Tema" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorPrimary">@color/accent</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+</resources>

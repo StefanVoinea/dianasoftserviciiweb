@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Grefier Alert</string>
+
+    <string name="canal_nume">Modificări la dosare</string>
+    <string name="canal_lamurire">Anunță când se schimbă ceva la un dosar urmărit.</string>
+
+    <string name="modificare_fara_text">S-a schimbat ceva la un dosar urmărit.</string>
+
+    <string name="fara_legatura_titlu">Nu se poate ajunge la server</string>
+    <string name="fara_legatura_lamurire">Verificați legătura la internet și încercați din nou.</string>
+    <string name="incearca_din_nou">Încearcă din nou</string>
+
+    <string name="fara_program">Nu există niciun program care să deschidă această adresă.</string>
+
+    <string name="descarcare_esuata">Documentul nu s-a putut descărca.</string>
+    <string name="descarcat_in">Descărcat în %1$s</string>
+    <string name="dosarul_de_descarcari">Descărcări</string>
+</resources>

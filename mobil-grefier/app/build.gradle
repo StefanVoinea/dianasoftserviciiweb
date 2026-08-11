@@ -1,0 +1,99 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+/*
+ * Firebase se leaga numai daca fisierul lui e la locul lui.
+ *
+ * Fara „google-services.json”, aplicatia se construieste si merge la fel — doar
+ * ca alertele nu mai vin instantaneu, ci la verificarea din aplicatie. Asa se
+ * poate incerca aplicatia inainte de a face proiectul Firebase, iar cand
+ * fisierul e pus, o noua construire aprinde alertele. Daca legarea ar fi fost
+ * obligatorie, lipsa fisierului ar fi oprit constructia cu totul.
+ */
+def areFirebase = file('google-services.json').exists()
+
+if (areFirebase) {
+    apply plugin: 'com.google.gms.google-services'
+}
+
+android {
+    namespace 'ro.dianasoft.grefier'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'ro.dianasoft.grefier'
+
+        /*
+         * Android 8. Sub el nu mai are rost sa coboram: sunt sub un procent din
+         * telefoane, iar de la 8 in sus icoanele si canalele de notificare se
+         * fac dintr-un singur fel, fara dubluri.
+         */
+        minSdk 26
+        targetSdk 35
+
+        versionCode 1
+        versionName '1.0'
+
+        buildConfigField 'String', 'ADRESA', '"https://app.dianasoft.ro"'
+        buildConfigField 'boolean', 'ARE_FIREBASE', areFirebase.toString()
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    /*
+     * Semnarea de lansare se citeste dintr-un fisier tinut in afara depozitului.
+     * Cand lipseste, „assembleRelease” ar da un pachet nesemnat — de aceea
+     * pentru telefonul propriu se foloseste „assembleDebug”, care se semneaza
+     * singur si se instaleaza de-a dreptul.
+     */
+    signingConfigs {
+        lansare {
+            def parole = rootProject.file('semnare.properties')
+
+            if (parole.exists()) {
+                def date = new Properties()
+                parole.withInputStream { date.load(it) }
+
+                storeFile rootProject.file(date['storeFile'])
+                storePassword date['storePassword']
+                keyAlias date['keyAlias']
+                keyPassword date['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+
+            if (rootProject.file('semnare.properties').exists()) {
+                signingConfig signingConfigs.lansare
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+
+    /*
+     * Firebase se compileaza intotdeauna, chiar si fara fisierul proiectului:
+     * altfel codul care il cheama n-ar mai trece de compilator. Fara fisier,
+     * pornirea lui esueaza linistit, iar aplicatia stie sa mearga mai departe.
+     */
+    implementation platform('com.google.firebase:firebase-bom:34.15.0')
+    implementation 'com.google.firebase:firebase-messaging'
+}
