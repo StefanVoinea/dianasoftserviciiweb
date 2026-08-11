@@ -409,6 +409,30 @@ function pdf_text($dosar, $fisier)
  *
  * Un 3xx final cu exit code != 0 (conexiune resetată în lanțul F5) e status 0.
  */
+/**
+ * O valoare scrisa in fisierul de configurare al lui curl.
+ *
+ * Curl taie valoarea la primul spatiu, daca nu e intre ghilimele. Numele de
+ * utilizator Windows are insa adesea un spatiu in el - "P.R. Control", "Ion
+ * Popescu" -, iar dosarul temporar sta chiar acolo:
+ *
+ *     output = C:\Users\P.R. Control\AppData\Local\Temp\spvC620.tmp
+ *
+ * Curl avertiza ("uses unquoted whitespace") si scria raspunsul in "C:\Users\P.R.",
+ * adica nicaieri: "curl: (23) Failed writing received data to disk". Toate
+ * apelurile la ANAF cadeau, la orice client al carui nume are un spatiu.
+ *
+ * Intre ghilimele, curl citeste "\" ca inceput de secventa de evitare, asa ca
+ * fiecare se dubleaza. La fel face si agentul - vezi agent_pentru_config().
+ */
+function curl_valoare($valoare)
+{
+    $escapate = str_replace(chr(92), chr(92) . chr(92), $valoare);
+    $escapate = str_replace('"', chr(92) . '"', $escapate);
+
+    return '"' . $escapate . '"';
+}
+
 function executa_curl(array $config, $url, array $optiuni = array())
 {
     $fisier_corp = tempnam(sys_get_temp_dir(), 'spvb');
@@ -416,11 +440,11 @@ function executa_curl(array $config, $url, array $optiuni = array())
     $fisier_config = tempnam(sys_get_temp_dir(), 'spvc');
 
     $linii = array_merge(array(
-        'url = ' . $url,
-        'cert = CurrentUser\\MY\\' . $config['thumbprint'],
+        'url = ' . curl_valoare($url),
+        'cert = ' . curl_valoare('CurrentUser\\MY\\' . $config['thumbprint']),
         'max-time = ' . (int) $config['timeout'],
-        'output = ' . $fisier_corp,
-        'dump-header = ' . $fisier_antete,
+        'output = ' . curl_valoare($fisier_corp),
+        'dump-header = ' . curl_valoare($fisier_antete),
         'silent',
         'show-error',
     ), $optiuni);
@@ -675,8 +699,8 @@ function spv_cere(array $config, $tinta)
     for ($incercare = 1; $incercare <= 3; $incercare++) {
         $rezultat = executa_curl($config, $tinta, array(
             'location',
-            'cookie-jar = ' . $config['cookie_jar'],
-            'cookie = ' . $config['cookie_jar'],
+            'cookie-jar = ' . curl_valoare($config['cookie_jar']),
+            'cookie = ' . curl_valoare($config['cookie_jar']),
         ));
 
         if ($rezultat['status'] >= 100 && !pana_trecatoare($rezultat['cod_iesire'])) {
@@ -1300,8 +1324,8 @@ if ($metoda === 'POST' && $calea === '/decl/login') {
 
     $sesiune = array(
         'location',
-        'cookie-jar = ' . $config['decl_jar'],
-        'cookie = ' . $config['decl_jar'],
+        'cookie-jar = ' . curl_valoare($config['decl_jar']),
+        'cookie = ' . curl_valoare($config['decl_jar']),
     );
 
     $rezultat = executa_curl($config, $config['decl_url'], $sesiune);
@@ -1350,9 +1374,9 @@ if ($metoda === 'POST' && $calea === '/decl/upload') {
     file_put_contents($fisier_pdf, $pdf);
 
     $rezultat = executa_curl($config, $config['decl_url'] . '/WAS6DUS/displayFile.do', array(
-        'cookie-jar = ' . $config['decl_jar'],
-        'cookie = ' . $config['decl_jar'],
-        'form = linkdoc=@' . $fisier_pdf . ';type=application/pdf;filename=' . $nume,
+        'cookie-jar = ' . curl_valoare($config['decl_jar']),
+        'cookie = ' . curl_valoare($config['decl_jar']),
+        'form = ' . curl_valoare('linkdoc=@' . $fisier_pdf . ';type=application/pdf;filename=' . $nume),
     ));
 
     @unlink($fisier_pdf);
@@ -1394,7 +1418,7 @@ if (preg_match('#^/etransport/(.+)$#', $calea, $potrivire)) {
         $fisier_trimis = tempnam(sys_get_temp_dir(), 'etr') . '.xml';
         file_put_contents($fisier_trimis, $corp);
 
-        $optiuni[] = 'data-binary = @' . $fisier_trimis;
+        $optiuni[] = 'data-binary = ' . curl_valoare('@' . $fisier_trimis);
         $optiuni[] = 'header = Content-Type: application/xml';
     }
 

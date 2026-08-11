@@ -261,4 +261,63 @@ class PeneLegaturaAnafTest extends TestCase
             $this->assertStringContainsString($vorba, $agent, 'lipsește rândul „' . $vorba . '"');
         }
     }
+
+    /**
+     * Caile scrise pentru curl stau intre ghilimele.
+     *
+     * Curl taie valoarea la primul spatiu, daca nu e intre ele. Numele de
+     * utilizator Windows are insa adesea un spatiu in el - "P.R. Control", "Ion
+     * Popescu" -, iar dosarul temporar sta chiar acolo:
+     *
+     *     output = C:\Users\P.R. Control\AppData\Local\Temp\spvC620.tmp
+     *
+     * Curl scria atunci raspunsul in "C:\Users\P.R.", adica nicaieri, si se
+     * oprea cu 23: "Failed writing received data to disk". Toate apelurile la
+     * ANAF cadeau, la orice client al carui nume are un spatiu - si nimic din
+     * mesaj nu arata spre nume.
+     */
+    public function test_caile_pentru_curl_stau_intre_ghilimele()
+    {
+        $server = file_get_contents(base_path('spv-bridge/server.php'));
+
+        $this->assertStringContainsString('function curl_valoare', $server);
+
+        // Nicio cale nu se mai scrie de-a dreptul in configurare.
+        foreach ([
+            "'output = ' . \$fisier_corp",
+            "'dump-header = ' . \$fisier_antete",
+            "'cookie-jar = ' . \$config['cookie_jar']",
+            "'cookie = ' . \$config['decl_jar']",
+        ] as $vechi) {
+            $this->assertStringNotContainsString(
+                $vechi,
+                $server,
+                'calea aceasta ajunge la curl neîmbrăcată în ghilimele'
+            );
+        }
+
+        // Si toate trec prin ajutor.
+        $this->assertGreaterThanOrEqual(
+            8,
+            substr_count($server, 'curl_valoare('),
+            'au rămas căi care nu trec prin ajutor'
+        );
+    }
+
+    /**
+     * Ghilimelele nu ajung sa strice caile de Windows.
+     *
+     * Intre ele, curl citeste bara inversa ca inceput de secventa de evitare,
+     * deci fiecare trebuie dublata.
+     */
+    public function test_ghilimelele_nu_strica_barele_din_cai()
+    {
+        $server = file_get_contents(base_path('spv-bridge/server.php'));
+
+        $inceput = strpos($server, 'function curl_valoare');
+        $bucata = substr($server, $inceput, 400);
+
+        $this->assertStringContainsString('chr(92) . chr(92)', $bucata, 'barele trebuie dublate');
+        $this->assertStringContainsString('chr(92) . \'"\'', $bucata, 'și ghilimelele dinăuntru');
+    }
 }
