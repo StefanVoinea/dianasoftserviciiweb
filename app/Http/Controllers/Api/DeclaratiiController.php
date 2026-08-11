@@ -317,13 +317,34 @@ class DeclaratiiController extends Controller
                 );
             }
 
+            /*
+             * Ce s-a dat spre lucru sta deoparte, in „Initiale". In dosarul
+             * tipului raman numai declaratia semnata si recipisa ei.
+             */
             if ($declaratie->cale_xml && Storage::exists($declaratie->cale_xml)) {
                 $cai['arhiva_xml'] = $arhiva->pune(
                     Storage::get($declaratie->cale_xml),
                     $dosar,
-                    $tip,
+                    ArhivaService::dosarInitiale($declaratie->tip),
                     ArhivaService::numeDeclaratie($declaratie, '', 'xml'),
                     $declaratie->arhiva_xml
+                );
+            }
+
+            /*
+             * Si documentul primit, cand a fost altul decat cel semnat: PDF-ul
+             * „inteligent" al programului de contabilitate se inlocuieste cu cel
+             * scos de DUKIntegrator, dar nu se pierde.
+             */
+            if ($declaratie->cale_pdf
+                && $declaratie->cale_pdf !== $declaratie->cale_pdf_semnat
+                && Storage::exists($declaratie->cale_pdf)) {
+                $cai['arhiva_initial'] = $arhiva->pune(
+                    Storage::get($declaratie->cale_pdf),
+                    $dosar,
+                    ArhivaService::dosarInitiale($declaratie->tip),
+                    ArhivaService::numeDeclaratie($declaratie, '', 'pdf'),
+                    $declaratie->arhiva_initial
                 );
             }
         } catch (ArhivaException $e) {
@@ -351,9 +372,18 @@ class DeclaratiiController extends Controller
             $sterse = [];
 
             if (isset($cai['arhiva_semnat'])) {
-                Storage::delete(array_filter([$declaratie->cale_pdf, $declaratie->cale_pdf_semnat]));
-                $sterse['cale_pdf'] = null;
+                Storage::delete($declaratie->cale_pdf_semnat);
                 $sterse['cale_pdf_semnat'] = null;
+
+                /*
+                 * Documentul dat spre lucru se sterge de pe server numai dupa ce
+                 * a ajuns in „Initiale". Altfel s-ar pierde tocmai ce trebuia
+                 * pastrat: dovada a ceea ce s-a semnat.
+                 */
+                if (isset($cai['arhiva_initial']) || $declaratie->cale_pdf === $declaratie->cale_pdf_semnat) {
+                    Storage::delete($declaratie->cale_pdf);
+                    $sterse['cale_pdf'] = null;
+                }
             }
 
             if (isset($cai['arhiva_xml'])) {

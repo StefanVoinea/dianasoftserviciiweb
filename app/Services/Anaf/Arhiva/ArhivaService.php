@@ -216,6 +216,23 @@ class ArhivaService
      *
      * @param string $stare "semnata", "depusa", "recipisa" sau "" pentru XML
      */
+    /**
+     * Dosarul in care se pastreaza declaratia asa cum a fost data spre lucru.
+     *
+     * In dosarul tipului raman numai documentele care conteaza pentru ANAF:
+     * declaratia semnata si recipisa ei. Ce s-a dat la intrare — XML-ul, sau
+     * PDF-ul venit de la programul de contabilitate — se pastreaza deoparte:
+     * trebuie sa se stie oricand ce s-a semnat, dar nu are ce cauta amestecat
+     * printre acte. Cine deschide dosarul D100 vrea sa vada declaratiile depuse,
+     * nu si ciornele lor.
+     *
+     * Se pastreaza pe tipuri si aici: „Initiale/D100", nu toate la un loc.
+     */
+    public static function dosarInitiale(?string $tip): string
+    {
+        return 'Initiale/' . (self::curata($tip) ?: 'Diverse');
+    }
+
     public static function numeDeclaratie(AnafDeclaratie $declaratie, string $stare, string $extensie): string
     {
         $bucati = [

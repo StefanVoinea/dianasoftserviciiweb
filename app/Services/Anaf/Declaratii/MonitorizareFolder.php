@@ -532,13 +532,26 @@ class MonitorizareFolder
                 );
             }
 
+            // Ce s-a dat spre lucru sta deoparte — vezi DeclaratiiController::arhiveaza().
             if ($declaratie->cale_xml && Storage::exists($declaratie->cale_xml)) {
                 $cai['arhiva_xml'] = $this->arhiva->pune(
                     Storage::get($declaratie->cale_xml),
                     $dosar,
-                    $tip,
+                    ArhivaService::dosarInitiale($declaratie->tip),
                     ArhivaService::numeDeclaratie($declaratie, '', 'xml'),
                     $declaratie->arhiva_xml
+                );
+            }
+
+            if ($declaratie->cale_pdf
+                && $declaratie->cale_pdf !== $declaratie->cale_pdf_semnat
+                && Storage::exists($declaratie->cale_pdf)) {
+                $cai['arhiva_initial'] = $this->arhiva->pune(
+                    Storage::get($declaratie->cale_pdf),
+                    $dosar,
+                    ArhivaService::dosarInitiale($declaratie->tip),
+                    ArhivaService::numeDeclaratie($declaratie, '', 'pdf'),
+                    $declaratie->arhiva_initial
                 );
             }
         } catch (\Exception $e) {
