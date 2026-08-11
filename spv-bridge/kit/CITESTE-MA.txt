@@ -156,6 +156,7 @@ FIȘIERE
   imprimante.ps1      citirea imprimantelor de pe acest calculator
   print-pdf.ps1       trimiterea la imprimantă
   itextsharp.dll      bibliotecă folosită la semnare
+  curl.exe            programul cu care se vorbește cu ANAF (vezi mai jos)
   agent.php           aduce de la aplicație lucrul pentru tokenul de aici
   agent-functii.php   uneltele lui
   agent-lucreaza.php  duce la capăt o lucrare, în procesul ei
@@ -170,6 +171,21 @@ FIȘIERE
   porneste-agent.bat  pornirea agentului cu fereastră, pentru verificări
   instaleaza.ps1      scriptul chemat de instaleaza.bat
   dezinstaleaza.ps1   scriptul chemat de dezinstaleaza.bat
+
+
+CURL
+----
+Legătura cu ANAF se face prin curl, fiindcă numai el poate folosi certificatul de
+pe token fără să-l scoată de acolo.
+
+Kitul aduce propriul curl. Cel din Windows e vechi de câți ani are calculatorul,
+iar în el s-au îndreptat de la o versiune la alta felurite neînțelegeri cu
+certificatele de pe token: pe o stație cu 8.13 legătura cădea („SEC_E_CONTEXT_
+EXPIRED"), pe alta cu 8.21 mergea. Nu are rost să vă înnoiți Windows-ul pentru
+atât.
+
+Dacă ștergeți curl.exe din acest dosar, programul îl ia pe cel din Windows, ca
+înainte. Se poate arăta și altul, în configurare.env, la SPV_CURL.
 
 
 PHP

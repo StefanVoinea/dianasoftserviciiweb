@@ -147,6 +147,20 @@ class KitProgramTiparireTest extends TestCase
         $this->assertContains('curl.exe', $this->continutulKitului());
     }
 
+    /**
+     * Curl-ul chiar se afla langa bridge, in depozit.
+     *
+     * Fara el, kitul pleaca fara curl si fiecare client ramane cu cel din
+     * Windows-ul lui — adica exact cu deosebirea din care s-a nascut necazul.
+     */
+    public function test_curlul_e_pus_langa_bridge_in_depozit(): void
+    {
+        $cale = base_path('spv-bridge/curl.exe');
+
+        $this->assertFileExists($cale, 'kitul trebuie să-și ducă propriul curl');
+        $this->assertStringStartsWith('MZ', file_get_contents($cale, false, null, 0, 2));
+    }
+
     /** Iar programul il alege pe el, cand e acolo. */
     public function test_programul_alege_curlul_de_langa_el(): void
     {
