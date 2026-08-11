@@ -723,6 +723,62 @@ if ($FaraSemnare) {
 
     Scrie ''
 
+    <#
+        A doua parere, fara curl.
+
+        Cand toate incercarile cu curl cad, se cheama ANAF inca o data, pe alt
+        drum cu totul: .NET, cu certificatul luat din acelasi magazin Windows.
+        Amandoua se sprijina pe Schannel, dar il folosesc altfel.
+
+        Daca pe drumul acesta merge, atunci reteaua, tokenul si ANAF sunt in
+        regula, iar vina e a felului in care curl vorbeste cu Schannel — se
+        indreapta cu un curl mai nou, pus langa program. Daca nu merge nici asa,
+        pricina e mai adanca si nu tine de programul nostru.
+
+        E singura proba care poate spune care din doua, si costa un apel.
+    #>
+    if ($primite -eq 0 -and -not $FaraSemnare -and $deIncercat.Count -gt 0) {
+        Scrie ''
+        Scrie '  A doua parere, fara curl (prin .NET):' 'White'
+
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+            $cerere = [Net.HttpWebRequest]::Create($adresaAnaf)
+            $cerere.ClientCertificates.Add($deIncercat[0]) | Out-Null
+            $cerere.Timeout = 45000
+            $cerere.AllowAutoRedirect = $true
+            $cerere.UserAgent = 'DianaSoft SPV Curier - diagnoza'
+
+            <#
+                Cu borcan de prajituri, ca la programul adevarat: lantul de
+                servere al ANAF pune o sesiune la prima cerere si o cere inapoi
+                la urmatoarea. Fara ea, proba ar merge pe alt drum decat cel care
+                cade, si n-ar dovedi nimic.
+            #>
+            $cerere.CookieContainer = New-Object System.Net.CookieContainer
+
+            $raspunsNet = $cerere.GetResponse()
+            $codNet = [int]$raspunsNet.StatusCode
+            $citit = New-Object System.IO.StreamReader($raspunsNet.GetResponseStream())
+            $corpNet = $citit.ReadToEnd()
+            $citit.Close()
+            $raspunsNet.Close()
+
+            if (PareRaspunsSpv $corpNet) {
+                Bine ('.NET a primit raspuns de la SPV (cod ' + $codNet + ')')
+                Amanunt 'Deci reteaua, tokenul si ANAF sunt in regula: nu merge doar prin curl.'
+                Amanunt 'Indreptarea: puneti un curl mai nou langa program (curl.exe in dosarul acesta).'
+            } else {
+                Semn ('.NET a raspuns ' + $codNet + ', dar nu cu datele din SPV')
+                Amanunt ('Raspunsul incepe cu: ' + $corpNet.Substring(0, [Math]::Min(120, $corpNet.Length)))
+            }
+        } catch {
+            Rau ('nici prin .NET nu merge: ' + $_.Exception.Message)
+            Amanunt 'Pricina nu tine de programul nostru: e in Windows, in retea, sau la ANAF.'
+        }
+    }
+
     if ($primite -eq 0) {
         Rau 'Niciun certificat de pe acest calculator nu a fost primit de ANAF.'
 
