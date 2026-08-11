@@ -94,7 +94,7 @@ class PeneLegaturaAnafTest extends TestCase
         $talc = talcul_curl(56, 'bun');
 
         $this->assertStringContainsString('NU el a rupt legătura', $talc);
-        $this->assertStringContainsString('filtrarea SSL/TLS', $talc, 'trebuie arătat încotro se caută');
+        $this->assertStringContainsString('curl-ul vechi', $talc, 'trebuie arătat încotro se caută');
     }
 
     /** Cheia care nu se poate folosi e spusa raspicat, cu ce e de facut. */
@@ -155,12 +155,20 @@ class PeneLegaturaAnafTest extends TestCase
         $this->assertStringNotContainsString('antivirus', $talc, 'nu se mai însiră pricini care au căzut');
     }
 
-    /** Cheia care se deschide pe loc arata incotro se cauta: la antivirus. */
-    public function test_cheia_deschisa_pe_loc_arata_spre_antivirus()
+    /**
+     * Cheia care se deschide pe loc arata incotro se cauta.
+     *
+     * Am scris intai „la antivirus", dupa primul client la care s-a intamplat.
+     * La al doilea, certificatul ANAF venea curat de la DigiCert si vina era a
+     * curl-ului vechi din Windows — o zi de cautat, si o lectie: un sfat dat cu
+     * siguranta acolo unde nu e costa mai mult decat tacerea.
+     */
+    public function test_cheia_deschisa_pe_loc_arata_spre_curlul_vechi()
     {
         $talc = talcul_curl(56, 'bun');
 
-        $this->assertStringContainsString('filtrarea', $talc);
+        $this->assertStringContainsString('curl-ul vechi', $talc);
+        $this->assertStringContainsString('diagnoza.bat', $talc, 'iar dacă nu e el, se merge la probă');
         $this->assertStringNotContainsString('single logon', $talc);
     }
 
@@ -418,5 +426,29 @@ class PeneLegaturaAnafTest extends TestCase
         $this->assertStringContainsString("'TLS fara margine'", $sursa);
         $this->assertStringContainsString("'sesiune noua'", $sursa, 'sesiunea nouă nu se vede în semne');
         $this->assertStringContainsString('no-sessionid', $sursa);
+    }
+
+    /**
+     * Al catelea curl scrie in mesaj.
+     *
+     * A costat o zi de cautat: la un client cu 8.13 legatura cu ANAF cadea, la
+     * altul cu 8.21 mergea, iar erorile aratau la fel. Scris acolo, se vede din
+     * primul rand.
+     */
+    public function test_mesajul_spune_al_catelea_curl()
+    {
+        $server = file_get_contents(base_path('spv-bridge/server.php'));
+
+        $this->assertStringContainsString('function versiunea_curl', $server);
+        $this->assertStringContainsString("'curl ' . \$potrivire[1]", $server);
+    }
+
+    /** Iar talcul penei arata intai spre el, fiindca acolo era. */
+    public function test_talcul_arata_spre_curlul_vechi()
+    {
+        $talc = talcul_curl(56, 'bun');
+
+        $this->assertStringContainsString('curl-ul vechi', $talc);
+        $this->assertStringContainsString('curl.exe din kit', $talc, 'trebuie spusă și îndreptarea');
     }
 }

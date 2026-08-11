@@ -437,12 +437,56 @@ function pdf_text($dosar, $fisier)
  * lipit intr-un email nu se poate sti nici macar daca indreptarea a ajuns pe
  * calculatorul acela. Cu ele, se vede din prima.
  */
+/**
+ * Al catelea curl e cel cu care s-a lucrat.
+ *
+ * Se intreaba o singura data pe cerere, si numai cand ceva a cazut: la fiecare
+ * apel ar fi un proces pornit degeaba.
+ */
+function versiunea_curl(array $rezultat)
+{
+    static $stiut = null;
+
+    if ($stiut !== null) {
+        return $stiut;
+    }
+
+    $stiut = '';
+
+    if (empty($GLOBALS['spv_config']['curl'])) {
+        return $stiut;
+    }
+
+    $iesire = array();
+    @exec(escapeshellarg($GLOBALS['spv_config']['curl']) . ' --version 2>&1', $iesire);
+
+    if (isset($iesire[0]) && preg_match('/curl\s+([0-9.]+)/i', $iesire[0], $potrivire)) {
+        $stiut = 'curl ' . $potrivire[1];
+    }
+
+    return $stiut;
+}
+
 function semnele_legaturii(array $rezultat)
 {
     $bucati = array();
 
     if (!empty($rezultat['tls'])) {
         $bucati[] = $rezultat['tls'];
+    }
+
+    /*
+     * Si al catelea curl.
+     *
+     * A costat o zi de cautat: la un client cu 8.13 legatura cu ANAF cadea, la
+     * altul cu 8.21 mergea, iar erorile aratau la fel. Scris aici, se vede din
+     * primul rand al mesajului. Se afla cerandu-i-o chiar lui, o data pe pana —
+     * curl n-o poate spune intr-un „write-out".
+     */
+    $alCatelea = versiunea_curl($rezultat);
+
+    if ($alCatelea !== '') {
+        $bucati[] = $alCatelea;
     }
 
     $versiune = __DIR__ . DIRECTORY_SEPARATOR . 'versiune.txt';
@@ -1058,6 +1102,12 @@ $config = array(
     'cookie_jar' => __DIR__ . '/cookies.txt',
     'decl_jar'   => __DIR__ . '/decl_cookies.txt',
 );
+
+/*
+ * Configurarea se lasa la indemana si mesajelor de eroare: ele spun al catelea
+ * curl s-a folosit, iar pentru asta trebuie sa stie unde e.
+ */
+$GLOBALS['spv_config'] = $config;
 
 if ($config['token'] === '') {
     raspunde_json(500, array('eroare' => 'Configurare incompletă: lipsește codul de acces (SPV_BRIDGE_TOKEN).'));

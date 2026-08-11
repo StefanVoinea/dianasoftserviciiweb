@@ -81,10 +81,12 @@ function talcul_cheii($cod, $cheia)
     if ($cheia === 'bun') {
         return '. Tokenul a fost întrebat chiar acum: cheia a semnat pe loc, fără să ceară nimic,'
             . ' deci driverul ține PIN-ul minte și NU el a rupt legătura. Rămâne strângerea de'
-            . ' mână cu ANAF. Rulați „diagnoza.bat" pe calculatorul cu tokenul: ea spune dacă'
-            . ' traficul e desfăcut de antivirus (atunci se scot webserviced.anaf.ro și'
-            . ' app.dianasoft.ro de sub filtrarea SSL/TLS) sau dacă e altceva, și scrie în raport'
-            . ' tot ce se vede pe dinăuntru';
+            . ' mână cu ANAF, și cea mai deasă pricină e curl-ul vechi din Windows: pe o stație cu'
+            . ' 8.13 legătura cădea, pe alta cu 8.21 mergea. Kitul aduce unul nou — copiați'
+            . ' curl.exe din kit în dosarul programului, apoi opriți și porniți-l'
+            . ' (opreste-manual.bat, porneste-manual.bat). Dacă nici așa, rulați „diagnoza.bat":'
+            . ' ea spune dacă traficul e desfăcut de antivirus și cere și o a doua părere,'
+            . ' fără curl';
     }
 
     /*
