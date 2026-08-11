@@ -130,4 +130,109 @@ class VectorFiscalParserTest extends TestCase
             'linie goala' => [''],
         ];
     }
+
+    /**
+     * Documentul de date identificare pune valoarea INAINTEA etichetei.
+     *
+     * E un tabel pe doua coloane, iar extractorul de PDF il desface pe randuri
+     * in ordinea in care sunt desenate: intai numele, apoi cuvantul "Denumire".
+     * Textul de mai jos e chiar cel scos dintr-un document adevarat.
+     */
+    public function test_denumirea_se_ia_de_deasupra_etichetei(): void
+    {
+        $text = $this->dateIdentificare();
+
+        $this->assertSame(
+            'CRISTI & DANA INSTAL SRL',
+            (new VectorFiscalParser())->citesteDenumire($text, '22489650')
+        );
+    }
+
+    /**
+     * Forma juridica singura nu e denumire.
+     *
+     * In antetul aceluiasi document, dupa CUI vine pe randul urmator doar
+     * "SRL" — coada numelui, taiata de extractor. Asa s-a si inregistrat o
+     * firma cu denumirea "SRL", si nimeni n-a mai gasit-o in liste.
+     */
+    public function test_forma_juridica_singura_nu_trece_drept_denumire(): void
+    {
+        $parser = new VectorFiscalParser();
+
+        // Numai antetul, fara randul cu eticheta: nu mai are de unde lua numele.
+        $doarAntet = "DATE PRIVIND SOCIETATEA
+ CE ARE CUI-ul 22489650
+SRL
+LA DATA DE
+";
+
+        $this->assertNull($parser->citesteDenumire($doarAntet, '22489650'));
+    }
+
+    /** Vectorul fiscal isi are numele in antet, si acela ramane neatins. */
+    public function test_vectorul_fiscal_citeste_ca_pana_acum(): void
+    {
+        $text = "DATE PRIVIND SOCIETATEA ALFA BETA SRL CE ARE CUI-ul 15208744 LA DATA DE 11/08/2026";
+
+        $this->assertSame(
+            'ALFA BETA SRL',
+            (new VectorFiscalParser())->citesteDenumire($text, '15208744')
+        );
+    }
+
+    /**
+     * Vectorul fiscal isi are numele rupt in doua.
+     *
+     * Desenat, antetul arata „<nume> DATE PRIVIND SOCIETATEA CE ARE CUI-ul
+     * <cif>". Scos din PDF, numele cade deasupra, iar forma juridica sub cod:
+     *
+     *     CRISTI & DANA INSTAL
+     *     DATE PRIVIND SOCIETATEA
+     *      CE ARE CUI-ul
+     *     22489650
+     *     SRL
+     *
+     * Se lua doar bucata de sub cod, si asa s-a inregistrat o firma cu numele
+     * „SRL". Textul de mai jos e chiar cel scos dintr-un document adevarat.
+     */
+    public function test_numele_rupt_in_doua_se_strange_la_loc(): void
+    {
+        $text = file_get_contents(base_path('tests/fixturi/vector-fiscal.txt'));
+
+        $this->assertSame(
+            'CRISTI & DANA INSTAL SRL',
+            (new VectorFiscalParser())->citesteDenumire($text, '22489650')
+        );
+    }
+
+    /** Si documentul de date identificare, al aceleiasi firme. */
+    public function test_datele_de_identificare_dau_acelasi_nume(): void
+    {
+        $text = file_get_contents(base_path('tests/fixturi/date-identificare.txt'));
+
+        $this->assertSame(
+            'CRISTI & DANA INSTAL SRL',
+            (new VectorFiscalParser())->citesteDenumire($text, '22489650')
+        );
+    }
+
+    /** Textul unui document adevarat de date identificare, asa cum iese din PDF. */
+    protected function dateIdentificare(): string
+    {
+        return implode("
+", [
+            'CRISTI & DANA INSTAL',
+            'DATE PRIVIND SOCIETATEA',
+            ' CE ARE CUI-ul 22489650',
+            'SRL',
+            'LA DATA DE',
+            '11/08/2026 1.18 PM',
+            'CRISTI & DANA INSTAL SRL',
+            'Denumire',
+            'JUD. ARAD, MUN. ARAD, STR. ANDREI ŞAGUNA, NR.67',
+            'Domiciliul Fiscal',
+            'JUD. ARAD, MUN. ARAD, STR. ANDREI ŞAGUNA, NR.67',
+            'Sediul Social',
+        ]);
+    }
 }

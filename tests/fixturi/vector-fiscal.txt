@@ -1,0 +1,37 @@
+
+CRISTI & DANA INSTAL
+DATE PRIVIND SOCIETATEA
+ CE ARE CUI-ul
+22489650
+SRL
+11/08/2026 1.31 PM
+LA DATA DE
+COD_IMP SEMNIFICATIE DATA_INCEPUT DATA_SFARSIT PERFISC
+100 Profit 04/10/2007 31/01/2013 Trimestriala
+100 Profit 01/10/2014 31/01/2017 Trimestriala
+100 Profit 01/02/2017 31/12/2017 Trimestriala
+100 Profit 01/04/2018  /  / Trimestriala
+120 Microintreprinderi 01/02/2013 30/09/2014 Trimestriala
+120 Microintreprinderi 01/01/2018 31/03/2018 Trimestriala
+300 Tva 03/10/2007 31/05/2009 Trimestriala
+300 Tva 30/08/2011 30/09/2011 Trimestriala
+300 Tva 01/10/2011 31/12/2012 Lunara
+300 Tva 01/01/2013 28/02/2015 Trimestriala
+300 Tva 01/03/2015  /  / Lunara
+410 CAS 01/03/2008 31/05/2009 Lunara
+410 CAS 01/10/2011 31/12/2017 Lunara
+412 Cas angajat 01/01/2018  /  / Lunara
+416 Cas accidente munca 01/03/2008 31/05/2009 Lunara
+416 Cas accidente munca 01/10/2011 31/12/2017 Lunara
+420 Somaj 01/03/2008 31/05/2009 Lunara
+420 Somaj 01/10/2011 31/12/2017 Lunara
+423 Fond garantare 01/03/2008 31/05/2009 Lunara
+423 Fond garantare 01/10/2011 31/12/2017 Lunara
+430 Sanatate 01/03/2008 31/05/2009 Lunara
+430 Sanatate 01/10/2011 31/12/2017 Lunara
+432 Sanatate angajat 01/01/2018  /  / Lunara
+439 Concedii si indemnizatii 01/03/2008 31/05/2009 Lunara
+439 Concedii si indemnizatii 01/10/2011 31/12/2017 Lunara
+480 Contribuţie asiguratorie 01/01/2018  /  / Lunara
+602 Venituri salarii 01/03/2008 31/05/2009 Lunara
+602 Venituri salarii 01/10/2011  /  / Lunara
