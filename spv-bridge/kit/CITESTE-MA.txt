@@ -55,6 +55,10 @@ Scriptul creează o sarcină programată numită „Acces token ANAF”, care po
 programul automat la fiecare autentificare a acestui utilizator, fără fereastră,
 și îl repornește dacă se oprește.
 
+Instanțele programului pornesc fără consolă, prin porneste-ascuns.vbs: ele n-au
+nimic de arătat, iar ferestrele lor se închideau din greșeală. Agentul rămâne cu
+fereastra lui — acolo se citește jurnalul, singurul lucru care merită privit.
+
 LUCRĂRI CARE NU SE AȘTEAPTĂ UNA PE ALTA
 ---------------------------------------
 Programul servește o singură cerere pe rând. O descărcare mai lungă din SPV ținea
@@ -162,6 +166,7 @@ FIȘIERE
   dezinstaleaza.bat   scoaterea ei (dublu clic)
   porneste-manual.bat pornirea programului, fără fereastră
   opreste-manual.bat  oprirea lui
+  porneste-ascuns.vbs lansatorul cu care sarcinile pornesc fără consolă
   porneste-agent.bat  pornirea agentului cu fereastră, pentru verificări
   instaleaza.ps1      scriptul chemat de instaleaza.bat
   dezinstaleaza.ps1   scriptul chemat de dezinstaleaza.bat

@@ -42,10 +42,14 @@ Scrie "Fisierele au fost deblocate (marca internetului)." 'Green'
 $phpDinKit = Join-Path $folder 'php\php.exe'
 $iniDinKit = Join-Path $folder 'php\php.ini'
 $argumentePhp = ''
+# Aceeasi configurare, dar ca argument deoparte: lansatorul fara fereastra
+# primeste fiecare bucata in parte, nu un sir intreg.
+$PhpIni = ''
 
 if (-not $PhpPath -and (Test-Path $phpDinKit)) {
     $PhpPath = $phpDinKit
     $argumentePhp = "-c `"$iniDinKit`" "
+    $PhpIni = $iniDinKit
     Scrie "Se folosește PHP-ul din kit — nu trebuie instalat nimic." 'Green'
 }
 
@@ -131,9 +135,58 @@ if ($existenta) {
     }
 }
 
+<#
+  Actiunea sarcinii: programul pornit fara fereastra.
+
+  Sarcina programata ruleaza php.exe de-a dreptul, iar Windows ii da consola —
+  la fiecare intrare in cont se deschideau cate o fereastra de fiecare instanta.
+  Ele n-au nimic de aratat, se inchideau din greseala, iar odata inchise se
+  opreau si descarcarile, si dosarul urmarit.
+
+  "Hidden" din Task Scheduler ascunde sarcina din lista, nu fereastra
+  programului; singurul care poate porni ceva cu fereastra inchisa e wscript,
+  prin lansatorul de langa noi.
+
+  Calea intreaga a lui server.php nu e de prisos: dupa ea isi recunosc
+  procesele opreste-manual.bat si dezinstaleaza.ps1.
+#>
+function ActiuneAscunsa([string[]]$argumenteProgram) {
+    $lansator = Join-Path $folder 'porneste-ascuns.vbs'
+
+    if (-not (Test-Path -LiteralPath $lansator)) {
+        # Kit fara lansator: se merge ca inainte, cu fereastra.
+        return New-ScheduledTaskAction -Execute $PhpPath `
+            -Argument ($argumenteProgram -join ' ') -WorkingDirectory $folder
+    }
+
+    $bucati = @('//B', '//Nologo', ('"' + $lansator + '"'), ('"' + $PhpPath + '"'))
+
+    foreach ($argument in $argumenteProgram) {
+        $bucati += ('"' + $argument + '"')
+    }
+
+    return New-ScheduledTaskAction -Execute 'wscript.exe' `
+        -Argument ($bucati -join ' ') -WorkingDirectory $folder
+}
+
+<# Argumentele programului local pentru un port anume, fiecare deoparte. #>
+function ArgumenteleProgramului([string]$port) {
+    $lista = @()
+
+    if ($PhpIni -ne '') {
+        $lista += '-c'
+        $lista += $PhpIni
+    }
+
+    $lista += '-S'
+    $lista += ($Adresa + ':' + $port)
+    $lista += (Join-Path $folder 'server.php')
+
+    return $lista
+}
+
 # 4. Sarcina programată
-$argumente = "$argumentePhp-S $Adresa`:$Port server.php"
-$actiune = New-ScheduledTaskAction -Execute $PhpPath -Argument $argumente -WorkingDirectory $folder
+$actiune = ActiuneAscunsa (ArgumenteleProgramului $Port)
 $declansator = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 
@@ -170,8 +223,7 @@ for ($i = 1; $i -lt [Math]::Max(1, $Instante); $i++) {
         Unregister-ScheduledTask -TaskName $numeLucrator -Confirm:$false -ErrorAction SilentlyContinue
     }
 
-    $actiuneLucrator = New-ScheduledTaskAction -Execute $PhpPath `
-        -Argument "$argumentePhp-S $Adresa`:$portLucrator server.php" -WorkingDirectory $folder
+    $actiuneLucrator = ActiuneAscunsa (ArgumenteleProgramului $portLucrator)
 
     try {
         Register-ScheduledTask -TaskName $numeLucrator -Action $actiuneLucrator -Trigger $declansator `

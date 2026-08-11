@@ -26,7 +26,7 @@ class KitBridge
     protected const FISIERE_KIT = [
         // .bat-urile sunt cele pe care le apasa omul: Windows nu ruleaza .ps1 la dublu clic
         'instaleaza.bat', 'dezinstaleaza.bat',
-        'porneste-manual.bat', 'opreste-manual.bat', 'porneste-agent.bat',
+        'porneste-manual.bat', 'opreste-manual.bat', 'porneste-ascuns.vbs', 'porneste-agent.bat',
         'instaleaza.ps1', 'dezinstaleaza.ps1',
         // Verificarea de pe calculatorul clientului, cand ceva nu merge
         'diagnoza.bat', 'diagnoza.ps1',

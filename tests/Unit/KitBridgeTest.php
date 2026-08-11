@@ -275,6 +275,59 @@ class KitBridgeTest extends TestCase
         $this->assertStringContainsString('server.php', $oprire);
     }
 
+    /**
+     * Si dupa instalare pornesc fara fereastra, nu doar pornite de mana.
+     *
+     * Sarcina programata ruleaza php.exe de-a dreptul, iar Windows ii da
+     * consola: la fiecare intrare in cont se deschideau cate o fereastra de
+     * fiecare instanta. „Hidden" din Task Scheduler ascunde sarcina din lista,
+     * nu fereastra programului — singurul care poate porni ceva cu fereastra
+     * inchisa e wscript, prin lansatorul din kit.
+     *
+     * Prima oara am indreptat numai pornirea de mana, si ferestrele au aparut
+     * mai departe: ele veneau de la sarcini.
+     */
+    public function test_sarcinile_pornesc_programul_fara_fereastra(): void
+    {
+        $kit = $this->construieste();
+
+        $zip = new ZipArchive();
+        $zip->open($kit['cale']);
+        $instalare = $zip->getFromName('instaleaza.ps1');
+        $lansator = $zip->getFromName('porneste-ascuns.vbs');
+        $zip->close();
+
+        $this->assertNotFalse($lansator, 'lipsește lansatorul fără consolă');
+        $this->assertStringContainsString('Run comanda, 0, False', $lansator, '0 înseamnă „fără fereastră"');
+
+        $this->assertStringContainsString('function ActiuneAscunsa', $instalare);
+        $this->assertStringContainsString("-Execute 'wscript.exe'", $instalare);
+
+        // Si instanta de baza, si lucratoarele trec pe acolo.
+        $this->assertSame(
+            2,
+            substr_count($instalare, 'ActiuneAscunsa (ArgumenteleProgramului'),
+            'și instanța de bază, și celelalte trebuie pornite fără fereastră'
+        );
+    }
+
+    /** Agentul ramane cu fereastra lui: acolo se citeste jurnalul. */
+    public function test_agentul_ramane_cu_fereastra_lui(): void
+    {
+        $kit = $this->construieste();
+
+        $zip = new ZipArchive();
+        $zip->open($kit['cale']);
+        $instalare = $zip->getFromName('instaleaza.ps1');
+        $zip->close();
+
+        $inceput = strpos($instalare, '$actiuneAgent');
+        $bucata = substr($instalare, $inceput, 200);
+
+        $this->assertStringContainsString('-Execute $PhpPath', $bucata, 'agentul nu se ascunde');
+        $this->assertStringNotContainsString('ActiuneAscunsa', $bucata);
+    }
+
     /** Arhiva poarta numele modulului, ca omul sa stie ce a descarcat. */
     public function test_arhiva_se_numeste_dupa_modul(): void
     {
