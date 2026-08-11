@@ -127,6 +127,50 @@ PS;
         $this->stergeDosarul($dosar);
     }
 
+    /**
+     * Pe formularele XFA nu se deseneaza caseta.
+     *
+     * Declaratiile ANAF sunt formulare XFA: pagina din PDF e doar un paravan, cu
+     * scrisul „Please wait...", iar declaratia adevarata o deseneaza Adobe din
+     * datele XFA. O caseta pusa acolo cade pe paravan — Adobe n-o arata
+     * niciodata, fiindca el deseneaza formularul in locul paginii, iar
+     * programele care nu stiu XFA tiparesc tocmai paravanul, cu caseta pe el.
+     *
+     * Asa a si iesit la imprimanta unui client: o foaie cu „Please wait..." si
+     * cu stampila noastra frumos asezata sub ea. Semnatura ramane insa —
+     * nevazuta pe hartie, dar buna in fila de semnaturi si pentru ANAF, care
+     * doar pe ea o cantareste. Tot asa isi semneaza si ei documentele.
+     */
+    public function test_pe_formularele_xfa_nu_se_deseneaza_caseta(): void
+    {
+        $script = $this->scriptul();
+
+        $this->assertStringContainsString('function EsteFormularXfa', $script);
+        $this->assertStringContainsString('/NeedsRendering', $script, 'semnul după care se recunoaște formularul');
+
+        // Cele trei locuri care deseneaza trebuie sa fie sub aceeasi conditie.
+        $this->assertSame(
+            2,
+            substr_count($script, 'if (-not $eXfa) {'),
+            'și semnătura văzută, și desenul ei trebuie lăsate deoparte pe XFA'
+        );
+
+        $this->assertStringContainsString('if ($eXfa) {', $script, 'ștampilarea se sare pe XFA');
+    }
+
+    /** Tiparirea unui formular XFA merge pe Adobe, singurul care il deseneaza. */
+    public function test_formularele_xfa_se_tiparesc_prin_adobe(): void
+    {
+        $tiparire = file_get_contents(base_path('spv-bridge/print-pdf.ps1'));
+
+        $this->assertStringContainsString('function EsteFormularXfa', $tiparire);
+        $this->assertStringContainsString(
+            'if (-not $areXfa -and $Program',
+            $tiparire,
+            'programul dedicat de tipărire nu știe XFA: pe el tipărește paravanul'
+        );
+    }
+
     protected function stergeDosarul(string $dosar): void
     {
         foreach (glob($dosar . DIRECTORY_SEPARATOR . '*') as $fisier) {

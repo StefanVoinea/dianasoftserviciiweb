@@ -139,6 +139,30 @@ function Extrage-CN([string]$numeDistinctiv) {
     return $numeDistinctiv
 }
 
+<#
+  Documentul e formular XFA dinamic?
+
+  Declaratiile ANAF sunt asa: pagina din PDF e doar un paravan, cu scrisul
+  "Please wait...", iar declaratia adevarata se deseneaza abia de catre Adobe
+  Reader, din datele XFA. Se recunoaste dupa "/NeedsRendering true", pus chiar
+  de cel care a facut documentul si care inseamna "pagina asta nu e documentul".
+
+  Conteaza fiindca o caseta desenata acolo cade pe paravan: Adobe n-o arata
+  niciodata (el deseneaza formularul in locul paginii), iar programele care nu
+  stiu XFA o arata langa "Please wait..." — adica tocmai foaia care nu trebuia
+  tiparita.
+#>
+function EsteFormularXfa($cale) {
+    try {
+        $octeti = [System.IO.File]::ReadAllBytes($cale)
+        $text = [System.Text.Encoding]::ASCII.GetString($octeti)
+
+        return ($text -match '/NeedsRendering\s*true')
+    } catch {
+        return $false
+    }
+}
+
 # Stampileaza caseta in continutul paginii si scrie rezultatul in $iesire.
 #
 # Fara acest pas, caseta ar exista doar ca aparenta a campului de semnatura,
@@ -229,9 +253,23 @@ try {
 
     if ($cn) { $dateCaseta['nume'] = $cn }
 
-    # Intai caseta intra in pagina, apoi se semneaza documentul stampilat.
-    $intermediar = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), [Guid]::NewGuid().ToString() + '.pdf')
-    Stampileaza-Caseta $InPath $intermediar $numarPagina $dateCaseta
+    <#
+      Pe formularele XFA nu se deseneaza nimic: caseta ar cadea pe paravanul cu
+      "Please wait...", pe care Adobe nu-l arata niciodata, iar celelalte
+      programe l-ar tipari cu caseta pe el — o foaie care pare declaratie
+      semnata, dar nu e declaratia. Semnatura ramane: ea nu se vede pe hartie,
+      dar se vede in fila de semnaturi a Adobe si e cea pe care o cantareste
+      ANAF. Tot asa semneaza si ei documentele lor, fara nimic desenat.
+    #>
+    $eXfa = EsteFormularXfa $InPath
+
+    if ($eXfa) {
+        $intermediar = $InPath
+    } else {
+        # Intai caseta intra in pagina, apoi se semneaza documentul stampilat.
+        $intermediar = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), [Guid]::NewGuid().ToString() + '.pdf')
+        Stampileaza-Caseta $InPath $intermediar $numarPagina $dateCaseta
+    }
 
     $reader = New-Object iTextSharp.text.pdf.PdfReader($intermediar)
     $fs = [System.IO.File]::Create($OutPath)
@@ -245,7 +283,9 @@ try {
 
     # Rectangle(llx, lly, urx, ury) — coltul din stanga-jos si cel din dreapta-sus
     $rect = New-Object iTextSharp.text.Rectangle($X, $Y, ($X + $Latime), ($Y + $Inaltime))
-    $sap.SetVisibleSignature($rect, $numarPagina, $null)
+    if (-not $eXfa) {
+        $sap.SetVisibleSignature($rect, $numarPagina, $null)
+    }
     $sap.SignDate = $acum
     $sap.SetCrypto($null, $chain, $null, $null)
     $sap.Reason = $Motiv
@@ -254,7 +294,9 @@ try {
     # Aceeasi caseta si ca aparenta a campului de semnatura, ca Adobe Reader sa
     # o arate ca semnatura verificabila, nu doar ca desen pe pagina. Coincide cu
     # cea stampilata, deci nu se vede nicio diferenta.
-    Deseneaza-Caseta $sap.GetLayer(2) $Latime $Inaltime $dateCaseta
+    if (-not $eXfa) {
+        Deseneaza-Caseta $sap.GetLayer(2) $Latime $Inaltime $dateCaseta
+    }
 
     $dic = New-Object iTextSharp.text.pdf.PdfSignature([iTextSharp.text.pdf.PdfName]::ADOBE_PPKMS, [iTextSharp.text.pdf.PdfName]::ADBE_PKCS7_SHA1)
     $dic.Date = New-Object iTextSharp.text.pdf.PdfDate($sap.SignDate)

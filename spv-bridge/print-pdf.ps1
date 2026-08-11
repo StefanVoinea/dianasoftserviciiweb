@@ -48,6 +48,44 @@ function ExistaImprimanta($nume) {
     }
 }
 
+<#
+  Documentul e formular XFA dinamic?
+
+  Se recunoaste dupa doua semne puse chiar de cel care l-a facut: "/XFA" in
+  formular si "/NeedsRendering true", adica "pagina asta nu e documentul; el se
+  deseneaza". Se citeste doar inceputul si sfarsitul fisierului, cat sa nu se
+  incarce in memorie declaratii de zeci de megaocteti.
+#>
+function EsteFormularXfa($cale) {
+    try {
+        $flux = [System.IO.File]::OpenRead($cale)
+        $lungime = $flux.Length
+        $cat = [Math]::Min(200000, $lungime)
+
+        $tampon = New-Object byte[] $cat
+        $flux.Read($tampon, 0, $cat) | Out-Null
+        $inceput = [System.Text.Encoding]::ASCII.GetString($tampon)
+
+        $sfarsit = ''
+
+        if ($lungime -gt $cat) {
+            $flux.Seek(-$cat, [System.IO.SeekOrigin]::End) | Out-Null
+            $tampon2 = New-Object byte[] $cat
+            $flux.Read($tampon2, 0, $cat) | Out-Null
+            $sfarsit = [System.Text.Encoding]::ASCII.GetString($tampon2)
+        }
+
+        $flux.Close()
+
+        $tot = $inceput + $sfarsit
+
+        return ($tot -match '/NeedsRendering\s*true')
+    } catch {
+        # Nestiind, se merge pe calea obisnuita: mai bine tiparit decat oprit.
+        return $false
+    }
+}
+
 try {
     <#
       Numele imprimantei se verifica intai. Fara asta, Windows accepta linistit
@@ -59,8 +97,26 @@ try {
         exit 1
     }
 
+    <#
+      Declaratiile ANAF sunt formulare XFA: pagina din PDF e doar un loc gol, cu
+      scrisul "Please wait...", iar declaratia adevarata se deseneaza abia de
+      catre Adobe Reader, din datele XFA. PDFtoPrinter si SumatraPDF nu stiu XFA,
+      deci tiparesc chiar acel loc gol — o foaie cu "Please wait..." in loc de
+      declaratie.
+
+      Pentru ele se merge deci pe programul asociat PDF-urilor, adica Adobe: e
+      singurul care deseneaza formularul. Restul documentelor — recipise,
+      decizii, orice PDF obisnuit — raman pe programul dedicat, care e calea
+      sigura si nu depinde de ce e instalat pe calculator.
+    #>
+    $areXfa = EsteFormularXfa $Cale
+
+    if ($areXfa) {
+        Write-Output "Documentul este formular XFA; il tiparesc prin programul asociat PDF-urilor (Adobe), singurul care il deseneaza."
+    }
+
     # Calea 1: program dedicat de tiparire
-    if ($Program -ne '' -and (Test-Path -LiteralPath $Program)) {
+    if (-not $areXfa -and $Program -ne '' -and (Test-Path -LiteralPath $Program)) {
         $nume = [System.IO.Path]::GetFileNameWithoutExtension($Program)
 
         if ($nume -like 'SumatraPDF*') {
