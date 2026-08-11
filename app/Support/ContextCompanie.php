@@ -86,7 +86,9 @@ class ContextCompanie
      */
     public static function esteAdministrator(): bool
     {
-        $user = Auth::guard('api')->user() ?: Auth::user();
+        // Prin ContextUtilizator, ca sa nu darame cererea un token care nu e al
+        // aplicatiei: agentul de la client vine cu codul lui de instalare.
+        $user = ContextUtilizator::curent();
 
         if (!$user) {
             return false;

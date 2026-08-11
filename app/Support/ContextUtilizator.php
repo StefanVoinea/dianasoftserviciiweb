@@ -23,9 +23,36 @@ class ContextUtilizator
     /** Ridicat programatic, pentru operatii interne care trebuie sa vada tot. */
     protected static $faraLimitare = false;
 
+    /**
+     * Omul din spatele cererii, daca e vreunul.
+     *
+     * Nu orice cerere poarta un token al aplicatiei: agentul de la client vine
+     * cu codul lui de instalare, iar Passport, incercand sa-l citeasca drept
+     * JWT, se opreste cu „Malformed UTF-8 characters" sau „The JWT string must
+     * have two dots" si darama toata cererea.
+     *
+     * Orice poticnire inseamna aici doar „nimeni conectat". Nu e treaba
+     * intrebarii „cine e omul?" sa pice lucrarea — cu atat mai putin cand ea se
+     * pune tocmai ca sa se scrie un mesaj de eroare, si atunci poticnirea ia
+     * locul erorii adevarate, care nu mai ajunge la nimeni.
+     */
     public static function curent(): ?User
     {
-        return Auth::guard('api')->user() ?: Auth::user();
+        try {
+            $user = Auth::guard('api')->user();
+        } catch (\Throwable $e) {
+            $user = null;
+        }
+
+        if ($user) {
+            return $user;
+        }
+
+        try {
+            return Auth::user();
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     /** Administratorul serviciului — un singur cont, cel din configuratie. */
