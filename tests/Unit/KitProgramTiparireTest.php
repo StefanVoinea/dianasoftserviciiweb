@@ -127,4 +127,35 @@ class KitProgramTiparireTest extends TestCase
         $this->assertStringContainsString('IMPRIMARE_EXE=', $configurare);
         $this->assertStringNotContainsString('IMPRIMARE_EXE=C:', $configurare);
     }
+
+    /**
+     * Curl-ul din kit are intaietate fata de cel din Windows.
+     *
+     * Cel din Windows e vechi de cati ani are calculatorul, iar in el s-au
+     * indreptat de la o versiune la alta necazuri ale lui Schannel cu
+     * certificatele de pe token: la un client cu 8.13 legatura cu ANAF cadea, la
+     * altul cu 8.21 mergea. Nu putem cere nimanui sa-si innoiasca Windows-ul.
+     */
+    public function test_curlul_pus_langa_bridge_intra_in_kit(): void
+    {
+        $this->assertNull((new KitBridge($this->dosar))->curlPropriu());
+        $this->assertNotContains('curl.exe', $this->continutulKitului());
+
+        file_put_contents($this->dosar . DIRECTORY_SEPARATOR . 'curl.exe', 'MZ program');
+
+        $this->assertSame('curl.exe', (new KitBridge($this->dosar))->curlPropriu());
+        $this->assertContains('curl.exe', $this->continutulKitului());
+    }
+
+    /** Iar programul il alege pe el, cand e acolo. */
+    public function test_programul_alege_curlul_de_langa_el(): void
+    {
+        $server = file_get_contents(base_path('spv-bridge/server.php'));
+
+        $inceput = strpos($server, "'curl'       =>");
+        $bucata = substr($server, $inceput, 400);
+
+        $this->assertStringContainsString("__DIR__ . DIRECTORY_SEPARATOR . 'curl.exe'", $bucata);
+        $this->assertStringContainsString('System32', $bucata, 'fără el, se ia tot cel din Windows');
+    }
 }

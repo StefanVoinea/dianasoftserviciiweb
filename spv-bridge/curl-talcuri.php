@@ -67,12 +67,24 @@ function talcul_cheii($cod, $cheia)
         return '';
     }
 
+    /*
+     * Cheia e buna. Pana acum se spunea de-a dreptul „e antivirusul" — si chiar
+     * asa era la primul client la care s-a intamplat. La al doilea insa
+     * certificatul ANAF venea curat de la DigiCert, adica nimeni nu desfacea
+     * nimic, iar omul a umblat degeaba prin setari.
+     *
+     * Se spune deci ce se stie: nu e nici PIN-ul, nici altceva de la noi, iar
+     * mai departe raspunde diagnoza, care se uita la lantul certificatului si
+     * cere si vorba lui curl pe dinauntru. Un sfat dat cu siguranta acolo unde
+     * nu e costa mai mult decat unul care trimite la proba potrivita.
+     */
     if ($cheia === 'bun') {
         return '. Tokenul a fost întrebat chiar acum: cheia a semnat pe loc, fără să ceară nimic,'
-            . ' deci driverul ține PIN-ul minte și NU el a rupt legătura. Rămâne desfacerea'
-            . ' traficului: scoateți webserviced.anaf.ro și app.dianasoft.ro de sub filtrarea'
-            . ' SSL/TLS a antivirusului (în ESET/NOD32: Configurare avansată → Web și email →'
-            . ' Filtrare protocoale SSL/TLS → Lista adreselor excluse de la verificare)';
+            . ' deci driverul ține PIN-ul minte și NU el a rupt legătura. Rămâne strângerea de'
+            . ' mână cu ANAF. Rulați „diagnoza.bat" pe calculatorul cu tokenul: ea spune dacă'
+            . ' traficul e desfăcut de antivirus (atunci se scot webserviced.anaf.ro și'
+            . ' app.dianasoft.ro de sub filtrarea SSL/TLS) sau dacă e altceva, și scrie în raport'
+            . ' tot ce se vede pe dinăuntru';
     }
 
     /*

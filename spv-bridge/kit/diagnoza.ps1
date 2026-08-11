@@ -382,6 +382,24 @@ if ($emitentApp) {
 
 # --- 3. ANAF, fara certificat ---------------------------------------------
 
+<#
+  Ce curl se foloseste, si al catelea.
+
+  Cel din Windows e vechi de cati ani are calculatorul, iar in el s-au indreptat
+  de la o versiune la alta necazuri ale lui Schannel cu certificatele de pe
+  token: la un client cu 8.13 legatura cu ANAF cadea, la altul cu 8.21 mergea.
+  Fara randul acesta in raport, deosebirea nu se vede.
+#>
+$curlPropriu = Join-Path $dosar 'curl.exe'
+
+if (Test-Path -LiteralPath $curlPropriu) {
+    $curl = $curlPropriu
+    Amanunt 'Se foloseste curl-ul din kit, nu cel din Windows.'
+}
+
+$versiuneCurl = (& $curl '--version' 2>&1 | Select-Object -First 1)
+Amanunt ('curl: ' + $versiuneCurl)
+
 Titlu '3. Legatura cu ANAF (fara certificat)'
 
 $gazdaAnaf = ([Uri]$spv).Host
@@ -592,6 +610,7 @@ if ($FaraSemnare) {
             desface traficul, ci Windows-ul si ANAF nu se inteleg pe 1.3.
         #>
         $peTls = @(
+            @{ nume = 'ca programul (1.2, sesiune noua, fara revocare)'; optiuni = @('--tlsv1.2', '--tls-max', '1.2', '--no-sessionid', '--ssl-no-revoke') },
             @{ nume = 'TLS 1.2, sesiune noua'; optiuni = @('--tlsv1.2', '--tls-max', '1.2', '--no-sessionid') },
             @{ nume = 'TLS 1.2'; optiuni = @('--tlsv1.2', '--tls-max', '1.2') },
             @{ nume = 'fara margine (poate 1.3)'; optiuni = @() }
@@ -651,7 +670,7 @@ if ($FaraSemnare) {
             $argumenteUrma = @(
                 '-sS', '-v', '-o', 'NUL', '--max-time', '45',
                 '--cert', "CurrentUser\MY\$($certificat.Thumbprint)",
-                '--location', '--tlsv1.2', '--tls-max', '1.2', '--no-sessionid',
+                '--location', '--tlsv1.2', '--tls-max', '1.2', '--no-sessionid', '--ssl-no-revoke',
                 $adresaAnaf
             )
 

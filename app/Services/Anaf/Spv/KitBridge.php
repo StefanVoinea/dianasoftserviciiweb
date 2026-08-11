@@ -85,6 +85,12 @@ class KitBridge
     }
 
     /** Programul de tiparit gasit langa bridge, daca a fost pus acolo. */
+    /** Curl-ul dus la client, daca a fost pus langa bridge. */
+    public function curlPropriu(): ?string
+    {
+        return is_file($this->caleBridge . DIRECTORY_SEPARATOR . 'curl.exe') ? 'curl.exe' : null;
+    }
+
     public function programTiparire(): ?string
     {
         foreach (self::PROGRAME_TIPARIRE as $fisier) {
@@ -140,6 +146,24 @@ class KitBridge
          * scripturile cauta un PHP din sistem, ca pana acum.
          */
         $this->adaugaDosarul($zip, $this->caleBridge . DIRECTORY_SEPARATOR . 'php', 'php');
+
+        /*
+         * Curl-ul, daca a fost pus langa bridge.
+         *
+         * Cel din Windows e vechi de cati ani are calculatorul, iar in el s-au
+         * indreptat, de la o versiune la alta, felurite necazuri ale lui
+         * Schannel cu certificatele de pe token: la un client cu 8.13 legatura
+         * cu ANAF cadea, la altul cu 8.21 mergea. Nu putem cere nimanui sa-si
+         * innoiasca Windows-ul, dar putem duce noi programul cu care lucram.
+         *
+         * Lipsa lui nu opreste kitul: fara el se ia cel din Windows, ca pana
+         * acum.
+         */
+        $curlPropriu = $this->caleBridge . DIRECTORY_SEPARATOR . 'curl.exe';
+
+        if (is_file($curlPropriu)) {
+            $zip->addFile($curlPropriu, 'curl.exe');
+        }
 
         // Programul de tiparit, daca a fost pus langa bridge. Lipsa lui nu
         // opreste kitul: fara el se tipareste prin programul asociat PDF-urilor.

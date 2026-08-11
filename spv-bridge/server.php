@@ -505,6 +505,23 @@ function executa_curl(array $config, $url, array $optiuni = array())
         $tls[] = 'no-sessionid';
     }
 
+    /*
+     * Fara verificarea listelor de revocare.
+     *
+     * Schannel intreaba emitentul, la fiecare strangere de mana, daca vreun
+     * certificat din lant a fost revocat. Intrebarea pleaca la certSIGN, si daca
+     * raspunsul intarzie — firewall, retea inceata, serverul lor obosit —
+     * strangerea de mana se lungeste, iar sesiunea securizata apuca sa expire
+     * inainte de capatul raspunsului: SEC_E_CONTEXT_EXPIRED.
+     *
+     * Nu se pierde nimic din ce ne apara: certificatul ANAF se verifica mai
+     * departe ca lant si ca nume, iar cel de pe token e chiar al nostru. Se
+     * pierde doar intrebarea „a fost revocat intre timp?", pusa la fiecare apel.
+     */
+    if (empty($config['verifica_revocarea'])) {
+        $tls[] = 'ssl-no-revoke';
+    }
+
     $linii = array_merge(array(
         'url = ' . curl_valoare($url),
         'cert = ' . curl_valoare('CurrentUser\\MY\\' . $config['thumbprint']),
@@ -548,7 +565,9 @@ function executa_curl(array $config, $url, array $optiuni = array())
         'cod_iesire' => $cod_iesire,
         // Ce margine de TLS s-a cerut; dupa ea se stie ce cod ruleaza la client.
         'tls' => implode(', ', array_map(function ($optiune) {
-            return $optiune === 'no-sessionid' ? 'sesiune noua' : $optiune;
+            $talcuri = array('no-sessionid' => 'sesiune noua', 'ssl-no-revoke' => 'fara revocare');
+
+            return isset($talcuri[$optiune]) ? $talcuri[$optiune] : $optiune;
         }, $tls)) ?: 'TLS fara margine',
     );
 }
@@ -1005,7 +1024,21 @@ $config = array(
     'decl_url'   => isset($env['ANAF_URL_DEPUNERE']) ? $env['ANAF_URL_DEPUNERE'] : 'https://decl.anaf.mfinante.gov.ro',
     'etransport' => isset($env['ETRANSPORT_URL']) ? $env['ETRANSPORT_URL'] : 'https://webserviceapl.anaf.ro/prod/ETRANSPORT/ws/v1',
     'timeout'    => 120,
-    'curl'       => getenv('SystemRoot') . '\\System32\\curl.exe',
+    /*
+     * Curl-ul cu care se vorbeste cu ANAF.
+     *
+     * Are intaietate cel pus langa program, ca si PHP-ul: cel din Windows e
+     * vechi de cati ani are calculatorul, si tocmai in el s-au indreptat, de
+     * la o versiune la alta, felurite necazuri ale lui Schannel cu
+     * certificatele de pe token. La un client cu 8.13 legatura cadea, la
+     * altul cu 8.21 mergea - iar noi nu putem cere nimanui sa-si innoiasca
+     * Windows-ul.
+     */
+    'curl'       => is_file(__DIR__ . DIRECTORY_SEPARATOR . 'curl.exe')
+        ? __DIR__ . DIRECTORY_SEPARATOR . 'curl.exe'
+        : (isset($env['SPV_CURL']) && trim($env['SPV_CURL']) !== ''
+            ? trim($env['SPV_CURL'])
+            : getenv('SystemRoot') . DIRECTORY_SEPARATOR . 'System32' . DIRECTORY_SEPARATOR . 'curl.exe'),
     // Program de tiparit PDF-uri; gasit singur daca sta langa acest fisier
     'imprimare_exe' => gaseste_program_tiparire($env, __DIR__),
     // Unde se strang documentele fiscale ale clientului (vezi ruta /arhiva)
@@ -1018,6 +1051,10 @@ $config = array(
     // rupe raspunsul la mijloc (SEC_E_CONTEXT_EXPIRED). Vezi executa_curl().
     'refoloseste_sesiunea' => isset($env['SPV_REFOLOSESTE_SESIUNEA'])
         && trim($env['SPV_REFOLOSESTE_SESIUNEA']) === '1',
+    // Verificarea revocarii; oprita, fiindca intrebarea catre emitent poate
+    // intarzia strangerea de mana pana la expirarea sesiunii. Vezi executa_curl().
+    'verifica_revocarea' => isset($env['SPV_VERIFICA_REVOCAREA'])
+        && trim($env['SPV_VERIFICA_REVOCAREA']) === '1',
     'cookie_jar' => __DIR__ . '/cookies.txt',
     'decl_jar'   => __DIR__ . '/decl_cookies.txt',
 );
