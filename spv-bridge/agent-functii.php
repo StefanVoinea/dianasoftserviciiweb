@@ -634,10 +634,10 @@ function agent_talcul_local($raspuns)
     return agent_talcul_curl((int) $raspuns['cod']);
 }
 
-function agent_inroleaza($config)
+function agent_inroleaza($config, $stiute = null)
 {
     if ($config['inrolare'] === '') {
-        return;
+        return null;
     }
 
     /*
@@ -649,10 +649,30 @@ function agent_inroleaza($config)
     $local = agent_intreaba_local($config, '/certificate');
 
     if ($local['cod'] !== 0 || $local['status'] !== 200) {
-        agent_scrie($config, 'Nu am putut citi certificatele de pe token: '
-            . agent_talcul_local($local) . '.');
+        /*
+         * La recitirile din mers se tace: tokenul scos pentru o clipa nu e o
+         * stire, iar jurnalul s-ar umple de plangeri la fiecare cateva minute.
+         * La pornire, unde omul chiar asteapta un raspuns, se spune.
+         */
+        if ($stiute === null) {
+            agent_scrie($config, 'Nu am putut citi certificatele de pe token: '
+                . agent_talcul_local($local) . '.');
+        }
 
-        return;
+        return null;
+    }
+
+    /*
+     * Amprenta listei, ca sa se stie daca s-a schimbat ceva.
+     *
+     * Cand e aceeasi ca data trecuta, nu se mai bate la usa serverului: la o
+     * recitire din trei in trei minute, asta ar insemna un apel degeaba de
+     * fiecare data, pe fiecare calculator, toata ziua.
+     */
+    $amprenta = md5(trim((string) $local['corp']));
+
+    if ($stiute !== null && $amprenta === $stiute) {
+        return $amprenta;
     }
 
     $fisier = $config['dosar'] . '/agent_inrolare.tmp';
@@ -672,9 +692,11 @@ function agent_inroleaza($config)
     @unlink($fisier);
 
     if ($raspuns['status'] === 200) {
-        agent_scrie($config, 'Certificatele de pe acest calculator au fost anunțate aplicației.');
+        agent_scrie($config, $stiute === null
+            ? 'Certificatele de pe acest calculator au fost anunțate aplicației.'
+            : 'S-a schimbat ce tokene sunt conectate; le-am anunțat aplicației.');
 
-        return;
+        return $amprenta;
     }
 
     // Serverul spune de obicei si de ce anume; motivul lui e mai bun decat JSON-ul brut.
@@ -684,6 +706,8 @@ function agent_inroleaza($config)
         : mb_substr($raspuns['corp'], 0, 200);
 
     agent_scrie($config, 'Înrolarea nu a reușit (' . $raspuns['status'] . '): ' . $motiv);
+
+    return null;
 }
 
 /** Duce comanda la programul local de lângă agent și adună răspunsul lui. */

@@ -38,14 +38,16 @@ class ContextUtilizator
      */
     public static function curent(): ?User
     {
-        try {
-            $user = Auth::guard('api')->user();
-        } catch (\Throwable $e) {
-            $user = null;
-        }
+        if (self::poateFiJetonulAplicatiei()) {
+            try {
+                $user = Auth::guard('api')->user();
+            } catch (\Throwable $e) {
+                $user = null;
+            }
 
-        if ($user) {
-            return $user;
+            if ($user) {
+                return $user;
+            }
         }
 
         try {
@@ -53,6 +55,29 @@ class ContextUtilizator
         } catch (\Throwable $e) {
             return null;
         }
+    }
+
+    /**
+     * Are rost sa fie intrebat Passport pe cererea de acum?
+     *
+     * Pe caile puntii, niciodata: agentul vine cu codul lui de instalare, iar
+     * serverul cu un jeton semnat de el insusi. Niciunul nu e token al
+     * aplicatiei.
+     *
+     * Prinderea poticnirii nu era de ajuns. Passport isi prinde singur exceptia
+     * si o RAPORTEAZA inainte s-o inghita — asa ca ea nu ajunge niciodata la
+     * „catch"-ul de mai jos, dar ajunge in jurnal: o urma de o suta de randuri
+     * despre JWT, la fiecare cerere a fiecarui agent. Erorile adevarate se
+     * pierdeau printre ele.
+     */
+    protected static function poateFiJetonulAplicatiei(): bool
+    {
+        // Fara cerere — comenzi, sarcini programate — se intreaba ca pana acum.
+        if (!app()->bound('request')) {
+            return true;
+        }
+
+        return !request()->is('api/punte/*');
     }
 
     /** Administratorul serviciului — un singur cont, cel din configuratie. */

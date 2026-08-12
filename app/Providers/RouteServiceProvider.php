@@ -68,8 +68,28 @@ class RouteServiceProvider extends ServiceProvider
              *
              * Ramane totusi o limita, ca un agent stricat sa nu bata la nesfarsit.
              */
+            /*
+             * Fiecare calculator cu token isi are galeata lui.
+             *
+             * Numaratoarea mergea pe adresa celui care bate. Numai ca la punte
+             * bate, cel mai des, chiar serverul nostru: fata dinspre aplicatie e
+             * o adresa web pe care aplicatia o cheama singura. Toate cererile
+             * tuturor clientilor porneau deci de la aceeasi masina, adica de la
+             * aceeasi adresa, si se adunau intr-o singura limita.
+             *
+             * Asa, un client cu trei sute de firme o umplea in cateva minute si
+             * primea „Too Many Attempts" — iar odata cu el se opreau si ceilalti,
+             * care n-aveau nicio vina.
+             *
+             * Se numara de acum pe certificat la fata dinspre aplicatie, si pe
+             * codul agentului la cea dinspre client. Limita ramane, ca un agent
+             * stricat sa nu bata la nesfarsit, dar ea il priveste doar pe el.
+             */
             if ($request->is('api/punte/*')) {
-                return Limit::perMinute(1200)->by($request->ip());
+                $cheie = $request->route('certificat')
+                    ?: ($request->bearerToken() ? sha1($request->bearerToken()) : $request->ip());
+
+                return Limit::perMinute(1200)->by('punte:' . $cheie);
             }
 
             return Limit::perMinute(60)->by(optional($request->user())->id ?: $request->ip());

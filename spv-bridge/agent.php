@@ -46,7 +46,7 @@ agent_scrie($config, 'Pornit. Întreb ' . $config['server'] . ' dacă are ceva d
  * si nici la care dintre pasi.
  */
 agent_scrie($config, 'Ma prezint: citesc certificatele de pe tokenul de aici.');
-agent_inroleaza($config);
+$tokeneleStiute = agent_inroleaza($config);
 
 /*
  * Si licenta si-o cere tot el. Fara ea, programul de langa noi refuza orice
@@ -69,6 +69,21 @@ $ultimaInnoire = 0;
 $ultimaLicenta = time();
 // Licenta tine luni de zile; se intreaba de ea o data la sase ceasuri
 $rastimpLicenta = 21600;
+
+/*
+ * Din cat in cat se recitesc tokenele de pe calculator.
+ *
+ * Pana acum, certificatele se citeau o singura data, la pornire. Un contabil cu
+ * doua tokene — unul al firmei si altul al clientului — le conecteaza insa pe
+ * rand, dupa cum are treaba; al doilea nu ajungea niciodata in aplicatie, si
+ * singurul leac era repornirea agentului.
+ *
+ * Trei minute: cat sa nu astepte omul dupa el, si destul de rar cat sa nu
+ * incarce nimic. Cand lista e neschimbata — adica aproape intotdeauna — nu se
+ * trimite nimic la server; se citeste doar lista de langa noi.
+ */
+$ultimaCitireTokene = time();
+$rastimpTokene = 180;
 
 /*
  * Din cât în cât se scrie în jurnal că agentul e viu, chiar dacă n-are ce face.
@@ -97,6 +112,28 @@ while (true) {
         continue;
     }
 
+    /*
+     * Tokenele se recitesc inainte de a intra in panda, nu in mijlocul unei
+     * lucrari: panda e clipa in care agentul oricum nu are nimic de facut.
+     */
+    if (time() - $ultimaCitireTokene >= $rastimpTokene) {
+        $ultimaCitireTokene = time();
+
+        $acum = agent_inroleaza($config, $tokeneleStiute === null ? '' : $tokeneleStiute);
+
+        if ($acum !== null && $acum !== $tokeneleStiute) {
+            $tokeneleStiute = $acum;
+
+            /*
+             * Un token nou n-are inca licenta, iar fara ea programul de langa
+             * noi refuza orice comanda pentru el. Se cere pe loc: altfel omul ar
+             * astepta pana la sase ceasuri, cat e rastimpul obisnuit.
+             */
+            agent_licentiaza($config);
+            $ultimaLicenta = time();
+        }
+    }
+
     $comanda = agent_intreaba($config, $motiv);
 
     if ($comanda === -1) {
@@ -106,7 +143,7 @@ while (true) {
          * poate tokenul tocmai a fost conectat — și se așteaptă un minut.
          */
         agent_scrie($config, 'Serverul nu-mi recunoaște codul de acces; încerc din nou înrolarea.');
-        agent_inroleaza($config);
+        $tokeneleStiute = agent_inroleaza($config);
         sleep(60);
 
         continue;
