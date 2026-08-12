@@ -39,7 +39,7 @@ deschidă porturi care nu trebuiau deschise și să lase blocat ce conta.
 
 ### Ce NU trece pe la calculatorul clientului
 
-`api.anaf.ro`, `www.anaf.ro`, `logincert.anaf.ro` și `portalquery.just.ro`
+`api.anaf.ro`, `www.anaf.ro`, `stare.anaf.ro`, `logincert.anaf.ro` și `portalquery.just.ro`
 (Portal Just, pe **HTTP, portul 80**) sunt chemate de **serverul aplicației**,
 nu de calculatorul cu tokenul. Ele contează în firewall doar dacă aplicația e
 instalată chiar la client, pe serverul lui. La o instalare obișnuită, unde

@@ -262,9 +262,19 @@ return [
         // Depunere prin bridge (mTLS cu certificatul de pe token)
         'url_depunere' => env('ANAF_URL_DEPUNERE', 'https://decl.anaf.mfinante.gov.ro'),
 
-        // Verificare stare + descarcare recipisa (fara certificat)
-        'url_stare' => env('ANAF_URL_STARE', 'https://www.anaf.ro/StareD112/vizualizareStare.do'),
-        'url_recipisa' => env('ANAF_URL_RECIPISA', 'https://www.anaf.ro/StareD112/ObtineRecipisa?numefisier='),
+        /*
+         * Verificare stare + descarcare recipisa (fara certificat).
+         *
+         * In august 2026, ANAF a mutat StareD112 de pe „www.anaf.ro” pe gazda
+         * ei proprie, „stare.anaf.ro”. Adresa veche nu mai raspunde deloc — nici
+         * macar cu o mutare anuntata —, asa ca interogarea cadea in exceptie si
+         * declaratia ramanea „In prelucrare” la nesfarsit, fara sa se vada de ce.
+         *
+         * Formularul a ramas neschimbat: aceleasi campuri (ghis, id, cui) si
+         * acelasi fel de raspuns.
+         */
+        'url_stare' => env('ANAF_URL_STARE', 'https://stare.anaf.ro/StareD112/vizualizareStare.do'),
+        'url_recipisa' => env('ANAF_URL_RECIPISA', 'https://stare.anaf.ro/StareD112/ObtineRecipisa?numefisier='),
 
         'storage_path' => 'declaratii',
         'timeout' => 120,

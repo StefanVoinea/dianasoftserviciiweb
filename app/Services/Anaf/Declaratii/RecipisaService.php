@@ -8,6 +8,7 @@ use App\Services\Anaf\Spv\SpvClient;
 use App\Services\Anaf\Spv\SpvException;
 use App\Services\Anaf\Spv\SpvStorage;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Preluarea recipiselor pentru declaratiile depuse. Sursa principala este SPV
@@ -217,6 +218,22 @@ class RecipisaService
      */
     protected function preiaStareaPublica(AnafDeclaratie $declaratie): void
     {
+        /*
+         * Cand intrebarea nu ajunge la ANAF, omului i se spune „In prelucrare”:
+         * e adevarul, fiindca nu se stie nimic altceva. Dar in jurnal trebuie sa
+         * ramana pricina — altfel o declaratie care asteapta un raspuns arata
+         * intocmai ca una despre care nu s-a putut afla nimic, si o adresa
+         * mutata poate trece luni de zile neobservata.
+         */
+        $nuSAPutut = function (string $pricina) use ($declaratie) {
+            Log::warning('Starea publica D112 nu s-a putut afla: ' . $pricina, [
+                'declaratie' => $declaratie->id,
+                'adresa' => $this->config['url_stare'],
+            ]);
+
+            $declaratie->update(['stare_declaratie' => 'In prelucrare']);
+        };
+
         try {
             $raspuns = Http::asForm()
                 ->timeout($this->config['timeout'])
@@ -228,7 +245,18 @@ class RecipisaService
 
             $html = $raspuns->body();
         } catch (\Exception $e) {
-            $declaratie->update(['stare_declaratie' => 'In prelucrare']);
+            $nuSAPutut($e->getMessage());
+
+            return;
+        }
+
+        /*
+         * O adresa mutata nu arunca exceptie: intoarce o pagina de eroare, care
+         * trece de aici mai departe si sfarseste tot in „In prelucrare”. Asa a
+         * si trecut neobservata mutarea StareD112 pe alta gazda.
+         */
+        if ($raspuns->failed()) {
+            $nuSAPutut('ANAF a raspuns ' . $raspuns->status());
 
             return;
         }

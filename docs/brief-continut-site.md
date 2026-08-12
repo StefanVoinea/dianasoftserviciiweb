@@ -170,7 +170,7 @@ Modul: `modul:spv` (`routes/api.php:97`). Interfață: „Certificate digitale�
   `config/anaf.php:241`.
 - **Recipise**: se caută mesajul SPV de tip RECIPISA după indexul de încărcare;
   când nu există, se interoghează starea publică pe
-  `https://www.anaf.ro/StareD112/vizualizareStare.do` (fără certificat) —
+  `https://stare.anaf.ro/StareD112/vizualizareStare.do` (fără certificat) —
   `app/Services/Anaf/Declaratii/RecipisaService.php:45-190`, `config/anaf.php:244-245`.
   Verdictul ANAF se citește din textul PDF-ului recipisei —
   `app/Services/Anaf/Declaratii/RecipisaService.php:191`.
