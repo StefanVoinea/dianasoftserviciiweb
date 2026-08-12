@@ -196,6 +196,31 @@ class ActualizareaDukTest extends TestCase
         $this->assertStringContainsString('B230;J3.0.0;P3.0.0', $dupa, 'rândurile neatinse rămân la locul lor');
     }
 
+    /**
+     * Pe server, catalogul poate avea sfarsit de rand de Linux — si asa ramane.
+     *
+     * DUKIntegrator ruleaza si pe Linux (in productie, la „/home/forge/
+     * anaf-tools/dist”), unde fisierul poate ajunge cu randuri incheiate simplu.
+     * Daca actualizarea l-ar rescrie in celalalt fel, s-ar schimba tot fisierul
+     * la fiecare noapte — si o schimbare adevarata nu s-ar mai deosebi de zgomot.
+     */
+    public function test_sfarsitul_de_rand_al_fisierului_se_pastreaza(): void
+    {
+        file_put_contents(
+            $this->dist . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'versiuniCurente.txt',
+            implode("\n", ['1.4.18.3.3', 'B230;J3.0.0;P3.0.0', 'D112;J27.0.1;P3.0.1']) . "\n"
+        );
+
+        $this->pregatesteAnaf();
+
+        $this->artisan('anaf:duk-update', ['--url' => 'http://static.anaf.ro/versiuni.xml']);
+
+        $dupa = $this->catalogul();
+
+        $this->assertStringNotContainsString("\r", $dupa, 'fișierul de Linux nu se preface în unul de Windows');
+        $this->assertStringContainsString('D112;J27.0.2;P3.0.1', $dupa);
+    }
+
     /** Proba pe uscat nu scrie nimic si nu descarca nimic. */
     public function test_proba_pe_uscat_nu_atinge_nimic(): void
     {
