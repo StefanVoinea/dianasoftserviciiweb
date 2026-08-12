@@ -480,14 +480,26 @@ class SolicitareService
 
         /*
          * Raspunsul merge de la ANAF drept in arhiva clientului; incoace vine
-         * doar textul din el, atat cat sa fie citit vectorul fiscal, situatia
-         * sintetica sau datele de identificare.
+         * doar textul din el, si numai cand avem ce citi in el.
+         *
+         * Pana acum textul se cerea pentru orice raspuns. Dar el se scoate din
+         * PDF pe calculatorul clientului si face drumul inapoi peste retea, iar
+         * pentru tipurile pe care nu le talcuim serverul il arunca — asa ca
+         * fiecare astfel de raspuns platea o citire si un drum degeaba. Iar cand
+         * programul local nu izbutea sa citeasca, documentul era cerut inapoi
+         * din arhiva: inca un drum, tot pentru un text de aruncat.
          */
-        $adus = $this->storage->aduce($inregistrat, true, 'solicitari');
+        $vreaText = $this->areNevoieDeText($solicitare->tip_document);
 
-        $obs = $adus['text'] !== null
-            ? $this->interpreteaza($solicitare, $adus['text'])
-            : 'Documentul nu a putut fi citit pe calculatorul clientului.';
+        $adus = $this->storage->aduce($inregistrat, $vreaText, 'solicitari');
+
+        $obs = null;
+
+        if ($vreaText) {
+            $obs = $adus['text'] !== null
+                ? $this->interpreteaza($solicitare, $adus['text'])
+                : 'Documentul nu a putut fi citit pe calculatorul clientului.';
+        }
 
         $solicitare->update([
             'mesaj_id' => $mesaj['id'],
@@ -498,6 +510,34 @@ class SolicitareService
             'obs' => $obs,
             'stare' => 'preluata',
         ]);
+    }
+
+    /**
+     * Tipurile de raspuns din care chiar citim ceva.
+     *
+     * Sunt aceleasi pe care le talcuieste „interpreteaza” mai jos; daca acolo se
+     * adauga unul nou, aici trebuie trecut, altfel documentul soseste fara text
+     * si nu mai are ce fi citit. Cele doua liste sunt tinute impreuna de o proba.
+     */
+    protected const CU_TEXT = [
+        'VECTOR FISCAL',
+        'SITUATIE SINTETICA',
+        'SITUAȚIE SINTETICĂ',
+        'DATE IDENTIFICARE',
+    ];
+
+    /** Are rost sa cerem textul acestui raspuns? */
+    protected function areNevoieDeText(?string $tip): bool
+    {
+        $tip = mb_strtoupper(trim((string) $tip));
+
+        foreach (self::CU_TEXT as $care) {
+            if (strpos($tip, $care) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Interpretarea documentului descarcat, in functie de tip. */
