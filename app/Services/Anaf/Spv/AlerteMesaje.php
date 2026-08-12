@@ -2,6 +2,7 @@
 
 namespace App\Services\Anaf\Spv;
 
+use App\Mail\AlertaConstatareSpvEmail;
 use App\Mail\AlertaMesajSpvEmail;
 use App\Models\AlertaMesajSpv;
 use App\Models\AnafSocietate;
@@ -26,7 +27,9 @@ class AlerteMesaje
      */
     public function pentruMesajNou(SpvMesaj $mesaj): int
     {
-        $alerte = AlertaMesajSpv::active()->get();
+        // Doar cele care asteapta o hartie; cele legate de o constatare pleaca
+        // mai tarziu, dupa ce documentul a fost talcuit.
+        $alerte = AlertaMesajSpv::active()->laSosire()->get();
 
         if ($alerte->isEmpty()) {
             return 0;
@@ -42,6 +45,59 @@ class AlerteMesaje
             if ($this->trimite($alerta, $mesaj)) {
                 $trimise++;
             }
+        }
+
+        return $trimise;
+    }
+
+    /**
+     * Instiintarile pentru ce s-a citit in document, nu pentru sosirea lui.
+     *
+     * Aici e toata deosebirea fata de alertele obisnuite: la o descarcare de
+     * doua sute cincizeci de firme, o alerta pe „vector fiscal” ar trimite doua
+     * sute cincizeci de emailuri, desi numai la cateva s-a schimbat ceva. Una
+     * legata de constatare pleaca doar la acelea.
+     *
+     * @param string $ce una dintre constatarile din AlertaMesajSpv::CONSTATARI
+     *
+     * @return int cate instiintari au plecat
+     */
+    public function pentruConstatare(string $ce, ?string $cif, ?int $certificatId, string $vorba): int
+    {
+        $alerte = AlertaMesajSpv::active()->laConstatare($ce)->get();
+
+        if ($alerte->isEmpty()) {
+            return 0;
+        }
+
+        $societate = $cif ? AnafSocietate::where('cif', $cif)->first() : null;
+        $trimise = 0;
+
+        foreach ($alerte as $alerta) {
+            if (!$alerta->seAplicaLaConstatare($cif, $certificatId, $this->cifuriInrolate($alerta->certificat_id))) {
+                continue;
+            }
+
+            try {
+                Mail::to($alerta->email)->send(new AlertaConstatareSpvEmail(
+                    $ce,
+                    $vorba,
+                    $cif,
+                    optional($societate)->denumire
+                ));
+            } catch (\Exception $e) {
+                // Ca si la celelalte: o adresa gresita nu opreste preluarea.
+                Log::error('Alertă SPV eșuată către ' . $alerta->email . ': ' . $e->getMessage());
+
+                continue;
+            }
+
+            $alerta->update([
+                'ultima_alerta_la' => now(),
+                'trimise' => $alerta->trimise + 1,
+            ]);
+
+            $trimise++;
         }
 
         return $trimise;

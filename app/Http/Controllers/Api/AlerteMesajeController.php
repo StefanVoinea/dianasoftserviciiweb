@@ -133,15 +133,25 @@ class AlerteMesajeController extends Controller
             'email' => 'required|email|max:191',
             'certificat_id' => 'nullable|exists:anaf_certificate,id',
             'tip_document' => 'nullable|string|max:100',
+            'doar_cand' => 'nullable|in:' . implode(',', array_keys(AlertaMesajSpv::CONSTATARI)),
             'cif' => 'nullable|string|max:20',
             'activ' => 'nullable|boolean',
         ]);
 
         // Sirurile goale din formular inseamna „oricare", nu text gol.
-        foreach (['certificat_id', 'tip_document', 'cif'] as $camp) {
+        foreach (['certificat_id', 'tip_document', 'doar_cand', 'cif'] as $camp) {
             if (array_key_exists($camp, $date) && $date[$camp] === '') {
                 $date[$camp] = null;
             }
+        }
+
+        /*
+         * Alerta legata de o constatare nu se mai uita la felul hartiei: ea vine
+         * din talcuirea unui document al carui tip e dinainte stiut. Lasat, tipul
+         * ar fi cerut si el sa se potriveasca — si alerta n-ar pleca niciodata.
+         */
+        if (!empty($date['doar_cand'])) {
+            $date['tip_document'] = null;
         }
 
         $date['activ'] = !array_key_exists('activ', $date) || (bool) $date['activ'];
@@ -157,6 +167,10 @@ class AlerteMesajeController extends Controller
             'certificat_id' => $alerta->certificat_id,
             'certificat_nume' => optional($alerta->certificat)->cn,
             'tip_document' => $alerta->tip_document,
+            'doar_cand' => $alerta->doar_cand,
+            'doar_cand_text' => $alerta->doar_cand
+                ? (AlertaMesajSpv::CONSTATARI[$alerta->doar_cand] ?? $alerta->doar_cand)
+                : null,
             'cif' => $alerta->cif,
             'activ' => $alerta->activ,
             'trimise' => $alerta->trimise,

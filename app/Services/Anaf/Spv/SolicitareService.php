@@ -2,10 +2,12 @@
 
 namespace App\Services\Anaf\Spv;
 
+use App\Models\AlertaMesajSpv;
 use App\Models\AnafSocietate;
 use App\Models\SpvSolicitare;
 use App\Models\VectorFiscal;
 use App\Services\Anaf\Arhiva\ArhivaService;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 
@@ -513,6 +515,39 @@ class SolicitareService
     }
 
     /**
+     * Cele doua constatari care merita strigate.
+     *
+     * Stau in constante fiindca acelasi text ajunge in doua locuri: in coloana
+     * de observatii din fila si in emailul de instiintare. Scrise de mana in
+     * amandoua, s-ar fi departat una de alta la prima indreptare de virgula.
+     */
+    public const VECTOR_MODIFICAT = 'ATENȚIE! VECTOR FISCAL MODIFICAT!';
+    public const RESTANTE = 'ATENȚIE! SUNT OBLIGAȚII DE PLATĂ RESTANTE';
+
+    /**
+     * Trimite instiintarile legate de o constatare.
+     *
+     * Nu darama preluarea daca nu izbuteste: documentul e adus si talcuit, iar
+     * observatia se vede oricum in fila. Un server de email obosit n-are voie sa
+     * strice lucrarea pentru care omul a asteptat.
+     */
+    protected function instiinteaza(SpvSolicitare $solicitare, string $ce, string $vorba): void
+    {
+        try {
+            app(AlerteMesaje::class)->pentruConstatare(
+                $ce,
+                $solicitare->cif,
+                $this->certificate->idCurent(),
+                $vorba
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Înștiințarea „' . $ce . '" nu a plecat: ' . $e->getMessage(), [
+                'cif' => $solicitare->cif,
+            ]);
+        }
+    }
+
+    /**
      * Tipurile de raspuns din care chiar citim ceva.
      *
      * Sunt aceleasi pe care le talcuieste „interpreteaza” mai jos; daca acolo se
@@ -565,9 +600,13 @@ class SolicitareService
                     return 'Vector fiscal preluat: ' . $numar . ' obligații.';
                 }
 
-                return $rezultat['modificat']
-                    ? 'ATENȚIE! VECTOR FISCAL MODIFICAT!'
-                    : 'Nu sunt modificări în vectorul fiscal.';
+                if (!$rezultat['modificat']) {
+                    return 'Nu sunt modificări în vectorul fiscal.';
+                }
+
+                $this->instiinteaza($solicitare, AlertaMesajSpv::CAND_VECTOR_MODIFICAT, self::VECTOR_MODIFICAT);
+
+                return self::VECTOR_MODIFICAT;
             }
 
             if (strpos($tip, 'SITUATIE SINTETICA') !== false || strpos($tip, 'SITUAȚIE SINTETICĂ') !== false) {
@@ -578,9 +617,13 @@ class SolicitareService
                  * niciodata denumirea — de unde si firmele ramase cu numele
                  * citit din vectorul fiscal, uneori doar „SRL".
                  */
-                return $this->parser->areObligatiiRestante($text)
-                    ? 'ATENȚIE! SUNT OBLIGAȚII DE PLATĂ RESTANTE'
-                    : 'Nu sunt obligații de plată restante.';
+                if (!$this->parser->areObligatiiRestante($text)) {
+                    return 'Nu sunt obligații de plată restante.';
+                }
+
+                $this->instiinteaza($solicitare, AlertaMesajSpv::CAND_RESTANTE, self::RESTANTE);
+
+                return self::RESTANTE;
             }
 
             if (strpos($tip, 'DATE IDENTIFICARE') !== false) {

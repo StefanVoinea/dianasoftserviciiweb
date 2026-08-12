@@ -166,7 +166,11 @@
           </template>
 
           <template #cell(tip_document)="rand">
-            {{ rand.item.tip_document || 'orice document' }}
+            <span
+              v-if="rand.item.doar_cand_text"
+              class="text-success"
+            >{{ rand.item.doar_cand_text }}</span>
+            <span v-else>{{ rand.item.tip_document || 'orice document' }}</span>
           </template>
 
           <template #cell(trimise)="rand">
@@ -216,24 +220,42 @@
             />
           </b-col>
           <b-col md="6">
-            <label>Tipul documentului</label>
-            <b-form-input
-              v-model="alerta.tip_document"
-              list="tipuri-documente"
-              placeholder="orice document"
+            <label>Când se trimite</label>
+            <b-form-select
+              v-model="alerta.doar_cand"
+              :options="optiuniConstatari"
               class="mb-1"
             />
-            <b-form-datalist
-              id="tipuri-documente"
-              :options="optiuniTipuri"
-            />
-            <small class="text-muted d-block mb-2">
-              <span v-if="tipuriVazute">
-                Primele {{ tipuriVazute }} din listă au apărut deja în mesajele
-                dumneavoastră; restul sunt feluri obișnuite.
-              </span>
-              Puteți scrie și altceva: se potrivește pe bucată de text, fără să
-              conteze literele mari sau mici.
+
+            <!-- Tipul are rost doar la alerta pe sosire: cea legată de o
+                 constatare vine dintr-un document al cărui fel e dinainte știut. -->
+            <template v-if="!alerta.doar_cand">
+              <b-form-input
+                v-model="alerta.tip_document"
+                list="tipuri-documente"
+                placeholder="orice document"
+                class="mb-1"
+              />
+              <b-form-datalist
+                id="tipuri-documente"
+                :options="optiuniTipuri"
+              />
+              <small class="text-muted d-block mb-2">
+                <span v-if="tipuriVazute">
+                  Primele {{ tipuriVazute }} din listă au apărut deja în mesajele
+                  dumneavoastră; restul sunt feluri obișnuite.
+                </span>
+                Puteți scrie și altceva: se potrivește pe bucată de text, fără să
+                conteze literele mari sau mici.
+              </small>
+            </template>
+
+            <small
+              v-else
+              class="text-success d-block mb-2"
+            >
+              Pleacă numai la firmele la care se constată acest lucru — nu la
+              fiecare document sosit.
             </small>
           </b-col>
         </b-row>
@@ -539,6 +561,20 @@ export default {
     tipuriVazute() {
       return this.tipuri.filter(tip => tip.vazut).length
     },
+    /**
+     * Ce așteaptă alerta: o hârtie sosită, sau o constatare din ea.
+     *
+     * Constatările se trimit numai la firmele la care s-a găsit chiar acel
+     * lucru. O alertă pe „vector fiscal” ca fel de document ar trimite, la 250
+     * de firme, 250 de emailuri — deși numai la câteva s-a schimbat ceva.
+     */
+    optiuniConstatari() {
+      return [
+        { value: null, text: 'la sosirea unui document de tipul ales' },
+        { value: 'vector_modificat', text: 'doar când vectorul fiscal s-a modificat' },
+        { value: 'restante', text: 'doar când situația sintetică arată restanțe' },
+      ]
+    },
     optiuniCertificate() {
       return [{ value: null, text: 'orice certificat' }]
         .concat(this.certificate.map(certificat => ({
@@ -604,7 +640,7 @@ export default {
     },
     alertaNoua() {
       this.alerta = {
-        email: '', tip_document: '', certificat_id: null, cif: null, activ: true,
+        email: '', tip_document: '', doar_cand: null, certificat_id: null, cif: null, activ: true,
       }
     },
     editeazaAlerta(alerta) {
