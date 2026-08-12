@@ -729,6 +729,14 @@ export default {
       if (rezultat.ramase) parti.push(`${rezultat.ramase} care nu s-au putut aduce acum`)
       if (rezultat.erori && rezultat.erori.length) parti.push(`${rezultat.erori.length} eșuate`)
 
+      /*
+       * Când s-a oprit singură, pricina e lucrul cel mai de folos din tot
+       * rezumatul: ea spune ce trebuie îndreptat ca restul să poată fi aduse.
+       */
+      if (rezultat.oprit) {
+        return `${parti.join(', ')}. S-a oprit după ${rezultat.opriteLaRand} eșecuri la rând: ${rezultat.oprit}`
+      }
+
       return parti.join(', ')
     },
     // Mesajele SPV stau pe discul privat, deci se cer prin API si se deschid
@@ -861,9 +869,24 @@ export default {
 
           if (arata) {
             const care = pas.ce ? ` — ${pas.ce}` : ''
-            const cazut = pas.reusit ? '' : ' (nu s-a putut aduce)'
+            // Cand cade, se spune si de ce: „nu s-a putut aduce” singur nu
+            // ajuta pe nimeni, iar cand cad sute la rand pricina e aceeasi si
+            // se vede din primul.
+            const cazut = pas.reusit ? '' : ` (nu s-a putut aduce: ${pas.de_ce || 'motiv necunoscut'})`
 
             this.mersul = `${pas.facute} din ${pas.total} documente aduse${care}${cazut}`
+          }
+
+          return
+        }
+
+        // Aducerea s-a oprit singura: nu mai avea rost sa incerce restul.
+        if (pas.tip === 'oprit') {
+          rezultat.oprit = pas.de_ce || 'motiv necunoscut'
+          rezultat.opriteLaRand = pas.la_rand
+
+          if (arata) {
+            this.mersul = `Oprit după ${pas.la_rand} eșecuri la rând: ${rezultat.oprit}`
           }
 
           return

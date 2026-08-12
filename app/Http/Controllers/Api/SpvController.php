@@ -17,6 +17,16 @@ use Illuminate\Support\Facades\Storage;
 
 class SpvController extends Controller
 {
+    /**
+     * Cate esecuri la rand inseamna ca s-a stricat legatura, nu documentul.
+     *
+     * Zece: destule cat sa se treaca peste cateva documente cu adevarat stricate
+     * (se intampla — un mesaj sters la ANAF, unul cu drepturi schimbate), si
+     * putine cat sa nu se arda o suta de apeluri degeaba dupa ce legatura a
+     * cazut.
+     */
+    protected const CAZUTE_LA_RAND = 10;
+
     public function index(Request $request, SpvClient $spvClient, SpvStorage $storage)
     {
         try {
@@ -183,17 +193,35 @@ class SpvController extends Controller
             $descarcate = 0;
             $erori = [];
 
+            /*
+             * Cand cad multe la rand, se opreste.
+             *
+             * Un client cu doua sute cincizeci de entitati a adus 390 de
+             * documente din 568, si de acolo incolo au cazut toate. Fila le-a
+             * parcurs pe celelalte 178 una cate una, fara sa aduca nimic: cand
+             * legatura cu ANAF s-a stricat, ea e stricata pentru toate, iar
+             * incercarile de dupa nu au ce descoperi.
+             *
+             * Nu e doar timp pierdut. Fiecare incercare e un apel catre ANAF, iar
+             * apelurile sunt numarate; arzandu-le degeaba, se strica si ce ar mai
+             * fi mers azi.
+             */
+            $cazuteLaRand = 0;
+            $oprit = null;
+
             foreach ($deDescarcat as $i => $mesaj) {
                 // Fiecare document isi cere ragazul lui, socotit de la capat.
                 ragaz(120);
 
                 $reusit = true;
+                $deCe = null;
 
                 try {
                     // Documentul merge de la ANAF drept in dosarul firmei, la client.
                     $storage->aduce($mesaj);
 
                     $descarcate++;
+                    $cazuteLaRand = 0;
                 } catch (SpvException $e) {
                     $mesaj->update([
                         'incercari' => $mesaj->incercari + 1,
@@ -202,6 +230,8 @@ class SpvController extends Controller
 
                     $erori[] = $mesaj->mesaj_id . ': ' . $e->getMessage();
                     $reusit = false;
+                    $deCe = $e->getMessage();
+                    $cazuteLaRand++;
                 }
 
                 yield [
@@ -210,13 +240,45 @@ class SpvController extends Controller
                     'total' => $total,
                     'reusit' => $reusit,
                     'ce' => trim(($mesaj->tip ?: 'Document') . ' ' . $mesaj->cif),
+                    /*
+                     * Pricina merge odata cu pasul, nu doar la sfarsit.
+                     *
+                     * Un client cu doua sute cincizeci de entitati a adus 390 de
+                     * documente din 568, iar restul au cazut unul dupa altul cu
+                     * „nu s-a putut aduce” si nimic mai mult. Cand cad sute la
+                     * rand, ce le doboara e aproape intotdeauna acelasi lucru —
+                     * si se vede din primul, daca e spus.
+                     */
+                    'de_ce' => $deCe,
                 ];
+
+                if ($cazuteLaRand >= self::CAZUTE_LA_RAND) {
+                    $oprit = $deCe;
+
+                    yield [
+                        'tip' => 'oprit',
+                        'facute' => $i + 1,
+                        'total' => $total,
+                        'la_rand' => $cazuteLaRand,
+                        'de_ce' => $deCe,
+                    ];
+
+                    break;
+                }
             }
 
             Jurnal::scrie(
                 'mesaje_descarcare',
-                sprintf('A adus documentele lipsă: %d din %d', $descarcate, $total),
-                ['descarcate' => $descarcate, 'erori' => $erori],
+                $oprit === null
+                    ? sprintf('A adus documentele lipsă: %d din %d', $descarcate, $total)
+                    : sprintf(
+                        'Aducerea s-a oprit după %d eșecuri la rând (%d din %d aduse): %s',
+                        self::CAZUTE_LA_RAND,
+                        $descarcate,
+                        $total,
+                        mb_substr($oprit, 0, 200)
+                    ),
+                ['descarcate' => $descarcate, 'erori' => $erori, 'oprit' => $oprit],
                 $request->query('cif') ?: null,
                 $erori === []
             );
