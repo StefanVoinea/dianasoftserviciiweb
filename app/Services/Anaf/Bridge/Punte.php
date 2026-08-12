@@ -86,6 +86,12 @@ class Punte
         return rtrim(config('app.url'), '/') . '/api/punte/' . $certificat->id;
     }
 
+    /** Serverul are cu ce semna? Fără chei, puntea rămâne închisă pentru toți. */
+    public function areChei(): bool
+    {
+        return $this->licente->areChei();
+    }
+
     /**
      * Cererea vine chiar de la serverul nostru?
      *

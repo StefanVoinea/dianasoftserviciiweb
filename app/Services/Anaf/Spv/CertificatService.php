@@ -30,6 +30,9 @@ class CertificatService
     /** Jetonul semnat al cererii curente. */
     protected $jeton;
 
+    /** Pana cand mai e bun de folosit jetonul de mai sus (timp unix). */
+    protected $jetonPanaLa = 0;
+
     public function __construct(array $config)
     {
         $this->config = $config;
@@ -151,12 +154,19 @@ class CertificatService
     /**
      * Jetonul semnat pentru comanda de acum.
      *
-     * Se face unul singur pe cerere: operatiile trimit mai multe apeluri catre
+     * Se tine minte intre apeluri: o operatie trimite mai multe cereri catre
      * acelasi program local, iar semnarea e ieftina, dar nu degeaba.
+     *
+     * Se reinnoieste insa cand imbatraneste. Jetonul e bun cateva minute, ceea ce
+     * ajunge pentru orice cerere obisnuita — dar aducerea documentelor in flux e
+     * o singura cerere care tine o jumatate de ora si face sute de apeluri. La un
+     * client cu doua sute cincizeci de entitati s-au adus 390 de documente din
+     * 568, si de acolo incolo au cazut toate: jetonul facut la pornire expirase,
+     * iar puntea le-a refuzat pe toate cu „cererea nu poarta jeton semnat”.
      */
     protected function jetonul(): ?string
     {
-        if ($this->jeton !== null) {
+        if ($this->jeton !== null && time() < $this->jetonPanaLa) {
             return $this->jeton;
         }
 
@@ -165,6 +175,13 @@ class CertificatService
         if (!$licente->areChei()) {
             return null;
         }
+
+        /*
+         * Se reface din vreme, nu chiar la expirare: intre semnare si sosirea
+         * cererii la punte trece drumul pana la calculatorul clientului, iar un
+         * jeton bun la plecare poate fi expirat la sosire.
+         */
+        $this->jetonPanaLa = time() + (int) (Licente::JETON_SECUNDE * 0.6);
 
         return $this->jeton = $licente->jeton();
     }

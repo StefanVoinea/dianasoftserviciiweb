@@ -51,10 +51,27 @@ class PunteController extends Controller
          * legătura noastră, neconfigurată. Un 401 ar fi citit mai departe ca
          * refuz al SPV-ului și ar trimite omul să-și verifice certificatul.
          */
-        if (!$this->punte->cerereDeLaServer($request)) {
+        /*
+         * Lipsa cheilor si un jeton nepotrivit se spun deosebit.
+         *
+         * Pana acum, amandoua trimiteau omul la „anaf:chei-bridge” — un sfat
+         * primejdios cand cheile exista: rescrise, ele lasa fara valabilitate
+         * toate licentele emise, iar fiecare calculator cu token ar avea nevoie
+         * de un kit nou. Iar cazul cel mai des intalnit e tocmai celalalt: un
+         * jeton care a apucat sa expire in timpul unei lucrari lungi.
+         */
+        if (!$this->punte->areChei()) {
             return response()->json([
                 'eroare' => 'Puntea către programul local nu este configurată.',
-                'detalii' => 'Cererea nu poartă jeton semnat de server. Rulați „php artisan anaf:chei-bridge".',
+                'detalii' => 'Serverul nu are cheile de semnare. Rulați „php artisan anaf:chei-bridge".',
+            ], 503);
+        }
+
+        if (!$this->punte->cerereDeLaServer($request)) {
+            return response()->json([
+                'eroare' => 'Cererea către programul local nu a fost primită.',
+                'detalii' => 'Jetonul lipsește, a expirat sau nu e semnat de acest server.'
+                    . ' Cheile sunt la locul lor — nu le rescrieți.',
             ], 503);
         }
 
