@@ -66,6 +66,24 @@ class Kernel extends ConsoleKernel
          * stă să expire, iar agenții adormiți se văd dintr-o dată.
          */
         $schedule->command('anaf:licente-bridge')->hourly()->withoutOverlapping();
+
+        /*
+         * DUKIntegrator si nomenclatoarele declaratiilor, in fiecare noapte.
+         *
+         * Pana acum se actualiza cu mana, adica atunci cand isi amintea cineva.
+         * Iar cand ANAF schimba forma unei declaratii fara sa schimbe si
+         * integratorul — cum face de cele mai multe ori —, nu se vedea nimic:
+         * validatorul vechi respingea declaratia noua, si vina parea a fi a
+         * declaratiei.
+         *
+         * Nu costa aproape nimic: se citeste o lista de versiuni si se aduc doar
+         * fisierele declaratiilor care chiar s-au schimbat. In noptile in care
+         * ANAF n-a schimbat nimic, comanda pleaca dupa o singura cerere.
+         *
+         * Noaptea, fiindca un validator inlocuit in timp ce tocmai valideaza o
+         * declaratie n-ar folosi nimanui.
+         */
+        $schedule->command('anaf:duk-update')->dailyAt('04:30')->withoutOverlapping();
     }
 
     /**
