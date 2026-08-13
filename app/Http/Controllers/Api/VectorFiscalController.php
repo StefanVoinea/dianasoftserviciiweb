@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exports\VectorLunarExport;
 use App\Http\Controllers\Controller;
 use App\Models\AnafDeclaratie;
+use App\Models\VectorDeclaratie;
 use App\Models\VectorFiscal;
 use App\Models\VectorSpv;
 use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
+use App\Services\Anaf\Spv\RaportVectorLunar;
+use Barryvdh\Snappy\Facades\SnappyPdf;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 class VectorFiscalController extends Controller
 {
@@ -136,6 +141,174 @@ class VectorFiscalController extends Controller
         })->values();
 
         return response()->json(['success' => true, 'data' => $situatie]);
+    }
+
+    /**
+     * Vectorul fiscal al unei luni, pe hartie sau in Excel.
+     *
+     * Randurile sunt entitatile inrolate, coloanele — declaratiile deduse din
+     * vectorul fiscal citit din SPV. Pentru fiecare declaratie: recipisa
+     * (index, data si ora), daca e depusa; altfel periodicitatea obligatiei,
+     * cu atentionare cand luna ceruta chiar era a ei.
+     */
+    public function lunar(Request $request, RaportVectorLunar $serviciu)
+    {
+        $date = $request->validate([
+            'luna' => 'required|integer|min:1|max:12',
+            'anul' => 'required|integer|min:2000|max:2100',
+            'format' => 'required|in:pdf,excel',
+        ]);
+
+        $raport = $serviciu->pentruLuna((int) $date['luna'], (int) $date['anul']);
+        $perioada = sprintf('%02d_%d', $raport['luna'], $raport['anul']);
+
+        Jurnal::scrie(
+            'vector_raport_lunar',
+            sprintf(
+                'A extras vectorul fiscal al lunii %02d/%d (%s): %d entități',
+                $raport['luna'],
+                $raport['anul'],
+                $date['format'],
+                count($raport['randuri'])
+            ),
+            ['luna' => $raport['luna'], 'anul' => $raport['anul'], 'format' => $date['format']]
+        );
+
+        if ($date['format'] === 'excel') {
+            return Excel::download(new VectorLunarExport($raport), 'vector_fiscal_' . $perioada . '.xlsx');
+        }
+
+        return SnappyPdf::loadView('spv.vector-lunar', [
+            'raport' => $raport,
+            'sigla' => $this->sigla(),
+        ])
+            ->setPaper('a4')
+            ->setOrientation('landscape')
+            ->setOption('margin-top', 8)
+            ->setOption('margin-bottom', 10)
+            ->setOption('margin-left', 8)
+            ->setOption('margin-right', 8)
+            ->setOption('footer-font-size', '7')
+            ->setOption('footer-right', 'Pag. [page] / [topage]')
+            ->download('vector_fiscal_' . $perioada . '.pdf');
+    }
+
+    /**
+     * Declaratiile asteptate pe CUI-uri: cele deduse de aplicatie si cele
+     * scrise de om, cu periodicitatea si valabilitatea fiecareia.
+     *
+     * Cu „deduce", deductia se face pe loc, pentru luna curenta: fereastra de
+     * actualizare are astfel ce arata si inainte de primul raport descarcat —
+     * altfel tabelul ar fi gol pana intocmeste cineva un raport.
+     */
+    public function declaratii(Request $request, RaportVectorLunar $serviciu)
+    {
+        if ($request->boolean('deduce')) {
+            try {
+                $serviciu->pentruLuna((int) now()->format('n'), (int) now()->format('Y'));
+            } catch (\Exception $e) {
+                // Deductia e un ajutor, nu o conditie: lista se arata si fara ea.
+            }
+        }
+
+        $query = VectorDeclaratie::query()->orderBy('cui')->orderBy('tip')->orderBy('data_inceput');
+
+        if ($request->filled('cui')) {
+            $query->where('cui', $request->query('cui'));
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $query->get()->map(function (VectorDeclaratie $rand) {
+                return [
+                    'id' => $rand->id,
+                    'cui' => $rand->cui,
+                    'tip' => $rand->tip,
+                    'perfisc' => $rand->perfisc,
+                    'data_inceput' => $rand->data_inceput ? $rand->data_inceput->format('Y-m-d') : null,
+                    'data_sfarsit' => $rand->data_sfarsit ? $rand->data_sfarsit->format('Y-m-d') : null,
+                    'sursa' => $rand->sursa,
+                    'obligatii' => $rand->obligatii,
+                ];
+            }),
+            'periodicitati' => VectorDeclaratie::PERIODICITATI,
+        ]);
+    }
+
+    /** Omul adauga o declaratie pe un CUI: Bilant semestrial, de pilda. */
+    public function adaugaDeclaratie(Request $request)
+    {
+        $date = $request->validate([
+            'cui' => 'required|string|max:20',
+            'tip' => 'required|string|max:20',
+            'perfisc' => 'required|in:' . implode(',', VectorDeclaratie::PERIODICITATI),
+            'data_inceput' => 'nullable|date',
+            'data_sfarsit' => 'nullable|date|after_or_equal:data_inceput',
+        ]);
+
+        $declaratie = VectorDeclaratie::create(array_merge($date, [
+            'tip' => strtoupper(trim($date['tip'])),
+            'sursa' => 'manuala',
+        ]));
+
+        Jurnal::scrie(
+            'vector_modificare',
+            sprintf('A adăugat în vector %s %s pentru %s', $declaratie->tip, $declaratie->perfisc, $declaratie->cui),
+            $date,
+            $declaratie->cui
+        );
+
+        return response()->json(['success' => true, 'data' => $declaratie]);
+    }
+
+    /** Se pot indrepta periodicitatea si valabilitatea, nu firma sau tipul. */
+    public function modificaDeclaratie(Request $request, VectorDeclaratie $declaratie)
+    {
+        $date = $request->validate([
+            'perfisc' => 'required|in:' . implode(',', VectorDeclaratie::PERIODICITATI),
+            'data_inceput' => 'nullable|date',
+            'data_sfarsit' => 'nullable|date|after_or_equal:data_inceput',
+        ]);
+
+        /*
+         * Un rand dedus indreptat de om devine manual: altfel urmatoarea
+         * intocmire a raportului i-ar scrie deductia la loc peste indreptare.
+         */
+        $declaratie->update(array_merge($date, ['sursa' => 'manuala']));
+
+        Jurnal::scrie(
+            'vector_modificare',
+            sprintf('A modificat în vector %s pentru %s', $declaratie->tip, $declaratie->cui),
+            $date,
+            $declaratie->cui
+        );
+
+        return response()->json(['success' => true, 'data' => $declaratie->fresh()]);
+    }
+
+    public function stergeDeclaratie(VectorDeclaratie $declaratie)
+    {
+        Jurnal::scrie(
+            'vector_stergere',
+            sprintf('A șters din vector %s pentru %s', $declaratie->tip, $declaratie->cui),
+            [],
+            $declaratie->cui
+        );
+
+        $declaratie->delete();
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Sigla SPV Curier, pusa in pagina ca SVG, nu ca legatura: wkhtmltopdf
+     * citeste pagina in afara aplicatiei si nu ar putea cere fisierul.
+     */
+    protected function sigla(): string
+    {
+        $cale = public_path('images/sigle/spv-curier-orizontal.svg');
+
+        return is_file($cale) ? (string) file_get_contents($cale) : '';
     }
 
     /** O declaratie trimestriala se depune in lunile 1,4,7,10 etc. */

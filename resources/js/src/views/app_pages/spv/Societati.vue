@@ -36,10 +36,26 @@
             Solicită datele lipsă din SPV
           </b-button>
         </b-col>
-        <b-col
-          md="6"
-          class="d-flex align-items-center"
-        >
+        <b-col md="6">
+          <!-- Situația unei luni: ce declarații reies din vectorul fiscal al
+               fiecărei entități și ce s-a depus pentru ele. -->
+          <b-button
+            variant="outline-primary"
+            class="mr-1"
+            @click="deschideVector"
+          >
+            <feather-icon
+              icon="FileTextIcon"
+              size="14"
+              class="mr-50"
+            />
+            Raport depunere declarații
+          </b-button>
+        </b-col>
+      </b-row>
+
+      <b-row class="mb-2">
+        <b-col class="d-flex align-items-center">
           <!-- Implicit se arata doar cele in lucru: ele sunt firmele clientului.
                Cele scoase din uz si cele fara drepturi se cer anume. -->
           <b-form-checkbox
@@ -227,12 +243,43 @@
         </template>
 
         <template #cell(actiuni)="rand">
+          <!-- Doar pictograme: numele și explicația stau în tooltip -->
           <b-button
             size="sm"
             variant="outline-primary"
+            class="mr-50"
+            title="Redenumește — schimbă denumirea entității. Denumirea scrisă de mână are prioritate față de cea preluată din documentele SPV."
             @click="editeaza(rand.item)"
           >
-            Redenumește
+            <feather-icon
+              icon="Edit2Icon"
+              size="14"
+            />
+          </b-button>
+          <!-- Obligațiile în vigoare, așa cum le-a scris ANAF în vectorul fiscal -->
+          <b-button
+            size="sm"
+            variant="outline-primary"
+            class="mr-50"
+            title="Vector fiscal — taxele în vigoare ale entității, așa cum le-a scris ANAF: cod, periodicitate și data intrării în vigoare. Doar de citit."
+            @click="deschideVectorFiscal(rand.item)"
+          >
+            <feather-icon
+              icon="FileTextIcon"
+              size="14"
+            />
+          </b-button>
+          <!-- Declarațiile așteptate ale acestei entități: deduse + scrise de om -->
+          <b-button
+            size="sm"
+            variant="outline-primary"
+            title="Actualizare frecvență declarații — declarațiile așteptate de la entitate: cele deduse din vectorul fiscal și din istoricul depunerilor, plus cele adăugate de dvs. Se pot adăuga, modifica și șterge — ele intră în raportul de depunere."
+            @click="deschideActualizare(rand.item)"
+          >
+            <feather-icon
+              icon="CalendarIcon"
+              size="14"
+            />
           </b-button>
         </template>
       </b-table>
@@ -243,6 +290,322 @@
         :total="societatiFiltrate.length"
       />
     </b-card>
+
+    <!--
+      Vectorul fiscal al unei luni: se alege luna raportată și forma dorită,
+      iar fișierul vine gata întocmit — PDF pe hârtia cunoscută sau Excel cu
+      aceleași rânduri și coloane.
+    -->
+    <b-modal
+      v-model="vectorVizibil"
+      title="Raport depunere declarații"
+      modal-class="modul-spv"
+      :ok-title="vectorInCurs ? 'Se întocmește...' : 'Descarcă'"
+      cancel-title="Renunță"
+      :ok-disabled="vectorInCurs"
+      @ok.prevent="descarcaVector"
+    >
+      <p class="text-muted small">
+        Din vectorul fiscal al fiecărei entități se deduc declarațiile lunii alese.
+        Pentru cele depuse se arată indexul recipisei cu data și ora depunerii;
+        pentru celelalte, periodicitatea obligației și atenționare dacă depunerea
+        era datorată chiar în luna aleasă.
+      </p>
+
+      <b-form-group label="Luna raportată">
+        <b-row>
+          <b-col cols="7">
+            <b-form-select
+              v-model="vector.luna"
+              :options="lunileAnului"
+            />
+          </b-col>
+          <b-col cols="5">
+            <b-form-select
+              v-model="vector.anul"
+              :options="aniiDeAles"
+            />
+          </b-col>
+        </b-row>
+      </b-form-group>
+
+      <b-form-group label="Formatul dorit">
+        <b-form-radio-group
+          v-model="vector.format"
+          :options="[
+            { value: 'pdf', text: 'PDF' },
+            { value: 'excel', text: 'Excel' },
+          ]"
+        />
+      </b-form-group>
+
+      <b-alert
+        v-if="vectorEroare"
+        show
+        variant="danger"
+        class="py-1 px-2 mb-0"
+      >
+        {{ vectorEroare }}
+      </b-alert>
+    </b-modal>
+
+    <!--
+      Vectorul fiscal, așa cum l-a scris ANAF: obligațiile (taxele) în vigoare
+      ale entității, cu periodicitatea și data intrării în vigoare. Aici nu se
+      modifică nimic — e ce spune ANAF; ce așteaptă aplicația se îndreaptă din
+      „Actualizare frecvență declarații".
+    -->
+    <b-modal
+      v-model="vfVizibil"
+      :title="`Vector fiscal — ${etichetaEntitate(vfCui)}`"
+      modal-class="modul-spv"
+      size="lg"
+      ok-only
+      ok-title="Închide"
+    >
+      <b-alert
+        v-if="vfEroare"
+        show
+        variant="danger"
+        class="py-1 px-2"
+      >
+        {{ vfEroare }}
+      </b-alert>
+
+      <b-form-checkbox
+        v-model="vfArataIstoricul"
+        class="mb-1"
+      >
+        Arată și obligațiile încheiate
+      </b-form-checkbox>
+
+      <b-table
+        :items="vfRanduriFiltrate"
+        :fields="[
+          { key: 'cod_imp', label: 'Cod' },
+          { key: 'semnificatie', label: 'Taxa' },
+          { key: 'perfisc', label: 'Periodicitate' },
+          { key: 'data_inceput', label: 'În vigoare de la' },
+          { key: 'data_sfarsit', label: 'Până la' },
+        ]"
+        :busy="vfInCurs"
+        responsive
+        striped
+        small
+        show-empty
+        empty-text="Vectorul fiscal nu a fost încă preluat din SPV — apăsați „Solicită datele lipsă din SPV”."
+      >
+        <template #table-busy>
+          <div class="text-center my-2">
+            <b-spinner class="align-middle mr-1" />
+            Se încarcă...
+          </div>
+        </template>
+
+        <template #cell(data_sfarsit)="rand">
+          <span v-if="rand.item.data_sfarsit">{{ rand.item.data_sfarsit }}</span>
+          <b-badge
+            v-else
+            variant="light-primary"
+          >
+            în vigoare
+          </b-badge>
+        </template>
+      </b-table>
+
+      <p
+        v-if="vfDataVector"
+        class="small text-muted mb-0"
+      >
+        Vector fiscal extras din SPV la {{ vfDataVector }}.
+      </p>
+    </b-modal>
+
+    <!--
+      Actualizarea frecvenței declarațiilor: cele așteptate pe fiecare CUI.
+
+      Rândurile „dedusă" le scrie aplicația din vectorul SPV și din istoricul
+      depunerilor, la fiecare întocmire a raportului lunar. Omul adaugă aici ce
+      nu se poate deduce — Bilanț semestrial, de pildă — cu periodicitatea și
+      valabilitatea lui; pe același tip, rândul manual bate deducția.
+    -->
+    <b-modal
+      v-model="actualizareVizibila"
+      :title="`Actualizare frecvență declarații — ${actualizareDenumire}`"
+      modal-class="modul-spv"
+      size="xl"
+      ok-only
+      ok-title="Închide"
+    >
+      <!-- Adăugarea: tipul, periodicitatea și valabilitatea. Entitatea e cea
+           de pe rândul al cărei buton a deschis fereastra. -->
+      <b-row class="mb-1 align-items-end">
+        <b-col md="3">
+          <label class="small mb-0">Tip declarație</label>
+          <b-form-input
+            v-model="noua.tip"
+            size="sm"
+            list="tipuri-declaratii"
+            placeholder="D300, BILANT..."
+          />
+          <datalist id="tipuri-declaratii">
+            <option
+              v-for="tip in tipuriCunoscute"
+              :key="tip"
+            >{{ tip }}</option>
+          </datalist>
+        </b-col>
+        <b-col md="3">
+          <label class="small mb-0">Periodicitate</label>
+          <b-form-select
+            v-model="noua.perfisc"
+            :options="periodicitati"
+            size="sm"
+          />
+        </b-col>
+        <b-col md="2">
+          <label class="small mb-0">Valabilă de la</label>
+          <b-form-input
+            v-model="noua.data_inceput"
+            type="date"
+            size="sm"
+          />
+        </b-col>
+        <b-col md="2">
+          <label class="small mb-0">până la</label>
+          <b-form-input
+            v-model="noua.data_sfarsit"
+            type="date"
+            size="sm"
+          />
+        </b-col>
+        <b-col md="2">
+          <b-button
+            variant="primary"
+            size="sm"
+            block
+            :disabled="!noua.tip || actualizareInCurs"
+            @click="adaugaDeclaratie"
+          >
+            Adaugă
+          </b-button>
+        </b-col>
+      </b-row>
+
+      <b-alert
+        v-if="actualizareEroare"
+        show
+        variant="danger"
+        class="py-1 px-2"
+      >
+        {{ actualizareEroare }}
+      </b-alert>
+
+      <b-table
+        :items="declaratiiFiltrate"
+        :fields="campuriDeclaratii"
+        :busy="actualizareInCurs"
+        responsive
+        striped
+        small
+        show-empty
+        empty-text="Nicio declarație — se completează la prima întocmire a raportului lunar sau manual, de mai sus."
+      >
+        <template #table-busy>
+          <div class="text-center my-2">
+            <b-spinner class="align-middle mr-1" />
+            Se încarcă...
+          </div>
+        </template>
+
+        <!-- Rândul în lucru își arată câmpurile de scris chiar în tabel:
+             și cele deduse se pot îndrepta — îndreptate, devin manuale,
+             ca următoarea deducție să nu le rescrie. -->
+        <template #cell(perfisc)="rand">
+          <b-form-select
+            v-if="editataId === rand.item.id"
+            v-model="editata.perfisc"
+            :options="periodicitati"
+            size="sm"
+          />
+          <span v-else>{{ rand.item.perfisc }}</span>
+        </template>
+
+        <template #cell(valabilitate)="rand">
+          <div
+            v-if="editataId === rand.item.id"
+            class="d-flex"
+          >
+            <b-form-input
+              v-model="editata.data_inceput"
+              type="date"
+              size="sm"
+              class="mr-50"
+            />
+            <b-form-input
+              v-model="editata.data_sfarsit"
+              type="date"
+              size="sm"
+            />
+          </div>
+          <span v-else>
+            {{ rand.item.data_inceput || '...' }} → {{ rand.item.data_sfarsit || 'în vigoare' }}
+          </span>
+        </template>
+
+        <template #cell(sursa)="rand">
+          <b-badge :variant="rand.item.sursa === 'manuala' ? 'primary' : 'light-primary'">
+            {{ rand.item.sursa === 'manuala' ? 'manuală' : 'dedusă' }}
+          </b-badge>
+          <div
+            v-if="rand.item.obligatii"
+            class="small text-muted"
+          >
+            {{ rand.item.obligatii }}
+          </div>
+        </template>
+
+        <template #cell(actiuni)="rand">
+          <template v-if="editataId === rand.item.id">
+            <b-button
+              size="sm"
+              variant="primary"
+              class="mr-50"
+              :disabled="actualizareInCurs"
+              @click="salveazaModificarea"
+            >
+              Salvează
+            </b-button>
+            <b-button
+              size="sm"
+              variant="outline-secondary"
+              @click="editataId = null"
+            >
+              Renunță
+            </b-button>
+          </template>
+          <template v-else>
+            <b-button
+              size="sm"
+              variant="outline-primary"
+              class="mr-50"
+              :disabled="actualizareInCurs"
+              @click="incepeModificarea(rand.item)"
+            >
+              Modifică
+            </b-button>
+            <b-button
+              size="sm"
+              variant="outline-danger"
+              :disabled="actualizareInCurs"
+              @click="stergeDeclaratie(rand.item)"
+            >
+              Șterge
+            </b-button>
+          </template>
+        </template>
+      </b-table>
+    </b-modal>
 
     <b-modal
       v-model="formularVizibil"
@@ -297,6 +660,53 @@ export default {
       RUNDE_MAXIME: 40,
       formularVizibil: false,
       formular: {},
+      vectorVizibil: false,
+      vectorInCurs: false,
+      vectorEroare: '',
+      /*
+       * Luna raportată implicit e cea trecută: pe cea în curs abia se depune,
+       * deci raportul ei ar fi mai mereu plin de „nedepusă" fără vină.
+       */
+      vector: {
+        luna: 0,
+        anul: 0,
+        format: 'pdf',
+      },
+      // Tabelul declaratiilor asteptate pe CUI: deduse + scrise de om
+      actualizareVizibila: false,
+      actualizareInCurs: false,
+      actualizareEroare: '',
+      declaratii: [],
+      // Randul din tabel aflat in lucru si valorile lui de scris
+      editataId: null,
+      editata: {
+        perfisc: 'Lunar', data_inceput: '', data_sfarsit: '',
+      },
+      // Entitatea al carei buton a deschis fereastra de actualizare
+      actualizareCui: '',
+      // Vectorul fiscal ANAF al unei entitati: obligatiile ei, doar de citit
+      vfVizibil: false,
+      vfInCurs: false,
+      vfEroare: '',
+      vfCui: '',
+      vfRanduri: [],
+      vfArataIstoricul: false,
+      noua: {
+        tip: '', perfisc: 'Lunar', data_inceput: '', data_sfarsit: '',
+      },
+      periodicitati: ['Lunar', 'Trimestrial', 'Semestrial', 'Anual'],
+      // Sugestii pentru campul de tip; se poate scrie si altceva
+      tipuriCunoscute: [
+        'D100', 'D101', 'D112', 'D205', 'D212', 'D300', 'D301', 'D307', 'D311',
+        'D390', 'D394', 'D406', 'BILANT',
+      ],
+      campuriDeclaratii: [
+        { key: 'tip', label: 'Tip' },
+        { key: 'perfisc', label: 'Periodicitate' },
+        { key: 'valabilitate', label: 'Valabilitate' },
+        { key: 'sursa', label: 'Sursa' },
+        { key: 'actiuni', label: '' },
+      ],
       campuri: [
         { key: 'cif', label: 'CIF' },
         { key: 'denumire', label: 'Denumire' },
@@ -309,6 +719,36 @@ export default {
     }
   },
   computed: {
+    /** Fereastra e legată de entitatea de pe rândul al cărei buton a deschis-o. */
+    declaratiiFiltrate() {
+      return this.declaratii.filter(d => d.cui === this.actualizareCui)
+    },
+    actualizareDenumire() {
+      return this.etichetaEntitate(this.actualizareCui)
+    },
+    /** Implicit doar obligațiile în vigoare; istoricul se cere anume. */
+    vfRanduriFiltrate() {
+      if (this.vfArataIstoricul) return this.vfRanduri
+
+      return this.vfRanduri.filter(r => !r.data_sfarsit)
+    },
+    vfDataVector() {
+      const cuData = this.vfRanduri.find(r => r.data_vector)
+
+      return cuData ? cuData.data_vector : ''
+    },
+    lunileAnului() {
+      return [
+        'ianuarie', 'februarie', 'martie', 'aprilie', 'mai', 'iunie',
+        'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie', 'decembrie',
+      ].map((nume, index) => ({ value: index + 1, text: nume }))
+    },
+    /** Anii de ales: de la anul viitor înapoi, cât ține istoricul rezonabil. */
+    aniiDeAles() {
+      const anulAcesta = new Date().getFullYear()
+
+      return Array.from({ length: 7 }, (v, i) => anulAcesta + 1 - i)
+    },
     /** Entitățile care trec de filtrele scrise pe coloane. */
     societatiFiltrate() {
       const contine = (valoare, cautat) => String(valoare || '')
@@ -583,6 +1023,198 @@ export default {
       }
 
       return runda(0)
+    },
+    etichetaEntitate(cui) {
+      const gasita = this.societati.find(s => s.cif === cui)
+
+      return gasita ? `${gasita.denumire || 'fără denumire'} (${gasita.cif})` : cui
+    },
+    /** Vectorul fiscal ANAF al entității: obligațiile ei, doar de citit. */
+    deschideVectorFiscal(societate) {
+      this.vfCui = societate.cif
+      this.vfEroare = ''
+      this.vfRanduri = []
+      this.vfArataIstoricul = false
+      this.vfVizibil = true
+      this.vfInCurs = true
+
+      this.$http.get('/vector-fiscal/spv', { params: { cui: societate.cif } })
+        .then(raspuns => {
+          this.vfRanduri = raspuns.data.data || []
+        })
+        .catch(err => {
+          this.vfEroare = this.mesajEroare(err, 'Vectorul fiscal nu a putut fi încărcat')
+        })
+        .finally(() => {
+          this.vfInCurs = false
+        })
+    },
+    deschideActualizare(societate) {
+      this.actualizareCui = societate.cif
+      this.actualizareEroare = ''
+      this.noua = {
+        tip: '', perfisc: 'Lunar', data_inceput: '', data_sfarsit: '',
+      }
+      this.actualizareVizibila = true
+      // La deschidere, deducția se face pe loc: tabelul are ce arăta și
+      // înainte de primul raport descărcat.
+      this.incarcaDeclaratii(true)
+    },
+    incarcaDeclaratii(deduce) {
+      this.actualizareInCurs = true
+
+      // Filtrarea pe entitate se face pe lista deja adusă; se cere tot.
+      return this.$http.get('/vector-fiscal/declaratii', { params: deduce ? { deduce: 1 } : {} })
+        .then(raspuns => {
+          this.declaratii = raspuns.data.data || []
+        })
+        .catch(err => {
+          this.actualizareEroare = this.mesajEroare(err, 'Declarațiile nu au putut fi încărcate')
+        })
+        .finally(() => {
+          this.actualizareInCurs = false
+        })
+    },
+    adaugaDeclaratie() {
+      this.actualizareEroare = ''
+      this.actualizareInCurs = true
+
+      const date = {
+        cui: this.actualizareCui,
+        tip: this.noua.tip,
+        perfisc: this.noua.perfisc,
+        data_inceput: this.noua.data_inceput || null,
+        data_sfarsit: this.noua.data_sfarsit || null,
+      }
+
+      this.$http.post('/vector-fiscal/declaratii', date)
+        .then(() => {
+          // Firma rămâne aleasă: de obicei se adaugă mai multe tipuri la rând.
+          this.noua.tip = ''
+          this.noua.data_inceput = ''
+          this.noua.data_sfarsit = ''
+
+          return this.incarcaDeclaratii()
+        })
+        .catch(err => {
+          this.actualizareEroare = this.mesajEroare(err, 'Declarația nu a putut fi adăugată')
+          this.actualizareInCurs = false
+        })
+    },
+    incepeModificarea(declaratie) {
+      this.actualizareEroare = ''
+      this.editataId = declaratie.id
+      this.editata = {
+        perfisc: declaratie.perfisc,
+        data_inceput: declaratie.data_inceput || '',
+        data_sfarsit: declaratie.data_sfarsit || '',
+      }
+    },
+    /**
+     * Salvează îndreptarea — și pe rândurile deduse.
+     *
+     * Serverul le trece atunci la „manuală": altfel următoarea întocmire a
+     * raportului ar scrie deducția la loc peste ce a îndreptat omul.
+     */
+    salveazaModificarea() {
+      this.actualizareEroare = ''
+      this.actualizareInCurs = true
+
+      const date = {
+        perfisc: this.editata.perfisc,
+        data_inceput: this.editata.data_inceput || null,
+        data_sfarsit: this.editata.data_sfarsit || null,
+      }
+
+      this.$http.put(`/vector-fiscal/declaratii/${this.editataId}`, date)
+        .then(() => {
+          this.editataId = null
+
+          return this.incarcaDeclaratii()
+        })
+        .catch(err => {
+          this.actualizareEroare = this.mesajEroare(err, 'Modificarea nu a putut fi salvată')
+          this.actualizareInCurs = false
+        })
+    },
+    stergeDeclaratie(declaratie) {
+      this.actualizareEroare = ''
+      this.actualizareInCurs = true
+
+      this.$http.delete(`/vector-fiscal/declaratii/${declaratie.id}`)
+        .then(() => this.incarcaDeclaratii())
+        .catch(err => {
+          this.actualizareEroare = this.mesajEroare(err, 'Declarația nu a putut fi ștearsă')
+          this.actualizareInCurs = false
+        })
+    },
+    deschideVector() {
+      // Luna trecută, propusă de fiecare dată: cea aleasă rândul trecut poate
+      // fi departe în urmă, iar omul vine de obicei pentru luna abia încheiată.
+      const lunaTrecuta = new Date()
+      lunaTrecuta.setDate(1)
+      lunaTrecuta.setMonth(lunaTrecuta.getMonth() - 1)
+
+      this.vector.luna = lunaTrecuta.getMonth() + 1
+      this.vector.anul = lunaTrecuta.getFullYear()
+      this.vectorEroare = ''
+      this.vectorVizibil = true
+    },
+    /**
+     * Descarcă vectorul fiscal al lunii alese, în forma aleasă.
+     *
+     * Fișierul vine ca blob, nu printr-un link direct: ruta cere tokenul, iar
+     * un `window.open` nu-l poartă cu el.
+     */
+    descarcaVector() {
+      this.vectorEroare = ''
+      this.vectorInCurs = true
+
+      const params = { luna: this.vector.luna, anul: this.vector.anul, format: this.vector.format }
+
+      this.$http.get('/vector-fiscal/lunar', { params, responseType: 'blob' })
+        .then(raspuns => {
+          const url = window.URL.createObjectURL(new Blob([raspuns.data]))
+          const legatura = document.createElement('a')
+          const extensie = this.vector.format === 'excel' ? 'xlsx' : 'pdf'
+          const luna = String(this.vector.luna).padStart(2, '0')
+
+          legatura.href = url
+          legatura.download = `vector_fiscal_${luna}_${this.vector.anul}.${extensie}`
+          document.body.appendChild(legatura)
+          legatura.click()
+          document.body.removeChild(legatura)
+
+          setTimeout(() => window.URL.revokeObjectURL(url), 60000)
+
+          this.vectorVizibil = false
+        })
+        .catch(err => this.aratEroareVector(err))
+        .finally(() => {
+          this.vectorInCurs = false
+        })
+    },
+    /**
+     * Eroarea vine tot ca blob (răspunsul a fost cerut așa) — se citește din
+     * el mesajul serverului, ca omul să afle de ce n-a primit fișierul.
+     */
+    aratEroareVector(err) {
+      const implicit = 'Raportul nu a putut fi întocmit.'
+
+      if (!(err.response && err.response.data instanceof Blob)) {
+        this.vectorEroare = this.mesajEroare(err, implicit)
+
+        return
+      }
+
+      err.response.data.text()
+        .then(text => {
+          const date = JSON.parse(text)
+          this.vectorEroare = date.message || implicit
+        })
+        .catch(() => {
+          this.vectorEroare = implicit
+        })
     },
     editeaza(societate) {
       this.formular = { ...societate }

@@ -49,6 +49,7 @@ class AnafJurnal extends Model
         'certificat_utilizator_detasare' => 'Eliminare utilizator de la certificat',
         'vector_modificare' => 'Modificare vector fiscal',
         'vector_stergere' => 'Ștergere din vectorul fiscal',
+        'vector_raport_lunar' => 'Extragere vector fiscal lunar',
     ];
 
     public function user()

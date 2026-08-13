@@ -196,6 +196,12 @@ Route::middleware(['auth:api', 'companie.anaf', 'modul:spv'])->group(function ()
     Route::post('/vector-fiscal', 'Api\VectorFiscalController@store');
     Route::get('/vector-fiscal/spv', 'Api\VectorFiscalController@spv');
     Route::get('/vector-fiscal/situatie', 'Api\VectorFiscalController@situatie');
+    Route::get('/vector-fiscal/lunar', 'Api\VectorFiscalController@lunar');
+    // Declaratiile asteptate pe CUI: deduse de aplicatie + adaugate de om
+    Route::get('/vector-fiscal/declaratii', 'Api\VectorFiscalController@declaratii');
+    Route::post('/vector-fiscal/declaratii', 'Api\VectorFiscalController@adaugaDeclaratie');
+    Route::put('/vector-fiscal/declaratii/{declaratie}', 'Api\VectorFiscalController@modificaDeclaratie');
+    Route::delete('/vector-fiscal/declaratii/{declaratie}', 'Api\VectorFiscalController@stergeDeclaratie');
     Route::put('/vector-fiscal/{vector}', 'Api\VectorFiscalController@update');
     Route::delete('/vector-fiscal/{vector}', 'Api\VectorFiscalController@destroy');
 });
