@@ -210,6 +210,16 @@
           >
             Abonament
           </b-button>
+          <!-- Periodicitățile declarațiilor, aduse din programul vechi al clientului -->
+          <b-button
+            size="sm"
+            variant="outline-primary"
+            class="mb-50"
+            title="Importă periodicitățile declarațiilor din vector.mde (programul vechi al clientului)"
+            @click="deschideImportVector(rand.item)"
+          >
+            Import vector
+          </b-button>
           <b-button
             size="sm"
             variant="flat-secondary"
@@ -222,6 +232,66 @@
         </template>
       </b-table>
     </b-card>
+
+    <!--
+      Importul vectorului din programul vechi: fisierul vector.mde al
+      clientului, cu tabelul vectormf — cate un rand pe firma, cate o coloana
+      pe declaratie, periodicitatea in ea. Randurile intra ca „manuale" si au
+      intaietate in raportul de depunere.
+    -->
+    <b-modal
+      v-model="importVectorVizibil"
+      :title="`Import vector — ${importVectorClient ? importVectorClient.denumire : ''}`"
+      :ok-title="importVectorInCurs ? 'Se importă...' : 'Importă'"
+      cancel-title="Renunță"
+      :ok-disabled="!importVectorFisier || importVectorInCurs"
+      @ok.prevent="importaVector"
+    >
+      <p class="text-muted small">
+        Alegeți fișierul <strong>vector.mde</strong> din programul vechi al clientului
+        (sau tabelul <code>vectormf</code> exportat ca CSV). Periodicitățile intră ca
+        rânduri „manuale" pe fiecare CUI și au întâietate în raportul de depunere.
+        Reimportul nu dublează nimic.
+      </p>
+
+      <b-form-file
+        v-model="importVectorFisier"
+        accept=".mde,.mdb,.accdb,.csv"
+        placeholder="Alegeți fișierul..."
+        browse-text="Răsfoiește"
+      />
+
+      <b-alert
+        v-if="importVectorEroare"
+        show
+        variant="danger"
+        class="py-1 px-2 mt-1 mb-0"
+      >
+        {{ importVectorEroare }}
+      </b-alert>
+
+      <b-alert
+        v-if="importVectorRezultat"
+        show
+        variant="success"
+        class="py-1 px-2 mt-1 mb-0"
+      >
+        {{ importVectorRezultat.firme }} firme citite,
+        {{ importVectorRezultat.scrise }} periodicități scrise.
+        <div
+          v-if="importVectorRezultat.sarite.length"
+          class="small mt-50"
+        >
+          Coloane fără nume de declarație, sărite (de adăugat manual dacă contează):
+          <ul class="mb-0 pl-1">
+            <li
+              v-for="sarita in importVectorRezultat.sarite"
+              :key="sarita"
+            >{{ sarita }}</li>
+          </ul>
+        </div>
+      </b-alert>
+    </b-modal>
 
     <!-- Client nou, cu primul lui cont de administrator -->
     <b-modal
@@ -736,6 +806,14 @@ export default {
       clientVizibil: false,
       clientNou: {},
 
+      // Importul vectorului din programul vechi (vector.mde)
+      importVectorVizibil: false,
+      importVectorInCurs: false,
+      importVectorClient: null,
+      importVectorFisier: null,
+      importVectorEroare: '',
+      importVectorRezultat: null,
+
       utilizatorVizibil: false,
       utilizator: {},
       clientCurent: {},
@@ -929,6 +1007,41 @@ export default {
             this.eroare = this.mesajEroare(err, 'Deconectarea a eșuat')
           })
       })
+    },
+    deschideImportVector(client) {
+      this.importVectorClient = client
+      this.importVectorFisier = null
+      this.importVectorEroare = ''
+      this.importVectorRezultat = null
+      this.importVectorVizibil = true
+    },
+    /**
+     * Trimite fișierul vector.mde și scrie periodicitățile pe clientul ales.
+     *
+     * Fereastra rămâne deschisă după import, ca rezultatul — și mai ales
+     * coloanele sărite — să poată fi citite pe îndelete.
+     */
+    importaVector() {
+      this.importVectorEroare = ''
+      this.importVectorRezultat = null
+      this.importVectorInCurs = true
+
+      const date = new FormData()
+      date.append('fisier', this.importVectorFisier)
+
+      this.$http.post(`/administrare/clienti/${this.importVectorClient.id}/import-vector`, date)
+        .then(raspuns => {
+          this.importVectorRezultat = raspuns.data.data
+          this.importVectorFisier = null
+        })
+        .catch(err => {
+          this.importVectorEroare = err.response && err.response.data && err.response.data.message
+            ? err.response.data.message
+            : 'Importul a eșuat.'
+        })
+        .finally(() => {
+          this.importVectorInCurs = false
+        })
     },
     deschideAbonament(client) {
       this.eroareFormular = ''

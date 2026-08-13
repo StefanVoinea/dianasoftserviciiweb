@@ -50,6 +50,7 @@ class AnafJurnal extends Model
         'vector_modificare' => 'Modificare vector fiscal',
         'vector_stergere' => 'Ștergere din vectorul fiscal',
         'vector_raport_lunar' => 'Extragere vector fiscal lunar',
+        'vector_import' => 'Import vector din programul vechi',
     ];
 
     public function user()

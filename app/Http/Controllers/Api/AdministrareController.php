@@ -10,7 +10,9 @@ use App\Models\User;
 use App\Support\Modul;
 use App\Services\AccesIp;
 use App\Services\Anaf\Format;
+use App\Services\Anaf\ImportVectorMf;
 use App\Services\Anaf\Jurnal;
+use App\Services\Anaf\VectorMde;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -122,6 +124,61 @@ class AdministrareController extends Controller
     }
 
     /** Cont nou in firma unui client. */
+    /**
+     * Importa periodicitatile declaratiilor din programul vechi al clientului.
+     *
+     * Se primeste chiar fisierul vector.mde (sau CSV-ul tabelului vectormf,
+     * pentru serverele care nu pot citi Access). Randurile intra in
+     * vector_declaratii ca "manuala" — cuvantul omului, care bate deductia —
+     * si tin de clientul de pe randul apasat, nu de vreun context.
+     */
+    public function importaVector(Request $request, Company $client, VectorMde $mde, ImportVectorMf $import)
+    {
+        $request->validate([
+            'fisier' => 'required|file|max:51200',
+        ]);
+
+        $fisier = $request->file('fisier');
+        $extensie = strtolower($fisier->getClientOriginalExtension() ?: 'mde');
+
+        if (!in_array($extensie, ['mde', 'mdb', 'accdb', 'csv'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Se acceptă fișiere Access (.mde, .mdb, .accdb) sau CSV-ul tabelului vectormf.',
+            ], 422);
+        }
+
+        // Fisierul urcat are nume trecator, fara extensie; ea decide drumul.
+        $cale = $fisier->getRealPath() . '.' . $extensie;
+        copy($fisier->getRealPath(), $cale);
+
+        try {
+            $rezultat = $import->importaCsv($mde->inCsv($cale), $client->id);
+        } catch (\Exception $e) {
+            Jurnal::esec(
+                'vector_import',
+                'Importul vectorului pentru „' . $client->denumire . '” a eșuat: ' . $e->getMessage()
+            );
+
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        } finally {
+            @unlink($cale);
+        }
+
+        Jurnal::scrie(
+            'vector_import',
+            sprintf(
+                'A importat vectorul din %s pentru „%s”: %d firme, %d periodicități',
+                $fisier->getClientOriginalName(),
+                $client->denumire,
+                $rezultat['firme'],
+                $rezultat['scrise']
+            )
+        );
+
+        return response()->json(['success' => true, 'data' => $rezultat]);
+    }
+
     public function creeazaUtilizator(Request $request, Company $client)
     {
         $date = $request->validate([
