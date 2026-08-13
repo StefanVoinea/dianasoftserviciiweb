@@ -8,10 +8,16 @@ use Tests\TestCase;
 
 class SpvDescarcareTest extends TestCase
 {
-    /** Expune metodele protejate ale controllerului pentru verificare. */
+    /**
+     * Expune metodele protejate ale controllerului pentru verificare.
+     *
+     * Controlerul isi cere acum serviciul de certificate — el alege cu ce token
+     * se intreaba ANAF. Aici nu se ajunge pana acolo, dar trebuie dat: altfel
+     * proba se opreste inca de la facerea lui.
+     */
     protected function controller()
     {
-        return new class extends SpvController {
+        return new class(app(\App\Services\Anaf\Spv\CertificatService::class)) extends SpvController {
             public function testLipseste(SpvMesaj $mesaj): bool
             {
                 return $this->lipsesteFisierul($mesaj);

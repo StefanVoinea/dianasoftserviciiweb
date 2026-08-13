@@ -745,12 +745,21 @@ export default {
           : `${payload.solicitari_gasite} solicitări găsite, trecute în „Solicitări ANAF”`)
       }
 
-      if (parti.length) return `ANAF a răspuns: ${parti.join(', ')}.`
+      /*
+       * Tokenele care n-au răspuns se spun întotdeauna, chiar când restul a mers
+       * bine: altfel lista pare întreagă, iar mesajele tokenului lipsă par a nu
+       * exista. Cel mai des e doar unul neconectat acum.
+       */
+      const tacute = (payload.tacute || []).length
+        ? ` Nu s-a putut întreba cu: ${payload.tacute.join('; ')}.`
+        : ''
+
+      if (parti.length) return `ANAF a răspuns: ${parti.join(', ')}.${tacute}`
 
       const intoarse = payload.intoarse || 0
 
       return `ANAF a răspuns, dar nu e nimic nou: cele ${intoarse} mesaje din `
-        + `ultimele ${this.zile} zile erau deja aduse.`
+        + `ultimele ${this.zile} zile erau deja aduse.${tacute}`
     },
     rezumatDescarcare(rezultat) {
       if (!rezultat) return ''

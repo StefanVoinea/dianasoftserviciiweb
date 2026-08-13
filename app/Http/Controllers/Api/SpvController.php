@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AnafCertificat;
 use App\Models\SpvMesaj;
+use App\Services\Anaf\Spv\CertificatService;
 use App\Services\Anaf\Spv\SpvClient;
 use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
@@ -11,6 +13,7 @@ use App\Services\Anaf\Spv\SocietatiService;
 use App\Services\Anaf\Spv\SolicitareService;
 use App\Services\Anaf\Spv\SpvException;
 use App\Services\Anaf\Spv\SpvStorage;
+use App\Support\ContextUtilizator;
 use App\Support\Flux;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -27,35 +30,115 @@ class SpvController extends Controller
      */
     protected const CAZUTE_LA_RAND = 10;
 
+    /** @var CertificatService */
+    protected $certificate;
+
+    public function __construct(CertificatService $certificate)
+    {
+        $this->certificate = $certificate;
+    }
+
+    /**
+     * Cu ce tokene se intreaba ANAF de mesaje.
+     *
+     * Cand omul a ales anume un certificat in fila, numai cu acela. Altfel, cu
+     * toate cele in lucru ale clientului — pe un calculator pot fi doua tokene,
+     * iar mesajele lor sunt deopotriva ale lui.
+     *
+     * Un singur „null" inseamna „lasa serviciul sa aleaga” — asa se poarta si
+     * instalarile fara certificate inregistrate, care lucreaza din configurare.
+     *
+     * @return array<int, \App\Models\AnafCertificat|null>
+     */
+    protected function certificateDeIntrebat(Request $request): array
+    {
+        // Aceleasi doua cai pe care le citeste si CertificatService::cerutExplicit.
+        if ($request->filled('certificat_id') || $request->header('X-Certificat-Id')) {
+            return [$this->certificate->activ()];
+        }
+
+        $accesibile = ContextUtilizator::certificateAccesibile();
+
+        $toate = AnafCertificat::where('activ', true)
+            ->when($accesibile !== [], function ($intrebare) use ($accesibile) {
+                return $intrebare->whereIn('id', $accesibile);
+            })
+            ->orderByDesc('implicit')
+            ->get()
+            ->all();
+
+        return $toate ?: [null];
+    }
+
     public function index(Request $request, SpvClient $spvClient, SpvStorage $storage)
     {
         try {
             $cif = $request->query('cif');
             $zile = (int) $request->query('zile', 30);
-            $mesaje = $spvClient->listaMesaje($zile, $cif ?: null);
 
             $salvate = [];
-
             $noi = 0;
+            $titlu = null;
+            $brute = [];
+            $tacute = [];
 
-            if (isset($mesaje['mesaje']) && is_array($mesaje['mesaje'])) {
-                foreach ($mesaje['mesaje'] as $item) {
-                    $mesaj = $storage->saveMessage($item, $cif ?: null);
-
-                    /*
-                     * „Nou" inseamna abia intrat, nu „intors iar de ANAF": lista
-                     * vine cu toata fereastra de zile la fiecare citire.
-                     *
-                     * Se numara doar ce se si arata aici: o recipisa abia venita
-                     * se vede in fila declaratiilor, iar un „un mesaj nou" fara
-                     * niciun rand nou in tabel ar parea o scapare.
-                     */
-                    if ($mesaj->wasRecentlyCreated && $this->filaCareAduce($mesaj) === null) {
-                        $noi++;
-                    }
-
-                    $salvate[] = $mesaj;
+            /*
+             * Se intreaba pe rand cu fiecare token de pe calculatorul clientului.
+             *
+             * Un contabil are des doua: unul al firmei lui si unul al clientului.
+             * Pana acum se intreba numai cu cel implicit, iar mesajele celuilalt
+             * nu veneau niciodata — singurul chip de a le vedea era sa fie
+             * schimbat certificatul implicit inainte de fiecare descarcare.
+             *
+             * La clientii cu un singur certificat nu se schimba nimic: lista are
+             * un rand, ca si pana acum.
+             */
+            foreach ($this->certificateDeIntrebat($request) as $certificat) {
+                if ($certificat !== null) {
+                    $this->certificate->foloseste($certificat);
                 }
+
+                try {
+                    $mesaje = $spvClient->listaMesaje($zile, $cif ?: null);
+                } catch (SpvException $e) {
+                    /*
+                     * Un token nu raspunde — cel mai des fiindca nu e conectat
+                     * acum. Ceilalti nu au de ce sa patimeasca pentru el: se
+                     * tine minte cine a tacut si se merge mai departe.
+                     */
+                    $tacute[] = ($certificat ? $certificat->cn : 'certificatul implicit')
+                        . ': ' . $e->getMessage();
+
+                    continue;
+                }
+
+                $titlu = $titlu ?: ($mesaje['titlu'] ?? null);
+                $brute = array_merge($brute, $mesaje['mesaje'] ?? []);
+
+                if (isset($mesaje['mesaje']) && is_array($mesaje['mesaje'])) {
+                    foreach ($mesaje['mesaje'] as $item) {
+                        $mesaj = $storage->saveMessage($item, $cif ?: null);
+
+                        /*
+                         * „Nou" inseamna abia intrat, nu „intors iar de ANAF": lista
+                         * vine cu toata fereastra de zile la fiecare citire.
+                         *
+                         * Se numara doar ce se si arata aici: o recipisa abia venita
+                         * se vede in fila declaratiilor, iar un „un mesaj nou" fara
+                         * niciun rand nou in tabel ar parea o scapare.
+                         */
+                        if ($mesaj->wasRecentlyCreated && $this->filaCareAduce($mesaj) === null) {
+                            $noi++;
+                        }
+
+                        $salvate[] = $mesaj;
+                    }
+                }
+            }
+
+            // Toate tokenele au tacut: atunci chiar nu s-a putut citi nimic.
+            if ($brute === [] && $tacute !== []) {
+                throw new SpvException(implode(' | ', $tacute));
             }
 
             /*
@@ -65,7 +148,7 @@ class SpvController extends Controller
              * se mai arata aici, altfel n-ar fi de vazut nicaieri.
              */
             $solicitariGasite = app(SolicitareService::class)->inregistreazaCeleGasite(
-                $mesaje['mesaje'] ?? [],
+                $brute,
                 optional($request->user())->id
             );
 
@@ -94,7 +177,10 @@ class SpvController extends Controller
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'titlu' => $mesaje['titlu'] ?? null,
+                    'titlu' => $titlu,
+                    // Tokenele care n-au raspuns: omul trebuie sa stie ca lista
+                    // pe care o vede nu e intreaga, si care token lipseste din ea.
+                    'tacute' => $tacute,
                     // Tabelul arata tot istoricul, nu doar mesajele din interogarea
                     // curenta — "zile" limiteaza doar ce se cere de la ANAF.
                     'mesaje' => $this->istoric($request),
