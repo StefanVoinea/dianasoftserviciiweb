@@ -446,7 +446,15 @@ class DeclaratiiController extends Controller
                 [],
                 $declaratie->cui
             );
+
+            return;
         }
+
+        // Declaratia depusa sta si in dosarul comun „Toate”, cu ale tuturor firmelor.
+        $arhiva->copiazaInToate(
+            $declaratie->arhiva_semnat,
+            ArhivaService::numeDeclaratie($declaratie, 'depusa', 'pdf')
+        );
     }
 
     /**

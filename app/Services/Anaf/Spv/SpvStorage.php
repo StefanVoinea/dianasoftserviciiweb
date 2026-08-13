@@ -225,13 +225,14 @@ class SpvStorage
         }
 
         $extensie = '.' . (pathinfo($cale, PATHINFO_EXTENSION) ?: 'pdf');
+        $nume = ArhivaService::numeDeclaratie($declaratie, 'recipisa', $extensie);
 
         try {
             $copie = $this->arhiva->copiaza(
                 $cale,
                 $this->dosarulFirmei($mesaj, $declaratie),
                 ArhivaService::curata($declaratie->tip) ?: 'Diverse',
-                ArhivaService::numeDeclaratie($declaratie, 'recipisa', $extensie)
+                $nume
             );
         } catch (ArhivaException $e) {
             Jurnal::esec(
@@ -246,6 +247,9 @@ class SpvStorage
         }
 
         $declaratie->update(['arhiva_recipisa' => $copie]);
+
+        // Recipisa sta si in dosarul comun „Toate”, cu ale tuturor firmelor.
+        $this->arhiva->copiazaInToate($copie, $nume);
     }
 
     /**
@@ -258,16 +262,23 @@ class SpvStorage
     protected function destinatiaMesajului(SpvMesaj $mesaj): array
     {
         $tip = $this->tipulDocumentului($mesaj);
+        $declaratie = $this->declaratiaMesajului($mesaj);
+        $denumire = $this->denumireaFirmei($mesaj, $declaratie);
 
         /*
-         * Numele poarta doua date, in ordinea asta:
+         * Numele incepe cu denumirea firmei si poarta apoi doua date:
          *
-         *   <Tip>_<CIF>_<data ANAF>_<data descarcarii>_<numarul mesajului>
+         *   <Firma>_<Tip>_<CIF>_<data ANAF>_<data descarcarii>_<numarul mesajului>
          *
-         * Intai cea de la ANAF, ziua in care documentul a fost intocmit: dupa
-         * ea se cauta, si tot dupa ea se insira dosarul cand e sortat pe nume.
-         * A doua spune cand a intrat documentul in arhiva — nu e acelasi lucru,
-         * fiindca un document poate fi adus si dupa saptamani.
+         * Denumirea sta in nume desi dosarul firmei o poarta deja: documentele
+         * se trimit pe email si se copiaza in alte parti, iar un fisier smuls
+         * din dosarul lui nu mai spune al cui e. Fara denumire stiuta, numele
+         * ramane cum a fost.
+         *
+         * Dintre date, intai cea de la ANAF, ziua in care documentul a fost
+         * intocmit: dupa ea se cauta, si tot dupa ea se insira dosarul cand e
+         * sortat pe nume. A doua spune cand a intrat documentul in arhiva — nu
+         * e acelasi lucru, fiindca un document poate fi adus si dupa saptamani.
          *
          * Mesajele mai vechi, aduse inainte de a fi tinuta minte data de la
          * ANAF, poarta mai departe o singura data: a descarcarii.
@@ -276,9 +287,10 @@ class SpvStorage
         $descarcat = $mesaj->descarcat_la ? Carbon::parse($mesaj->descarcat_la) : now();
 
         return [
-            'firma' => $this->dosarulFirmei($mesaj, $this->declaratiaMesajului($mesaj)),
+            'firma' => ArhivaService::dosarFirma($denumire, $mesaj->cif),
             'dosar' => config('anaf.arhiva.dosar_spv', 'SPV') . '/' . $tip,
             'nume' => ArhivaService::curata(implode('_', array_filter([
+                $denumire,
                 $tip,
                 $mesaj->cif,
                 $creat ? $creat->format('Y-m-d') : null,
@@ -331,12 +343,17 @@ class SpvStorage
      */
     protected function dosarulFirmei(SpvMesaj $mesaj, ?AnafDeclaratie $declaratie): string
     {
+        return ArhivaService::dosarFirma($this->denumireaFirmei($mesaj, $declaratie), $mesaj->cif);
+    }
+
+    /** Denumirea singura, pentru inceputul numelui de fisier; null cand nu se stie. */
+    protected function denumireaFirmei(SpvMesaj $mesaj, ?AnafDeclaratie $declaratie): ?string
+    {
         $societate = $mesaj->cif ? AnafSocietate::where('cif', $mesaj->cif)->first() : null;
 
-        return ArhivaService::dosarFirma(
-            optional($societate)->denumire ?: optional($declaratie)->den_firma,
-            $mesaj->cif
-        );
+        $denumire = trim((string) (optional($societate)->denumire ?: optional($declaratie)->den_firma));
+
+        return $denumire !== '' ? $denumire : null;
     }
 
     /**
@@ -344,7 +361,7 @@ class SpvStorage
      *
      * Locul lui de drept e dosarul SPV al firmei, pe tipuri de document:
      *
-     *     <Firma (CUI)>\SPV\<Tip document>\<Tip>_<CIF>_<data descarcarii>_<id>.pdf
+     *     <Firma (CUI)>\SPV\<Tip document>\<Firma>_<Tip>_<CIF>_<data descarcarii>_<id>.pdf
      *
      * Recipisele primesc pe deasupra si o copie langa declaratia la care
      * raspund, ca sa fie gasite acolo unde le cauta omul — dar raman si in SPV,
@@ -407,12 +424,14 @@ class SpvStorage
         string $firma,
         string $extensie
     ): void {
+        $nume = ArhivaService::numeDeclaratie($declaratie, 'recipisa', $extensie);
+
         try {
             $cale = $this->arhiva->pune(
                 $fisier->continut,
                 $firma,
                 ArhivaService::curata($declaratie->tip) ?: 'Diverse',
-                ArhivaService::numeDeclaratie($declaratie, 'recipisa', $extensie)
+                $nume
             );
         } catch (ArhivaException $e) {
             Jurnal::esec(
@@ -427,6 +446,9 @@ class SpvStorage
         }
 
         $declaratie->update(['arhiva_recipisa' => $cale]);
+
+        // Recipisa sta si in dosarul comun „Toate”, cu ale tuturor firmelor.
+        $this->arhiva->copiazaInToate($cale, $nume);
     }
 
     /**

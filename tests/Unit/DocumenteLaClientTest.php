@@ -140,7 +140,7 @@ class DocumenteLaClientTest extends TestCase
                 && ($intrebare['firma'] ?? null) === 'DIANA SOFT SRL (15208744)'
                 && ($intrebare['dosar'] ?? null) === 'SPV/Situatie Sintetica'
                 // Fara extensie: abia raspunsul ANAF spune daca e pdf sau zip.
-                && ($intrebare['nume'] ?? null) === 'Situatie Sintetica_15208744_2026-07-29_5104283612';
+                && ($intrebare['nume'] ?? null) === 'DIANA SOFT SRL_Situatie Sintetica_15208744_2026-07-29_5104283612';
         });
     }
 
@@ -299,7 +299,7 @@ class DocumenteLaClientTest extends TestCase
 
             return $cerere['cale'] === 'DIANA SOFT SRL (15208744)/SPV/RECIPISA/r.pdf'
                 && $cerere['dosar'] === 'D112'
-                && $cerere['nume'] === 'D112_15208744_2026-06_recipisa_912239948.pdf';
+                && $cerere['nume'] === 'DIANA SOFT SRL_D112_15208744_2026-06_recipisa_912239948.pdf';
         });
 
         $this->assertSame([], Storage::allFiles());

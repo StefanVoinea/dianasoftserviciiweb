@@ -531,6 +531,14 @@ class MonitorizareFolder
                     ArhivaService::numeDeclaratie($declaratie, $stare, 'pdf'),
                     $declaratie->arhiva_semnat
                 );
+
+                // Declaratia depusa sta si in dosarul comun „Toate”.
+                if ($stare === 'depusa') {
+                    $this->arhiva->copiazaInToate(
+                        $cai['arhiva_semnat'],
+                        ArhivaService::numeDeclaratie($declaratie, 'depusa', 'pdf')
+                    );
+                }
             }
 
             // Ce s-a dat spre lucru sta deoparte — vezi DeclaratiiController::arhiveaza().

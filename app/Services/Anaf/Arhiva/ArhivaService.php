@@ -3,6 +3,7 @@
 namespace App\Services\Anaf\Arhiva;
 
 use App\Models\AnafDeclaratie;
+use App\Models\AnafSocietate;
 use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\CertificatService;
 use Illuminate\Support\Facades\Http;
@@ -13,7 +14,11 @@ use Illuminate\Support\Facades\Http;
  * Aplicatia sta in cloud, dar declaratiile, recipisele si documentele aduse din
  * SPV raman la client, scrise prin programul local in structura:
  *
- *     <radacina>\<Denumire firma (CUI)>\<TIP>\<TIP>_<CUI>_<perioada>_<stare>.pdf
+ *     <radacina>\<Denumire firma (CUI)>\<TIP>\<Firma>_<TIP>_<CUI>_<perioada>_<stare>.pdf
+ *
+ * Numele fisierului incepe cu denumirea firmei desi dosarul o poarta deja:
+ * documentele se trimit pe email si se copiaza in alte parti, iar un fisier
+ * "D112_..." smuls din dosarul lui nu mai spune al cui e.
  *
  * Serverul retine doar calea relativa, ca sa stie de la ce bridge sa ceara
  * fisierul cand omul apasa pe el. Bridge-ul se alege ca la semnare: cel al
@@ -22,6 +27,13 @@ use Illuminate\Support\Facades\Http;
  */
 class ArhivaService
 {
+    /**
+     * Dosarul comun de la radacina arhivei: declaratiile depuse si recipisele
+     * lor, ale tuturor firmelor, la gramada — fara subdosare. Numele fisierelor
+     * incep cu denumirea firmei, deci se vede si aici al cui e fiecare.
+     */
+    public const DOSAR_TOATE = 'Toate';
+
     /** Cat se asteapta strangerea dosarelor la un loc — e doar o asezare. */
     protected const UNIRE_SECUNDE = 15;
 
@@ -99,6 +111,30 @@ class ArhivaService
         ]);
 
         return $this->cale($raspuns, 'Copia în arhiva locală a eșuat');
+    }
+
+    /**
+     * Inca un exemplar in dosarul comun „Toate”, de la radacina arhivei.
+     *
+     * Acolo stau declaratiile depuse si recipisele tuturor firmelor la un loc:
+     * cine vrea sa vada tot ce s-a depus nu mai umbla firma cu firma. Copia e
+     * o inlesnire, nu documentul insusi — un esec se scrie in jurnal si atat,
+     * fara sa opreasca lucrarea in mijlocul careia s-a intamplat.
+     */
+    public function copiazaInToate(?string $caleRelativa, string $nume): void
+    {
+        if (!$this->activa() || !$caleRelativa) {
+            return;
+        }
+
+        try {
+            $this->copiaza($caleRelativa, self::DOSAR_TOATE, '', $nume);
+        } catch (\Exception $e) {
+            Jurnal::esec(
+                'arhiva_toate',
+                'Documentul „' . $nume . '” nu a putut fi copiat în dosarul „Toate”: ' . $e->getMessage()
+            );
+        }
     }
 
     /**
@@ -243,7 +279,14 @@ class ArhivaService
 
     public static function numeDeclaratie(AnafDeclaratie $declaratie, string $stare, string $extensie): string
     {
+        /*
+         * Denumirea firmei sta la inceput, desi dosarul firmei o poarta deja:
+         * documentele se trimit pe email si se copiaza in alte parti, iar un
+         * fisier "D112_15208744_..." smuls din dosarul lui nu mai spune al cui
+         * e. Fara denumire stiuta, numele ramane cum a fost.
+         */
         $bucati = [
+            self::denumireaFirmei($declaratie),
             $declaratie->tip ?: 'declaratie',
             $declaratie->cui ?: 'fara-cui',
             self::perioada($declaratie),
@@ -263,6 +306,24 @@ class ArhivaService
         }
 
         return self::curata(implode('_', array_filter($bucati))) . '.' . ltrim($extensie, '.');
+    }
+
+    /**
+     * Denumirea firmei pentru numele fisierului.
+     *
+     * Intai cea de pe declaratie, citita din chiar XML-ul ei; daca acolo
+     * lipseste, cea din Entitati inrolate. Nula cand nu se stie de nicaieri —
+     * numele fisierului merge mai departe fara ea, ca pana acum.
+     */
+    protected static function denumireaFirmei(AnafDeclaratie $declaratie): ?string
+    {
+        $denumire = trim((string) $declaratie->den_firma);
+
+        if ($denumire === '' && $declaratie->cui) {
+            $denumire = trim((string) AnafSocietate::where('cif', $declaratie->cui)->value('denumire'));
+        }
+
+        return $denumire !== '' ? $denumire : null;
     }
 
     /** "2026-06" pentru declaratiile lunare, "2026" pentru cele anuale. */

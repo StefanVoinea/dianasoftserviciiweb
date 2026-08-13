@@ -112,13 +112,42 @@ class ArhivaClientTest extends TestCase
         $declaratie = $this->declaratie();
 
         $this->assertSame(
-            'D112_15208744_2026-06_semnata.pdf',
+            'DIANA SOFT SRL_D112_15208744_2026-06_semnata.pdf',
             ArhivaService::numeDeclaratie($declaratie, 'semnata', 'pdf')
         );
 
         $this->assertSame(
-            'D112_15208744_2026-06.xml',
+            'DIANA SOFT SRL_D112_15208744_2026-06.xml',
             ArhivaService::numeDeclaratie($declaratie, '', 'xml')
+        );
+    }
+
+    /**
+     * Numele incepe cu denumirea firmei: fisierul trimis pe email sau copiat
+     * din dosarul lui trebuie sa spuna singur al cui e.
+     *
+     * Fara denumire pe declaratie, se ia cea din Entitati inrolate; cand nu se
+     * stie de nicaieri, numele ramane cum a fost — fara gaura la inceput.
+     */
+    public function test_fara_denumire_pe_declaratie_se_ia_cea_din_entitati(): void
+    {
+        $declaratie = $this->declaratie(['den_firma' => null]);
+
+        $this->assertSame(
+            'D112_15208744_2026-06_semnata.pdf',
+            ArhivaService::numeDeclaratie($declaratie, 'semnata', 'pdf'),
+            'necunoscuta de nicaieri, denumirea nu lasa gaura in nume'
+        );
+
+        AnafSocietate::create([
+            'company_id' => self::COMPANIE,
+            'cif' => '15208744',
+            'denumire' => 'ALFA BETA SRL',
+        ]);
+
+        $this->assertSame(
+            'ALFA BETA SRL_D112_15208744_2026-06_semnata.pdf',
+            ArhivaService::numeDeclaratie($declaratie, 'semnata', 'pdf')
         );
     }
 
@@ -128,7 +157,7 @@ class ArhivaClientTest extends TestCase
         $declaratie = $this->declaratie(['tip' => 'D101', 'luna' => null, 'anul' => 2025]);
 
         $this->assertSame(
-            'D101_15208744_2025_semnata.pdf',
+            'DIANA SOFT SRL_D101_15208744_2025_semnata.pdf',
             ArhivaService::numeDeclaratie($declaratie, 'semnata', 'pdf')
         );
     }
@@ -139,12 +168,12 @@ class ArhivaClientTest extends TestCase
         $declaratie = $this->declaratie(['index_recipisa' => '912239948', 'rectificativa' => true]);
 
         $this->assertSame(
-            'D112_15208744_2026-06_rectificativa_depusa_912239948.pdf',
+            'DIANA SOFT SRL_D112_15208744_2026-06_rectificativa_depusa_912239948.pdf',
             ArhivaService::numeDeclaratie($declaratie, 'depusa', 'pdf')
         );
 
         $this->assertSame(
-            'D112_15208744_2026-06_rectificativa_recipisa_912239948.pdf',
+            'DIANA SOFT SRL_D112_15208744_2026-06_rectificativa_recipisa_912239948.pdf',
             ArhivaService::numeDeclaratie($declaratie, 'recipisa', 'pdf')
         );
     }
@@ -242,6 +271,45 @@ class ArhivaClientTest extends TestCase
         });
     }
 
+    /**
+     * Dosarul comun „Toate”: declaratiile depuse si recipisele tuturor
+     * firmelor, la gramada, la radacina arhivei — fara subdosare. Numele
+     * fisierelor incep cu denumirea firmei, deci se vede al cui e fiecare.
+     */
+    public function test_copia_din_toate_sta_la_radacina_fara_subdosare(): void
+    {
+        Http::fake([
+            '192.168.1.44:8099/arhiva/copiaza' => Http::response(
+                ['cale' => 'Toate/DIANA SOFT SRL_D112_15208744_2026-06_recipisa_912239948.pdf'],
+                200
+            ),
+        ]);
+
+        $this->serviciu()->copiazaInToate(
+            'DIANA SOFT SRL (15208744)/D112/DIANA SOFT SRL_D112_15208744_2026-06_recipisa_912239948.pdf',
+            'DIANA SOFT SRL_D112_15208744_2026-06_recipisa_912239948.pdf'
+        );
+
+        Http::assertSent(function (Request $cerere) {
+            return str_contains($cerere->url(), '/arhiva/copiaza')
+                && $cerere['firma'] === 'Toate'
+                && $cerere['dosar'] === ''
+                && $cerere['nume'] === 'DIANA SOFT SRL_D112_15208744_2026-06_recipisa_912239948.pdf';
+        });
+    }
+
+    /** Copia din „Toate” e o inlesnire: esecul ei nu opreste lucrarea. */
+    public function test_esecul_copiei_din_toate_nu_opreste_nimic(): void
+    {
+        Http::fake([
+            '192.168.1.44:8099/arhiva/copiaza' => Http::response(['eroare' => 'discul e plin'], 500),
+        ]);
+
+        $this->serviciu()->copiazaInToate('X (1)/D112/doc.pdf', 'doc.pdf');
+
+        $this->assertTrue(true, 'nu s-a aruncat nimic');
+    }
+
     /** Calculatorul clientului poate fi inchis: esecul trebuie sa se vada. */
     public function test_esecul_programului_local_este_spus_pe_intelesul_omului(): void
     {
@@ -317,7 +385,9 @@ class ArhivaClientTest extends TestCase
             // Intai se strang la un loc dosarele firmei, daca a ramas vreunul vechi.
             ->push(['mutate' => 0, 'unit' => false], 200)
             ->push(['cale' => 'DIANA SOFT SRL (15208744)/SPV/RECIPISA/RECIPISA_15208744_2026-07-20_2026-07-29_5104283611.pdf'], 200)
-            ->push(['cale' => 'DIANA SOFT SRL (15208744)/D112/D112_15208744_2026-06_recipisa_912239948.pdf'], 200);
+            ->push(['cale' => 'DIANA SOFT SRL (15208744)/D112/D112_15208744_2026-06_recipisa_912239948.pdf'], 200)
+            // Copia din dosarul comun „Toate”, cu ale tuturor firmelor.
+            ->push(['cale' => 'Toate/DIANA SOFT SRL_D112_15208744_2026-06_recipisa_912239948.pdf'], 200);
 
         $cale = $this->app->make(SpvStorage::class)->arhiveazaMesaj(
             $mesaj,
@@ -350,8 +420,8 @@ class ArhivaClientTest extends TestCase
         });
 
         $this->assertSame([
-            ['SPV/RECIPISA', 'RECIPISA_15208744_2026-07-20_2026-07-29_5104283611.pdf'],
-            ['D112', 'D112_15208744_2026-06_recipisa_912239948.pdf'],
+            ['SPV/RECIPISA', 'DIANA SOFT SRL_RECIPISA_15208744_2026-07-20_2026-07-29_5104283611.pdf'],
+            ['D112', 'DIANA SOFT SRL_D112_15208744_2026-06_recipisa_912239948.pdf'],
         ], $trimise);
     }
 
@@ -459,7 +529,7 @@ class ArhivaClientTest extends TestCase
 
             return self::camp($corp, 'firma') === 'DIANA SOFT SRL (15208744)'
                 && self::camp($corp, 'dosar') === 'SPV/Situatie Sintetica'
-                && self::camp($corp, 'nume') === 'Situatie Sintetica_15208744_2026-07-20_2026-07-29_5104283612.pdf';
+                && self::camp($corp, 'nume') === 'DIANA SOFT SRL_Situatie Sintetica_15208744_2026-07-20_2026-07-29_5104283612.pdf';
         });
     }
 
