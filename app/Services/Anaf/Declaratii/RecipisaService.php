@@ -2,8 +2,10 @@
 
 namespace App\Services\Anaf\Declaratii;
 
+use App\Models\AnafCertificat;
 use App\Models\AnafDeclaratie;
 use App\Services\Anaf\Arhiva\ArhivaService;
+use App\Services\Anaf\Spv\CertificatService;
 use App\Services\Anaf\Spv\SpvClient;
 use App\Services\Anaf\Spv\SpvException;
 use App\Services\Anaf\Spv\SpvStorage;
@@ -24,16 +26,24 @@ class RecipisaService
     /** Arhiva de pe calculatorul clientului; lipseste doar in teste. */
     protected $arhiva;
 
+    /** Alegerea certificatului cu care se intreaba SPV; lipseste doar in teste. */
+    protected $certificate;
+
+    /** Listele de mesaje SPV deja aduse, una pe certificat. */
+    protected $liste = [];
+
     public function __construct(
         array $config,
         SpvClient $spvClient,
         SpvStorage $spvStorage,
-        ?ArhivaService $arhiva = null
+        ?ArhivaService $arhiva = null,
+        ?CertificatService $certificate = null
     ) {
         $this->config = $config;
         $this->spvClient = $spvClient;
         $this->spvStorage = $spvStorage;
         $this->arhiva = $arhiva;
+        $this->certificate = $certificate;
     }
 
     /**
@@ -49,16 +59,7 @@ class RecipisaService
             return ['verificate' => 0, 'descarcate' => 0, 'descarcate_id' => [], 'erori' => []];
         }
 
-        $mesaje = [];
         $erori = [];
-
-        try {
-            $lista = $this->spvClient->listaMesaje($zile);
-            $mesaje = isset($lista['mesaje']) && is_array($lista['mesaje']) ? $lista['mesaje'] : [];
-        } catch (SpvException $e) {
-            // SPV indisponibil sau fara mesaje — continuam doar cu StareD112.
-            $erori[] = 'SPV: ' . $e->getMessage();
-        }
 
         // Se retin si declaratiile a caror recipisa tocmai a venit: din ele se
         // poate face pe loc un singur fisier de tiparit.
@@ -66,7 +67,7 @@ class RecipisaService
 
         foreach ($declaratii as $declaratie) {
             try {
-                if ($this->verificaDeclaratie($declaratie, $mesaje)) {
+                if ($this->verificaDeclaratie($declaratie, $this->mesajele($declaratie, $zile, $erori))) {
                     $descarcate[] = $declaratie->id;
                 }
             } catch (\Exception $e) {
@@ -104,17 +105,7 @@ class RecipisaService
             return;
         }
 
-        $mesaje = [];
         $erori = [];
-
-        try {
-            $lista = $this->spvClient->listaMesaje($zile);
-            $mesaje = isset($lista['mesaje']) && is_array($lista['mesaje']) ? $lista['mesaje'] : [];
-        } catch (SpvException $e) {
-            // SPV indisponibil sau fara mesaje — continuam doar cu StareD112.
-            $erori[] = 'SPV: ' . $e->getMessage();
-        }
-
         $descarcate = [];
         $facute = 0;
 
@@ -125,7 +116,7 @@ class RecipisaService
             $adusa = false;
 
             try {
-                $adusa = $this->verificaDeclaratie($declaratie, $mesaje);
+                $adusa = $this->verificaDeclaratie($declaratie, $this->mesajele($declaratie, $zile, $erori));
 
                 if ($adusa) {
                     $descarcate[] = $declaratie->id;
@@ -152,6 +143,48 @@ class RecipisaService
             'descarcate_id' => $descarcate,
             'erori' => $erori,
         ];
+    }
+
+    /**
+     * Mesajele SPV printre care se cauta recipisa acestei declaratii.
+     *
+     * Lista se cere cu certificatul cu care a fost depusa declaratia: pe un
+     * calculator cu doua tokene, recipisa vine pe drepturile certificatului
+     * care a depus, iar lista celuilalt n-o cuprinde. Cat timp se intreba o
+     * singura data, cu certificatul activ intamplator, jumatate din recipise
+     * nu se gaseau niciodata.
+     *
+     * Se aduce o lista pe certificat, nu una pe declaratie: acelasi token
+     * raspunde de obicei de multe firme, iar SPV cere pauza intre intrebari.
+     */
+    protected function mesajele(AnafDeclaratie $declaratie, int $zile, array &$erori): array
+    {
+        $cheie = $declaratie->certificat_id ?: 0;
+
+        if (array_key_exists($cheie, $this->liste)) {
+            return $this->liste[$cheie];
+        }
+
+        if ($cheie && $this->certificate) {
+            $alLui = AnafCertificat::where('activ', true)->find($cheie);
+
+            if ($alLui) {
+                $this->certificate->foloseste($alLui);
+            }
+        }
+
+        try {
+            $lista = $this->spvClient->listaMesaje($zile);
+
+            return $this->liste[$cheie] = isset($lista['mesaje']) && is_array($lista['mesaje'])
+                ? $lista['mesaje']
+                : [];
+        } catch (SpvException $e) {
+            // SPV indisponibil sau fara mesaje — se continua doar cu StareD112.
+            $erori[] = 'SPV: ' . $e->getMessage();
+
+            return $this->liste[$cheie] = [];
+        }
     }
 
     public function verificaDeclaratie(AnafDeclaratie $declaratie, array $mesaje = []): bool
@@ -268,13 +301,65 @@ class RecipisaService
         }
 
         if (strpos($html, '<td>' . $declaratie->index_recipisa . '</td>') !== false) {
-            $text = trim(preg_replace('/\s+/', ' ', strip_tags($html)));
-            $declaratie->update(['stare_declaratie' => mb_substr($text, 0, 1000)]);
+            $declaratie->update([
+                'stare_declaratie' => mb_substr($this->stareaDinPagina($html, $declaratie->index_recipisa), 0, 1000),
+            ]);
 
             return;
         }
 
         $declaratie->update(['stare_declaratie' => 'In prelucrare']);
+    }
+
+    /**
+     * Starea declaratiei, scoasa din randul ei din pagina StareD112.
+     *
+     * Pagina insira toate depunerile din ultimele luni; inainte se pastra tot
+     * textul ei, cu antetul ministerului si cu entitatile HTML nedecodate —
+     * "Ministerul Finan&#355;elor... IndexTip documentStare..." — iar starea
+     * adevarata, "Documentul este valid", se ineca in el. Se ia doar randul
+     * indicelui cautat: tipul, starea si numarul de inregistrare.
+     */
+    protected function stareaDinPagina(string $html, string $index): string
+    {
+        preg_match_all('#<tr[^>]*>(.*?)</tr>#si', $html, $randuri);
+
+        foreach ($randuri[1] as $rand) {
+            if (strpos($rand, '>' . $index . '<') === false) {
+                continue;
+            }
+
+            preg_match_all('#<td[^>]*>(.*?)</td>#si', $rand, $celule);
+
+            $curate = [];
+
+            foreach ($celule[1] as $celula) {
+                $text = trim(preg_replace(
+                    '/\s+/u',
+                    ' ',
+                    html_entity_decode(strip_tags($celula), ENT_QUOTES | ENT_HTML401, 'UTF-8')
+                ));
+
+                // Fara indicele cautat (e deja pe declaratie) si fara textul
+                // legaturii "recipisa" — raman tipul, starea si inregistrarea.
+                if ($text === '' || $text === $index || strcasecmp($text, 'recipisa') === 0) {
+                    continue;
+                }
+
+                $curate[] = $text;
+            }
+
+            if ($curate !== []) {
+                return implode(' ', $curate);
+            }
+        }
+
+        // Randul nu s-a lasat citit: macar tot textul, dar decodat si curat.
+        return trim(preg_replace(
+            '/\s+/u',
+            ' ',
+            html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML401, 'UTF-8')
+        )) ?: 'In prelucrare';
     }
 
     /**

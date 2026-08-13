@@ -28,15 +28,16 @@ class AnafDeclaratie extends Model
     }
 
     /**
-     * Declaratiile depuse care asteapta recipisa (sau au primit una intermediara).
+     * Declaratiile depuse care isi asteapta inca recipisa.
+     *
+     * Asteptarea tine pana cand recipisa e adusa din SPV (pas "finalizat"), nu
+     * pana cand se afla starea: StareD112 spune devreme "Documentul este valid",
+     * dar documentul recipisei vine abia dupa aceea, prin SPV. Judecata dupa
+     * stare scotea declaratia din coada la primul raspuns — si recipisa ei nu
+     * se mai descarca niciodata.
      */
     public function scopeAsteaptaRecipisa($query)
     {
-        return $query->whereNotNull('index_recipisa')
-            ->where(function ($q) {
-                $q->whereNull('stare_declaratie')
-                    ->orWhere('stare_declaratie', '')
-                    ->orWhere('stare_declaratie', 'like', 'In prelucrare%');
-            });
+        return $query->whereNotNull('index_recipisa')->where('pas', '!=', 'finalizat');
     }
 }

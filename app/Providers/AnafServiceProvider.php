@@ -149,7 +149,8 @@ class AnafServiceProvider extends ServiceProvider
                 config('anaf.declaratii'),
                 $app->make(SpvClient::class),
                 $app->make(SpvStorage::class),
-                $app->make(ArhivaService::class)
+                $app->make(ArhivaService::class),
+                $app->make(CertificatService::class)
             );
         });
     }
