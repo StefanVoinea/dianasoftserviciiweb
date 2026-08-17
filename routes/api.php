@@ -218,6 +218,19 @@ Route::middleware(['auth:api', 'companie', 'modul:etransport'])->group(function 
     Route::post('/anaf-etransport/depune', 'Api\EtransportAnafController@depune');
     Route::get('/anaf-etransport/stare', 'Api\EtransportAnafController@stare');
     Route::get('/anaf-etransport/transportator', 'Api\EtransportAnafController@transportator');
+
+    // Declaratiile lucrate in aplicatie, pentru obtinerea UIT-ului.
+    Route::get('/anaf-etransport/declaratii/nomenclatoare', 'Api\EtransportDeclaratiiController@nomenclatoare');
+    Route::get('/anaf-etransport/declaratii/coduri-vamale', 'Api\EtransportDeclaratiiController@coduriVamale');
+    Route::get('/anaf-etransport/declaratii/curs', 'Api\EtransportDeclaratiiController@curs');
+    Route::post('/anaf-etransport/declaratii/importa', 'Api\EtransportDeclaratiiController@importa');
+    Route::get('/anaf-etransport/declaratii', 'Api\EtransportDeclaratiiController@index');
+    Route::post('/anaf-etransport/declaratii', 'Api\EtransportDeclaratiiController@store');
+    Route::get('/anaf-etransport/declaratii/{declaratie}', 'Api\EtransportDeclaratiiController@show');
+    Route::post('/anaf-etransport/declaratii/{declaratie}', 'Api\EtransportDeclaratiiController@update');
+    Route::delete('/anaf-etransport/declaratii/{declaratie}', 'Api\EtransportDeclaratiiController@destroy');
+    Route::post('/anaf-etransport/declaratii/{declaratie}/depune', 'Api\EtransportDeclaratiiController@depune');
+    Route::post('/anaf-etransport/declaratii/{declaratie}/verifica', 'Api\EtransportDeclaratiiController@verifica');
 });
 
 /*

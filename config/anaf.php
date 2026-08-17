@@ -159,6 +159,14 @@ return [
         'zile_max' => 60,
         'timeout' => 120,
         'storage_path' => 'etransport',
+
+        /*
+         * Cine vede importul de fisiere la declaratiile UIT. Parserele sunt
+         * scrise pe formatele furnizorilor acestui client; restul lumii
+         * completeaza deocamdata declaratia in formular. Lista se largeste de
+         * aici (emailuri despartite prin virgula), fara modificari in cod.
+         */
+        'import_emails' => env('ETRANSPORT_IMPORT_EMAILS', 'emporiocom@yahoo.com'),
     ],
 
     /*
