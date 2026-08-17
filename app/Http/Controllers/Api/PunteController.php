@@ -95,13 +95,6 @@ class PunteController extends Controller
         $terminata = $this->punte->asteapta($comanda);
 
         if ($terminata === null) {
-            AlertaEroare::trimite('programul local nu a răspuns', 'Programul local nu a răspuns în răgazul dat.', [
-                'company_id' => $certificat->company_id,
-                'certificat_id' => $certificat->id,
-                'comanda' => $comanda->metoda . ' ' . $comanda->cale,
-                'agent_vazut_la' => optional($certificat->agent_vazut_la)->format('d.m.Y H:i:s'),
-            ]);
-
             return response()->json([
                 'eroare' => 'Programul local nu a răspuns.',
                 'detalii' => 'Calculatorul cu tokenul este închis sau agentul nu rulează.',

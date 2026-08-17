@@ -11,6 +11,7 @@ use App\Services\Anaf\Arhiva\ArhivaService;
 use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\CertificatService;
 use App\Support\ContextCompanie;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -164,7 +165,19 @@ class MonitorizareFolder
      */
     protected function fisiereleCareAsteapta(AnafCertificat $certificat): array
     {
-        $raspuns = $this->cerere($certificat)->get($this->url($certificat, '/monitorizare'));
+        try {
+            $raspuns = $this->cerere($certificat)->get($this->url($certificat, '/monitorizare'));
+        } catch (ConnectionException $e) {
+            /*
+             * Calculatorul inchis sau reteaua cazuta e viata de zi cu zi, nu o
+             * defectiune la noi: lasata sa urce, eroarea oprea toata comanda si
+             * pleca email de alerta la fiecare rulare. Se consemneaza si se
+             * trece la certificatul urmator.
+             */
+            throw new DeclaratieException(
+                'Calculatorul cu dosarul urmărit nu a răspuns: ' . $e->getMessage()
+            );
+        }
 
         if ($raspuns->failed()) {
             throw new DeclaratieException(
