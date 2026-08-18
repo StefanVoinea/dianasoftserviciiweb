@@ -104,7 +104,8 @@ class EtransportAnafController extends Controller
 
         return response()->json([
             'success' => true,
-            'mod' => $client->prinOauth() ? 'oauth' : 'certificat',
+            // CIF-ul autorizat merge prin OAuth de la sine, chiar fara modul global.
+            'mod' => $client->foloseseOauth($date['cif'] ?? null) ? 'oauth' : 'certificat',
             'configurat' => $oauth->configurat(),
             'redirect_uri' => $oauth->redirectUri(),
             // CIF-ul clientului, ca filele sa nu-l mai ceara scris de mana.

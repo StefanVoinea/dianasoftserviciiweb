@@ -83,11 +83,11 @@ class EtransportClient
 
     /**
      * Apelul merge fie prin programul local (cu certificatul de pe token), fie
-     * direct la ANAF cu autorizare OAuth2, după cum e configurat.
+     * direct la ANAF cu autorizare OAuth2.
      */
     protected function trimite(string $metoda, string $cale, array $query = [], ?string $corp = null, ?string $cif = null): Response
     {
-        return $this->prinOauth()
+        return $this->foloseseOauth($cif)
             ? $this->trimiteOauth($metoda, $cale, $query, $corp, $cif)
             : $this->trimitePrinProgramLocal($metoda, $cale, $query, $corp);
     }
@@ -97,9 +97,36 @@ class EtransportClient
         return ($this->config['mod'] ?? 'certificat') === 'oauth';
     }
 
+    /**
+     * OAuth se folosește când e modul configurat, dar și de la sine, când
+     * CIF-ul are o autorizare valabilă: cine a autorizat aplicația la ANAF nu
+     * mai are nevoie de programul local pentru e-Transport, și nici de vreo
+     * setare pe server.
+     */
+    public function foloseseOauth(?string $cif): bool
+    {
+        if ($this->prinOauth()) {
+            return true;
+        }
+
+        return $cif !== null && $cif !== '' && $this->oauth->token($cif) !== null;
+    }
+
     protected function trimitePrinProgramLocal(string $metoda, string $cale, array $query, ?string $corp): Response
     {
         $bridge = $this->certificate->bridge();
+
+        /*
+         * Fara adresa puntii, URL-ul ar iesi „/etransport/...", iar curl ar
+         * cauta o gazda pe nume „etransport" si ar cadea cu o eroare criptica.
+         * Mai bine se spune de aici ce lipseste si ce e de facut.
+         */
+        if (empty($bridge['url'])) {
+            throw new EtransportException(
+                'Certificatul ales nu are un program local legat, deci cererea nu are pe unde pleca. '
+                . 'Alegeți certificatul cu care lucrați (dreapta sus) sau instalați kitul pe calculatorul cu tokenul.'
+            );
+        }
 
         $url = rtrim($bridge['url'], '/') . '/etransport/' . ltrim($cale, '/');
 
