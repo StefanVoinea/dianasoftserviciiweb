@@ -220,6 +220,16 @@
           >
             Import vector
           </b-button>
+          <!-- Istoricul depunerilor din programul vechi, cu declarațiile și recipisele lor -->
+          <b-button
+            size="sm"
+            variant="outline-primary"
+            class="mb-50"
+            title="Importă istoricul depunerilor din declmf.mde (programul vechi al clientului)"
+            @click="deschideImportDeclaratii(rand.item)"
+          >
+            Import declarații
+          </b-button>
           <b-button
             size="sm"
             variant="flat-secondary"
@@ -286,6 +296,77 @@
           <ul class="mb-0 pl-1">
             <li
               v-for="sarita in importVectorRezultat.sarite"
+              :key="sarita"
+            >{{ sarita }}</li>
+          </ul>
+        </div>
+      </b-alert>
+    </b-modal>
+
+    <!--
+      Istoricul depunerilor din programul vechi (declmf.mde), cu tabelul
+      depuneri — câte un rând pe depunere, cu căile declarației și recipisei pe
+      calculatorul clientului. Rândurile intră în Declarații fiscale ca istoric
+      încheiat, iar fișierele se copiază în arhivă prin programul local.
+    -->
+    <b-modal
+      v-model="importDeclVizibil"
+      :title="`Import declarații — ${importDeclClient ? importDeclClient.denumire : ''}`"
+      :ok-title="importDeclInCurs ? 'Se importă...' : 'Importă'"
+      cancel-title="Renunță"
+      :ok-disabled="!importDeclFisier || importDeclInCurs"
+      @ok.prevent="importaDeclaratii"
+    >
+      <p class="text-muted small">
+        Alegeți fișierul <strong>declmf.mde</strong> din programul vechi al clientului
+        (sau tabelul <code>depuneri</code> exportat ca CSV). Depunerile intră în
+        „Declarații fiscale" ca istoric încheiat, firmele înrolate fără denumire o
+        primesc din tabel, iar declarațiile și recipisele — aflate pe calculatorul
+        clientului — se copiază în arhivă în fundal, prin programul local.
+        Reimportul nu dublează nimic.
+      </p>
+
+      <b-form-file
+        v-model="importDeclFisier"
+        accept=".mde,.mdb,.accdb,.csv"
+        placeholder="Alegeți fișierul..."
+        browse-text="Răsfoiește"
+      />
+
+      <b-alert
+        v-if="importDeclEroare"
+        show
+        variant="danger"
+        class="py-1 px-2 mt-1 mb-0"
+      >
+        {{ importDeclEroare }}
+      </b-alert>
+
+      <b-alert
+        v-if="importDeclRezultat"
+        show
+        variant="success"
+        class="py-1 px-2 mt-1 mb-0"
+      >
+        {{ importDeclRezultat.randuri }} rânduri citite:
+        {{ importDeclRezultat.scrise }} declarații noi,
+        {{ importDeclRezultat.existente }} deja existente,
+        {{ importDeclRezultat.denumiri }} denumiri de firmă completate.
+        <div
+          v-if="importDeclRezultat.de_arhivat"
+          class="small mt-50"
+        >
+          Copierea în arhivă a {{ importDeclRezultat.de_arhivat }} depuneri a pornit
+          în fundal, prin programul local al clientului — mersul se vede în Jurnal.
+        </div>
+        <div
+          v-if="importDeclRezultat.sarite.length"
+          class="small mt-50"
+        >
+          Rânduri sărite:
+          <ul class="mb-0 pl-1">
+            <li
+              v-for="sarita in importDeclRezultat.sarite"
               :key="sarita"
             >{{ sarita }}</li>
           </ul>
@@ -814,6 +895,14 @@ export default {
       importVectorEroare: '',
       importVectorRezultat: null,
 
+      // Importul depunerilor din programul vechi (declmf.mde)
+      importDeclVizibil: false,
+      importDeclInCurs: false,
+      importDeclClient: null,
+      importDeclFisier: null,
+      importDeclEroare: '',
+      importDeclRezultat: null,
+
       utilizatorVizibil: false,
       utilizator: {},
       clientCurent: {},
@@ -1014,6 +1103,39 @@ export default {
       this.importVectorEroare = ''
       this.importVectorRezultat = null
       this.importVectorVizibil = true
+    },
+    deschideImportDeclaratii(client) {
+      this.importDeclClient = client
+      this.importDeclFisier = null
+      this.importDeclEroare = ''
+      this.importDeclRezultat = null
+      this.importDeclVizibil = true
+    },
+    /**
+     * Trimite fișierul declmf.mde și scrie istoricul depunerilor pe clientul
+     * ales. Fereastra rămâne deschisă, ca rezultatul să poată fi citit.
+     */
+    importaDeclaratii() {
+      this.importDeclEroare = ''
+      this.importDeclRezultat = null
+      this.importDeclInCurs = true
+
+      const date = new FormData()
+      date.append('fisier', this.importDeclFisier)
+
+      this.$http.post(`/administrare/clienti/${this.importDeclClient.id}/import-declaratii`, date)
+        .then(raspuns => {
+          this.importDeclRezultat = raspuns.data.data
+          this.importDeclFisier = null
+        })
+        .catch(err => {
+          this.importDeclEroare = err.response && err.response.data && err.response.data.message
+            ? err.response.data.message
+            : 'Importul a eșuat.'
+        })
+        .finally(() => {
+          this.importDeclInCurs = false
+        })
     },
     /**
      * Trimite fișierul vector.mde și scrie periodicitățile pe clientul ales.

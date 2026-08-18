@@ -56,6 +56,8 @@ class AnafSocietatiController extends Controller
                     'date_identificare_la' => Format::dataOra($societate->date_identificare_la),
                     'sincronizat_la' => Format::dataOra($societate->sincronizat_la),
                     'certificat' => optional($societate->certificat)->cn,
+                    // Filele care filtreaza firmele pe token au nevoie si de id.
+                    'certificat_id' => $societate->certificat_id,
                     'certificat_expira' => Format::data(optional($societate->certificat)->valabil_pana_la),
                     'complet' => $societate->denumire !== null && $societate->vector_la !== null,
                 ];

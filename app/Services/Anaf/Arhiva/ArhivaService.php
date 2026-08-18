@@ -114,6 +114,26 @@ class ArhivaService
     }
 
     /**
+     * Aduce in arhiva un fisier aflat pe calculatorul clientului, in afara ei.
+     *
+     * La migrarea de la programul vechi de depunere, declaratiile si recipisele
+     * stau in dosarele lui, pe acelasi calculator cu arhiva. Copierea o face
+     * programul local, dintr-o cale in alta, fara ca documentele sa faca drumul
+     * pana la server si inapoi. Originalul ramane neatins.
+     */
+    public function dinLocal(string $sursaLocala, string $firma, string $dosar, string $nume): string
+    {
+        $raspuns = $this->cerere()->asForm()->post($this->url('/arhiva/din-local'), [
+            'sursa' => $sursaLocala,
+            'firma' => $firma,
+            'dosar' => $dosar,
+            'nume' => $nume,
+        ]);
+
+        return $this->cale($raspuns, 'Aducerea în arhivă a fișierului local a eșuat');
+    }
+
+    /**
      * Inca un exemplar in dosarul comun „Toate”, de la radacina arhivei.
      *
      * Acolo stau declaratiile depuse si recipisele tuturor firmelor la un loc:

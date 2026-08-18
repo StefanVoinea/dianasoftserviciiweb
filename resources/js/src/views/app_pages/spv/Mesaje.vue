@@ -2,7 +2,19 @@
   <div class="card">
     <div class="card-body">
       <div class="row mb-3">
-        <div class="col-md-4">
+        <!-- Certificatul spune de la ce token se descarcă — deci ce PIN se cere.
+             Unii clienți au mai multe tokenuri și nu știu la care să introducă PIN-ul. -->
+        <div class="col-md-3">
+          <label class="form-label">Certificat (token)</label>
+          <b-form-select
+            v-model="certificatAles"
+            :options="optiuniCertificatToken"
+          />
+          <small class="text-muted">
+            {{ certificatAles ? 'se descarcă doar de la acest token' : 'se descarcă de la toate tokenurile' }}
+          </small>
+        </div>
+        <div class="col-md-3">
           <div class="d-flex align-items-center justify-content-between">
             <label class="form-label mb-0">
               Firme
@@ -15,10 +27,10 @@
               size="sm"
               variant="flat-primary"
               class="py-0 px-50"
-              :disabled="!societati.length"
+              :disabled="!optiuniFirmeInrolate.length"
               @click="alegeToateFirmele"
             >
-              <small>{{ firme.length === societati.length ? 'niciuna' : 'toate' }}</small>
+              <small>{{ firme.length === optiuniFirmeInrolate.length ? 'niciuna' : 'toate' }}</small>
             </b-button>
           </div>
           <v-select
@@ -46,7 +58,7 @@
         </div>
         <!-- Butoanele stau pe aceeași linie; reglajul descărcării automate trece
              sub ele, ca să nu ridice unul dintre butoane din rând. -->
-        <div class="col-md-6 d-flex flex-column justify-content-end align-items-end">
+        <div class="col-md-4 d-flex flex-column justify-content-end align-items-end">
           <div class="d-flex align-items-end">
             <b-button
               variant="outline-primary"
@@ -444,6 +456,8 @@ export default {
     return {
       // Firmele pentru care se cer mesaje, din Entități înrolate
       firme: [],
+      // Tokenul de la care se descarcă; null înseamnă toate
+      certificatAles: null,
       zile: 30,
       loading: false,
       error: '',
@@ -543,10 +557,26 @@ export default {
       return this.firme.map(firma => firma.cif)
     },
     optiuniFirmeInrolate() {
-      return this.societati.map(societate => ({
+      // Cu un certificat ales, lista arată doar firmele înrolate pe el.
+      const potrivite = this.certificatAles
+        ? this.societati.filter(societate => Number(societate.certificat_id) === Number(this.certificatAles))
+        : this.societati
+
+      return potrivite.map(societate => ({
         cif: societate.cif,
         eticheta: societate.denumire ? `${societate.denumire} (${societate.cif})` : societate.cif,
       }))
+    },
+    optiuniCertificatToken() {
+      return [{ value: null, text: 'toate certificatele' }]
+        .concat(this.certificate
+          .filter(certificat => certificat.activ !== false)
+          .map(certificat => ({ value: certificat.id, text: certificat.cn })))
+    },
+    /** Antetul care spune serverului cu ce token să lucreze această cerere. */
+    antetCertificat() {
+      // Gol, cererea nu poartă certificat: serverul întreabă toate tokenurile.
+      return { 'X-Certificat-Id': this.certificatAles ? String(this.certificatAles) : '' }
     },
     /**
      * Felurile de document din listă. Cele deja întâlnite se scot în față cu un
@@ -611,12 +641,23 @@ export default {
 
       if (this.pagina > ultima) this.pagina = ultima
     },
+    // La schimbarea certificatului, firmele alese de pe alt token ies din alegere.
+    certificatAles() {
+      const permise = this.optiuniFirmeInrolate.map(optiune => optiune.cif)
+
+      this.firme = this.firme.filter(firma => permise.indexOf(firma.cif) !== -1)
+    },
   },
   created() {
     this.incarcaSetarea()
     this.incarcaStocate()
     this.incarcaSocietatiInrolate()
+    this.incarcaCertificateToken()
     this.reglaCronometrul()
+
+    // Certificatul activ ales în fila Certificate rămâne alegerea de pornire.
+    const activ = Number(window.localStorage.getItem('anaf_certificat_activ'))
+    if (activ) this.certificatAles = activ
   },
   beforeDestroy() {
     this.opresteCronometrul()
@@ -710,6 +751,16 @@ export default {
       return err.response && err.response.data && err.response.data.message
         ? err.response.data.message
         : implicit
+    },
+    /** Certificatele clientului, pentru lista de tokenuri de descărcare. */
+    incarcaCertificateToken() {
+      this.$http.get('/anaf-certificate')
+        .then(({ data }) => {
+          this.certificate = data.data || []
+        })
+        .catch(() => {
+          // fara lista, ramane doar alegerea „toate certificatele"
+        })
     },
     // Fisierele se descarca automat la citirea listei; cand asta nu a reusit,
     // in locul butonului de deschidere se afiseaza motivul.
@@ -840,7 +891,13 @@ export default {
         [params.cif] = this.listaCif
       }
 
-      return this.$http.get('/spv', { params })
+      // Cu un certificat ales, se întreabă doar tokenul lui — și doar PIN-ul
+      // lui se cere. Antetul per-cerere bate certificatul activ global.
+      if (this.certificatAles) {
+        params.certificat_id = this.certificatAles
+      }
+
+      return this.$http.get('/spv', { params, headers: this.antetCertificat })
         .then(response => {
           if (response.data && response.data.success) {
             const payload = response.data.data || {}
@@ -888,12 +945,23 @@ export default {
      * @param {boolean} arata se scrie mersul lucrului pe ecran?
      */
     aduceDocumentele(payload, arata) {
-      const intrebare = this.listaCif.length === 1 ? `?cif=${encodeURIComponent(this.listaCif[0])}` : ''
+      const parametri = []
+
+      if (this.listaCif.length === 1) parametri.push(`cif=${encodeURIComponent(this.listaCif[0])}`)
+      // Fluxul nu poartă antete proprii, așa că certificatul merge în adresă.
+      if (this.certificatAles) parametri.push(`certificat_id=${this.certificatAles}`)
+
+      const intrebare = parametri.length ? `?${parametri.join('&')}` : ''
 
       // Browserele fără fetch cu flux rămân pe calea dinainte: loturi, fără
       // numărătoare. Mai bine fără mers decât fără descărcare.
       if (!areFlux()) {
-        return this.$http.get('/spv/descarca-lipsa', { params: this.listaCif.length === 1 ? { cif: this.listaCif[0] } : {} })
+        const params = {}
+
+        if (this.listaCif.length === 1) [params.cif] = this.listaCif
+        if (this.certificatAles) params.certificat_id = this.certificatAles
+
+        return this.$http.get('/spv/descarca-lipsa', { params, headers: this.antetCertificat })
           .then(raspuns => this.aduceRestul(payload, (raspuns.data && raspuns.data.descarcare) || {}, arata))
       }
 
@@ -975,6 +1043,10 @@ export default {
         [params.cif] = this.listaCif
       }
 
+      if (this.certificatAles) {
+        params.certificat_id = this.certificatAles
+      }
+
       const adunate = {
         descarcate: descarcare.descarcate || 0,
         ramase: descarcare.ramase || 0,
@@ -989,7 +1061,7 @@ export default {
             + `${adunate.ramase} de adus. Vă rugăm așteptați...`
         }
 
-        return this.$http.get('/spv/descarca-lipsa', { params })
+        return this.$http.get('/spv/descarca-lipsa', { params, headers: this.antetCertificat })
           .then(response => {
             const lot = (response.data && response.data.descarcare) || {}
             const acum = lot.descarcate || 0
@@ -1025,7 +1097,7 @@ export default {
         })
     },
     alegeToateFirmele() {
-      this.firme = this.firme.length === this.societati.length ? [] : [...this.optiuniFirmeInrolate]
+      this.firme = this.firme.length === this.optiuniFirmeInrolate.length ? [] : [...this.optiuniFirmeInrolate]
     },
     /** Momentul de acum, scris ca peste tot în modul: zz.ll.aaaa hh:mm:ss. */
     acum() {

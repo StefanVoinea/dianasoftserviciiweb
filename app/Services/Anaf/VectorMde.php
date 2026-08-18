@@ -5,7 +5,7 @@ namespace App\Services\Anaf;
 use Symfony\Component\Process\Process;
 
 /**
- * Scoate tabelul „vectormf” dintr-un fisier Access (vector.mde) intr-un CSV.
+ * Scoate un tabel dintr-un fisier Access (vector.mde, declmf.mde) intr-un CSV.
  *
  * Fisierul e format JET, pe care PHP nu-l citeste singur. Pe Linux se foloseste
  * mdb-export (pachetul mdbtools); pe Windows, driverul ODBC de Access, care e
@@ -14,16 +14,21 @@ use Symfony\Component\Process\Process;
  */
 class VectorMde
 {
-    /** Tabelul cautat in fisier. Numele se potriveste fara sa tina cont de litere. */
+    /** Tabelul cautat cand nu se cere altul. Potrivirea nu tine cont de litere. */
     protected const TABEL = 'vectormf';
 
+    /** Tabelul din care se exporta acum. */
+    protected $tabel = self::TABEL;
+
     /**
-     * Calea catre un CSV cu tabelul vectormf; un CSV primit trece neatins.
+     * Calea catre un CSV cu tabelul cerut; un CSV primit trece neatins.
      *
      * @throws \RuntimeException cand fisierul nu poate fi citit pe masina asta
      */
-    public function inCsv(string $cale): string
+    public function inCsv(string $cale, string $tabel = self::TABEL): string
     {
+        $this->tabel = $tabel;
+
         if (strtolower(pathinfo($cale, PATHINFO_EXTENSION)) === 'csv') {
             return $cale;
         }
@@ -38,7 +43,7 @@ class VectorMde
 
         throw new \RuntimeException(
             'Fișierele Access nu pot fi citite pe acest server: lipsește mdbtools. '
-            . 'Instalați-l („apt install mdbtools”) sau încărcați tabelul vectormf exportat ca CSV.'
+            . 'Instalați-l („apt install mdbtools”) sau încărcați tabelul ' . $tabel . ' exportat ca CSV.'
         );
     }
 
@@ -61,7 +66,7 @@ class VectorMde
         $tabel = null;
 
         foreach (preg_split('/\r?\n/', trim($tabele->getOutput())) as $nume) {
-            if (strcasecmp(trim($nume), self::TABEL) === 0) {
+            if (strcasecmp(trim($nume), $this->tabel) === 0) {
                 $tabel = trim($nume);
 
                 break;
@@ -69,7 +74,7 @@ class VectorMde
         }
 
         if ($tabel === null) {
-            throw new \RuntimeException('Fișierul nu are tabelul „' . self::TABEL . '”.');
+            throw new \RuntimeException('Fișierul nu are tabelul „' . $this->tabel . '”.');
         }
 
         $export = new Process(['mdb-export', $cale, $tabel]);
@@ -100,7 +105,7 @@ class VectorMde
             '$conn = New-Object System.Data.Odbc.OdbcConnection($cs)',
             '$conn.Open()',
             '$cmd = $conn.CreateCommand()',
-            '$cmd.CommandText = "SELECT * FROM ' . self::TABEL . '"',
+            '$cmd.CommandText = "SELECT * FROM ' . $this->tabel . '"',
             '$adapter = New-Object System.Data.Odbc.OdbcDataAdapter($cmd)',
             '$dt = New-Object System.Data.DataTable',
             '[void]$adapter.Fill($dt)',

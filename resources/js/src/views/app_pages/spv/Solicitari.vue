@@ -4,6 +4,15 @@
       <!-- Toate se termină la aceeași linie: câmpurile și butoanele rândului
            sunt aliniate la bază, nu întinse pe înălțimea celui mai înalt. -->
       <b-row class="mb-3 align-items-end">
+        <!-- Certificatul spune cu ce token pleacă solicitarea — deci ce PIN se
+             cere — și restrânge lista de firme la cele înrolate pe el. -->
+        <b-col md="3">
+          <label>Certificat (token)</label>
+          <b-form-select
+            v-model="certificatAles"
+            :options="optiuniCertificatToken"
+          />
+        </b-col>
         <b-col md="3">
           <div class="d-flex align-items-center justify-content-between">
             <label class="mb-0">
@@ -18,17 +27,17 @@
               size="sm"
               variant="flat-primary"
               class="py-0 px-50"
-              :disabled="!societati.length"
+              :disabled="!firmeDisponibile.length"
               @click="alegeToate"
             >
-              <small>{{ firme.length === societati.length ? 'niciuna' : 'toate' }}</small>
+              <small>{{ firme.length === firmeDisponibile.length ? 'niciuna' : 'toate' }}</small>
             </b-button>
           </div>
           <v-select
             v-model="firme"
             multiple
             label="eticheta"
-            :options="societati"
+            :options="firmeDisponibile"
             :loading="societatiInCurs"
             placeholder="Alegeți firmele..."
             class="select-firme"
@@ -439,6 +448,9 @@ export default {
       firme: [],
       societati: [],
       societatiInCurs: false,
+      // Tokenul cu care pleacă solicitările; null înseamnă oricare
+      certificatAles: null,
+      certificate: [],
       tipDocument: null,
       an: null,
       luna: null,
@@ -503,6 +515,18 @@ export default {
     listaCui() {
       return this.firme.map(firma => firma.cif)
     },
+    optiuniCertificatToken() {
+      return [{ value: null, text: 'toate certificatele' }]
+        .concat(this.certificate
+          .filter(certificat => certificat.activ !== false)
+          .map(certificat => ({ value: certificat.id, text: certificat.cn })))
+    },
+    /** Firmele din listă: cu un certificat ales, doar cele înrolate pe el. */
+    firmeDisponibile() {
+      if (!this.certificatAles) return this.societati
+
+      return this.societati.filter(societate => Number(societate.certificat_id) === Number(this.certificatAles))
+    },
     /** Solicitările care trec de filtrele scrise pe coloane. */
     solicitariFiltrate() {
       const contine = (valoare, cautat) => String(valoare || '')
@@ -559,12 +583,23 @@ export default {
       this.salveazaSetarea()
       this.reglaCronometrul()
     },
+    // La schimbarea certificatului, firmele alese de pe alt token ies din alegere.
+    certificatAles() {
+      const permise = this.firmeDisponibile.map(societate => societate.cif)
+
+      this.firme = this.firme.filter(firma => permise.indexOf(firma.cif) !== -1)
+    },
   },
   created() {
     this.incarcaSetarea()
     this.incarcaLista()
     this.incarcaSocietati()
+    this.incarcaCertificate()
     this.reglaCronometrul()
+
+    // Certificatul activ ales în fila Certificate rămâne alegerea de pornire.
+    const activ = Number(window.localStorage.getItem('anaf_certificat_activ'))
+    if (activ) this.certificatAles = activ
   },
   beforeDestroy() {
     // Fără asta, cronometrul ar cere răspunsuri și după plecarea din filă.
@@ -582,6 +617,7 @@ export default {
         .then(({ data }) => {
           this.societati = data.data.map(societate => ({
             cif: societate.cif,
+            certificat_id: societate.certificat_id,
             eticheta: societate.denumire ? `${societate.denumire} (${societate.cif})` : societate.cif,
           }))
         })
@@ -592,8 +628,18 @@ export default {
           this.societatiInCurs = false
         })
     },
+    /** Certificatele clientului, pentru lista de tokenuri. */
+    incarcaCertificate() {
+      this.$http.get('/anaf-certificate')
+        .then(({ data }) => {
+          this.certificate = data.data || []
+        })
+        .catch(() => {
+          // fara lista, ramane doar alegerea „toate certificatele"
+        })
+    },
     alegeToate() {
-      this.firme = this.firme.length === this.societati.length ? [] : [...this.societati]
+      this.firme = this.firme.length === this.firmeDisponibile.length ? [] : [...this.firmeDisponibile]
     },
     clasaObs(obs) {
       if (!obs) return ''

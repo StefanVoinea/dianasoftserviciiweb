@@ -179,6 +179,78 @@ class AdministrareController extends Controller
         return response()->json(['success' => true, 'data' => $rezultat]);
     }
 
+    /**
+     * Importa istoricul depunerilor din programul vechi al clientului.
+     *
+     * Se primeste fisierul declmf.mde (sau CSV-ul tabelului „depuneri").
+     * Firmele inrolate fara denumire si-o primesc din tabel, depunerile intra
+     * in fila Declaratii fiscale ca istoric incheiat, iar declaratiile si
+     * recipisele — aflate pe calculatorul clientului — se copiaza in arhiva
+     * printr-o lucrare in fundal, prin programul local.
+     */
+    public function importaDeclaratii(Request $request, Company $client, VectorMde $mde, \App\Services\Anaf\ImportDepuneri $import)
+    {
+        $request->validate([
+            'fisier' => 'required|file|max:102400',
+        ]);
+
+        $fisier = $request->file('fisier');
+        $extensie = strtolower($fisier->getClientOriginalExtension() ?: 'mde');
+
+        if (!in_array($extensie, ['mde', 'mdb', 'accdb', 'csv'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Se acceptă fișiere Access (.mde, .mdb, .accdb) sau CSV-ul tabelului depuneri.',
+            ], 422);
+        }
+
+        $cale = $fisier->getRealPath() . '.' . $extensie;
+        copy($fisier->getRealPath(), $cale);
+
+        try {
+            $rezultat = $import->importaCsv($mde->inCsv($cale, 'depuneri'), $client->id);
+        } catch (\Exception $e) {
+            Jurnal::esec(
+                'import_depuneri',
+                'Importul depunerilor pentru „' . $client->denumire . '” a eșuat: ' . $e->getMessage()
+            );
+
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        } finally {
+            @unlink($cale);
+        }
+
+        if ($rezultat['de_arhivat'] !== []) {
+            \App\Jobs\ArhiveazaDepunerileImportate::dispatch($client->id, $rezultat['de_arhivat']);
+        }
+
+        Jurnal::scrie(
+            'import_depuneri',
+            sprintf(
+                'A importat depunerile din %s pentru „%s”: %d rânduri, %d declarații noi, %d denumiri completate,'
+                    . ' %d depuneri de arhivat',
+                $fisier->getClientOriginalName(),
+                $client->denumire,
+                $rezultat['randuri'],
+                $rezultat['scrise'],
+                $rezultat['denumiri'],
+                count($rezultat['de_arhivat'])
+            )
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'randuri' => $rezultat['randuri'],
+                'scrise' => $rezultat['scrise'],
+                'existente' => $rezultat['existente'],
+                'denumiri' => $rezultat['denumiri'],
+                'de_arhivat' => count($rezultat['de_arhivat']),
+                'sarite' => $rezultat['sarite'],
+            ],
+        ]);
+    }
+
     public function creeazaUtilizator(Request $request, Company $client)
     {
         $date = $request->validate([

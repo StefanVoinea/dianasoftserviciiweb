@@ -27,6 +27,7 @@
  *   GET  /arhiva          — citește un document din arhiva locală
  *   POST /arhiva/redenumeste — schimbă numele unui document arhivat
  *   POST /arhiva/copiaza  — încă un exemplar al unui document deja arhivat
+ *   POST /arhiva/din-local — aduce în arhivă un fișier de pe acest calculator
  *   POST /arhiva/uneste-dosarul — strânge la un loc cele două dosare ale firmei
  *   GET  /monitorizare    — declarațiile puse în dosarul urmărit
  *   POST /monitorizare/mutat — scoate din dosar fișierul prelucrat
@@ -2176,6 +2177,57 @@ if (strpos($calea, '/arhiva') === 0) {
         $dosarul = arhiva_cale_ceruta(
             $config['arhiva'],
             $firma . '/' . (isset($_POST['dosar']) ? $_POST['dosar'] : '')
+        );
+
+        if (!is_dir($dosarul) && !@mkdir($dosarul, 0777, true)) {
+            raspunde_json(500, array('eroare' => 'Dosarul nu poate fi creat.', 'detalii' => $dosarul));
+        }
+
+        $destinatie = arhiva_destinatie($dosarul, $nume);
+
+        if (!@copy($sursa, $destinatie)) {
+            raspunde_json(500, array('eroare' => 'Copia nu a putut fi scrisă.', 'detalii' => $destinatie));
+        }
+
+        raspunde_json(200, array(
+            'cale' => arhiva_relativa($config['arhiva'], $destinatie),
+            'cale_completa' => $destinatie,
+        ));
+    }
+
+    /*
+     * POST /arhiva/din-local — aduce în arhivă un fișier aflat pe acest
+     * calculator, în afara arhivei.
+     *
+     * Migrarea de la programul vechi de depunere lasă declarațiile și
+     * recipisele în dosarele lui (de pildă C:\Program Files\AutomaticIT\Depuse).
+     * Aplicația știe căile din tabelul „depuneri" și cere de aici copierea
+     * fiecăreia în arhivă, fără ca documentele să facă drumul până la server
+     * și înapoi. Originalul rămâne neatins.
+     */
+    if ($metoda === 'POST' && $calea === '/arhiva/din-local') {
+        $sursa = isset($_POST['sursa']) ? trim($_POST['sursa']) : '';
+        $firma = arhiva_bucata(isset($_POST['firma']) ? $_POST['firma'] : '');
+        $nume = arhiva_bucata(isset($_POST['nume']) ? $_POST['nume'] : '');
+
+        // Doar o cale completă (C:\... sau \\server\...), fără „..": se aduce
+        // un fișier anume, nu se umblă prin calculator.
+        $completa = preg_match('/^([A-Za-z]:[\\\\\\/]|\\\\\\\\)/', $sursa) && strpos($sursa, '..') === false;
+
+        if (!$completa || !is_file($sursa)) {
+            raspunde_json(404, array(
+                'eroare' => 'Fișierul de adus nu există pe acest calculator.',
+                'detalii' => $sursa,
+            ));
+        }
+
+        if ($firma === '' || $nume === '') {
+            raspunde_json(400, array('eroare' => 'Lipsește firma sau numele documentului.'));
+        }
+
+        $dosarul = arhiva_cale_ceruta(
+            $config['arhiva'],
+            $firma . '\\' . (isset($_POST['dosar']) ? $_POST['dosar'] : '')
         );
 
         if (!is_dir($dosarul) && !@mkdir($dosarul, 0777, true)) {
