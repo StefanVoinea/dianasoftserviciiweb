@@ -109,6 +109,17 @@
             <feather-icon icon="RefreshCwIcon" />
           </b-button>
           <b-button
+            v-if="rand.item.uit"
+            v-b-tooltip.hover.top.window.v-light
+            size="sm"
+            variant="outline-secondary"
+            class="btn-icon ml-25"
+            title="Trimite codul UIT pe email"
+            @click="deschideEmail(rand.item)"
+          >
+            <feather-icon icon="MailIcon" />
+          </b-button>
+          <b-button
             v-if="rand.item.poate_fi_modificata"
             v-b-tooltip.hover.top.window.v-light
             size="sm"
@@ -151,6 +162,19 @@
         >
           UIT: <span class="text-success font-weight-bolder">{{ declaratia.uit }}</span>
         </h5>
+        <b-button
+          v-if="declaratia.uit"
+          variant="outline-primary"
+          size="sm"
+          class="ml-2"
+          @click="deschideEmail(declaratia)"
+        >
+          <feather-icon
+            icon="MailIcon"
+            class="mr-25"
+          />
+          Trimite pe email
+        </b-button>
       </div>
 
       <!-- Import fisiere: doar pentru utilizatorii cu formate de fisiere cunoscute -->
@@ -741,6 +765,27 @@
         </b-button>
       </div>
     </div>
+
+    <!-- Trimiterea codului UIT pe email -->
+    <b-modal
+      v-model="emailVizibil"
+      :title="`Trimite codul UIT ${emailUit || ''}`"
+      :ok-disabled="!emailAdrese.trim() || emailInCurs"
+      ok-title="Trimite"
+      cancel-title="Renunță"
+      @ok.prevent="trimiteEmailUit"
+    >
+      <b-form-input
+        v-model="emailAdrese"
+        autofocus
+        placeholder="sofer@firma.ro, dispecer@firma.ro"
+        @keyup.enter="trimiteEmailUit"
+      />
+      <small class="text-muted">
+        Mai multe adrese se despart prin virgulă. Emailul cuprinde codul UIT,
+        vehiculul și data transportului.
+      </small>
+    </b-modal>
   </div>
 </template>
 
@@ -798,10 +843,16 @@ export default {
       },
       coduriVamaleGasite: [],
       importPermis: false,
+      cifImplicit: '',
       fisiereDeImportat: [],
       grupate: true,
       greutateBrutaTotala: null,
       filtruStare: '',
+      emailVizibil: false,
+      emailAdrese: '',
+      emailUit: '',
+      emailDeclaratieId: null,
+      emailInCurs: false,
       info: '',
       eroare: '',
       listaInCurs: false,
@@ -889,6 +940,12 @@ export default {
         .then(raspuns => {
           this.nomenclatoare = raspuns.data
           this.importPermis = !!raspuns.data.import_permis
+          this.cifImplicit = raspuns.data.cif_implicit || ''
+
+          // Nomenclatoarele pot sosi dupa ce omul a apucat sa deschida ciorna.
+          if (this.declaratia && !this.declaratia.id && !this.declaratia.cif_declarant) {
+            this.declaratia.cif_declarant = this.cifImplicit
+          }
         })
         .catch(err => {
           this.eroare = this.mesajEroare(err, 'Nomenclatoarele nu s-au putut încărca')
@@ -913,6 +970,8 @@ export default {
       this.info = ''
       this.eroare = ''
       this.declaratia = declaratieGoala()
+      // Declarantul e de obicei chiar clientul; ramane editabil.
+      this.declaratia.cif_declarant = this.cifImplicit
       this.tipOperatiuneSchimbat()
     },
     deschide(id) {
@@ -1178,6 +1237,28 @@ export default {
         })
         .catch(err => {
           this.eroare = this.mesajEroare(err, 'Starea nu s-a putut verifica')
+        })
+    },
+    deschideEmail(declaratie) {
+      this.emailDeclaratieId = declaratie.id
+      this.emailUit = declaratie.uit
+      this.emailVizibil = true
+    },
+    trimiteEmailUit() {
+      if (!this.emailAdrese.trim() || this.emailInCurs) return
+
+      this.emailInCurs = true
+
+      this.$http.post(`/anaf-etransport/declaratii/${this.emailDeclaratieId}/email`, { adrese: this.emailAdrese })
+        .then(raspuns => {
+          this.emailVizibil = false
+          this.info = raspuns.data.message
+        })
+        .catch(err => {
+          this.eroare = this.mesajEroare(err, 'Emailul nu a putut fi trimis')
+        })
+        .finally(() => {
+          this.emailInCurs = false
         })
     },
     verificaDinLista(id) {

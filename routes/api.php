@@ -231,6 +231,7 @@ Route::middleware(['auth:api', 'companie', 'modul:etransport'])->group(function 
     Route::delete('/anaf-etransport/declaratii/{declaratie}', 'Api\EtransportDeclaratiiController@destroy');
     Route::post('/anaf-etransport/declaratii/{declaratie}/depune', 'Api\EtransportDeclaratiiController@depune');
     Route::post('/anaf-etransport/declaratii/{declaratie}/verifica', 'Api\EtransportDeclaratiiController@verifica');
+    Route::post('/anaf-etransport/declaratii/{declaratie}/email', 'Api\EtransportDeclaratiiController@trimiteEmail');
 });
 
 /*

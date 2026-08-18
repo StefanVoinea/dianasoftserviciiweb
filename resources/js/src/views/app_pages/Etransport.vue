@@ -443,6 +443,12 @@ export default {
           this.oauthConfigurat = raspuns.data.configurat
           this.oauthRedirect = raspuns.data.redirect_uri
           this.autorizare = raspuns.data.data
+
+          // CIF-ul clientului se pune din prima; ramane editabil.
+          if (raspuns.data.cif_implicit) {
+            if (!this.cif) this.cif = raspuns.data.cif_implicit
+            if (!this.cifDepunere) this.cifDepunere = raspuns.data.cif_implicit
+          }
         })
         .catch(() => {
           // starea autorizării nu blochează restul paginii

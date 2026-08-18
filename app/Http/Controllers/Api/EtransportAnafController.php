@@ -99,11 +99,16 @@ class EtransportAnafController extends Controller
     {
         $date = $request->validate(['cif' => 'nullable|string|max:20']);
 
+        $companie = \App\Support\ContextCompanie::curenta();
+        $cuiClient = $companie ? optional(\App\Models\Company::find($companie))->cui : null;
+
         return response()->json([
             'success' => true,
             'mod' => $client->prinOauth() ? 'oauth' : 'certificat',
             'configurat' => $oauth->configurat(),
             'redirect_uri' => $oauth->redirectUri(),
+            // CIF-ul clientului, ca filele sa nu-l mai ceara scris de mana.
+            'cif_implicit' => $cuiClient ? preg_replace('/\D/', '', $cuiClient) : null,
             // Fără CIF se întoarce doar modul de lucru, ca interfața să se poată configura.
             'data' => !empty($date['cif'])
                 ? $oauth->stare($date['cif'])

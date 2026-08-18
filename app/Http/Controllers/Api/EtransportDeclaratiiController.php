@@ -58,6 +58,8 @@ class EtransportDeclaratiiController extends Controller
         return response()->json([
             'success' => true,
             'import_permis' => $this->importPermis($request),
+            // Declarantul e de obicei chiar clientul: CIF-ul lui se pune din prima.
+            'cif_implicit' => $this->cifClientului(),
             'tipuri_operatiune' => Nomenclatoare::TIPURI_OPERATIUNE,
             'scopuri' => Nomenclatoare::SCOPURI,
             'scopuri_pe_operatiune' => Nomenclatoare::SCOPURI_PE_OPERATIUNE,
@@ -271,6 +273,64 @@ class EtransportDeclaratiiController extends Controller
             'data' => $this->detalii($declaratie->fresh()),
             'raspuns' => $raspuns,
         ]);
+    }
+
+    /** Trimite codul UIT pe email, șoferului sau partenerului. */
+    public function trimiteEmail(Request $request, EtransportDeclaratie $declaratie)
+    {
+        if (!$declaratie->uit) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Declarația nu are încă un cod UIT de trimis.',
+            ], 422);
+        }
+
+        $date = $request->validate(['adrese' => 'required|string|max:500']);
+
+        $adrese = array_filter(array_map('trim', preg_split('/[,;\s]+/', $date['adrese'])));
+
+        $gresite = array_filter($adrese, function ($adresa) {
+            return !filter_var($adresa, FILTER_VALIDATE_EMAIL);
+        });
+
+        if ($adrese === [] || $gresite !== []) {
+            return response()->json([
+                'success' => false,
+                'message' => $gresite !== []
+                    ? 'Adresa „' . reset($gresite) . '" nu arată a email.'
+                    : 'Scrieți cel puțin o adresă de email.',
+            ], 422);
+        }
+
+        foreach ($adrese as $adresa) {
+            \Illuminate\Support\Facades\Mail::to($adresa)->send(new \App\Mail\EtransportUitEmail($declaratie));
+        }
+
+        Jurnal::scrie(
+            'etransport_declaratie',
+            'A trimis codul UIT ' . $declaratie->uit . ' către ' . implode(', ', $adrese),
+            ['adrese' => $adrese],
+            $declaratie->cif_declarant
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Codul UIT a plecat către ' . implode(', ', $adrese) . '.',
+        ]);
+    }
+
+    /** Codul fiscal al clientului curent, doar cifrele (fără „RO"). */
+    protected function cifClientului(): ?string
+    {
+        $companie = \App\Support\ContextCompanie::curenta();
+
+        if (!$companie) {
+            return null;
+        }
+
+        $cui = optional(\App\Models\Company::find($companie))->cui;
+
+        return $cui ? preg_replace('/\D/', '', $cui) : null;
     }
 
     /**
