@@ -435,7 +435,8 @@ export default {
         })
     },
     verificaAutorizarea() {
-      const params = this.cif ? { cif: this.cif } : {}
+      const cifCerut = this.cif
+      const params = cifCerut ? { cif: cifCerut } : {}
 
       this.$http.get('/anaf-etransport/oauth/stare', { params })
         .then(raspuns => {
@@ -448,6 +449,15 @@ export default {
           if (raspuns.data.cif_implicit) {
             if (!this.cif) this.cif = raspuns.data.cif_implicit
             if (!this.cifDepunere) this.cifDepunere = raspuns.data.cif_implicit
+          }
+
+          /*
+           * Prima cerere pleaca inainte de a sti CIF-ul, asa ca starea vine
+           * goala si pagina ar spune pe nedrept „nicio autorizare". Acum, ca
+           * CIF-ul e stiut, se cere starea adevarata — o singura data.
+           */
+          if (!cifCerut && this.cif) {
+            this.verificaAutorizarea()
           }
         })
         .catch(() => {
