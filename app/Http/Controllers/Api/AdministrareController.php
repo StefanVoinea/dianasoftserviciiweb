@@ -45,6 +45,85 @@ class AdministrareController extends Controller
         ]);
     }
 
+    /**
+     * Statistici despre toti clientii: cat au depus cu aplicatia si cand au
+     * folosit-o ultima oara.
+     *
+     * Se numara doar depunerile facute cu aplicatia (cu data depunerii si
+     * certificatul cu care s-a semnat), nu si istoricul importat din programul
+     * vechi — acela ar umfla cifrele fara sa spuna nimic despre folosire.
+     */
+    public function statistici()
+    {
+        $inceputCurenta = now()->startOfMonth();
+        $inceputAnterioara = now()->subMonthNoOverflow()->startOfMonth();
+
+        $depuneri = DB::table('anaf_declaratii')
+            ->selectRaw(
+                'company_id,'
+                . ' COUNT(*) as total,'
+                . ' COUNT(DISTINCT cui) as cuiuri,'
+                . ' SUM(CASE WHEN data_depunere >= ? THEN 1 ELSE 0 END) as luna_curenta,'
+                . ' COUNT(DISTINCT CASE WHEN data_depunere >= ? THEN cui END) as cuiuri_luna_curenta,'
+                . ' SUM(CASE WHEN data_depunere >= ? AND data_depunere < ? THEN 1 ELSE 0 END) as luna_anterioara,'
+                . ' COUNT(DISTINCT CASE WHEN data_depunere >= ? AND data_depunere < ? THEN cui END) as cuiuri_luna_anterioara,'
+                . ' MAX(data_depunere) as ultima_depunere',
+                [
+                    $inceputCurenta, $inceputCurenta,
+                    $inceputAnterioara, $inceputCurenta,
+                    $inceputAnterioara, $inceputCurenta,
+                ]
+            )
+            ->whereNotNull('data_depunere')
+            ->whereNotNull('certificat_id')
+            ->whereNotNull('company_id')
+            ->groupBy('company_id')
+            ->get()
+            ->keyBy('company_id');
+
+        // Ultima logare: cel mai nou token de acces al vreunui cont al clientului.
+        $logari = DB::table('oauth_access_tokens')
+            ->join('company_user', 'company_user.user_id', '=', 'oauth_access_tokens.user_id')
+            ->selectRaw('company_user.company_id, MAX(oauth_access_tokens.created_at) as ultima')
+            ->groupBy('company_user.company_id')
+            ->get()
+            ->keyBy('company_id');
+
+        // Ultima treaba facuta, din jurnalul de activitate.
+        $jurnal = DB::table('anaf_jurnal')
+            ->selectRaw('company_id, MAX(created_at) as ultima')
+            ->whereNotNull('company_id')
+            ->groupBy('company_id')
+            ->get()
+            ->keyBy('company_id');
+
+        $clienti = Company::orderBy('denumire')->get()->map(function (Company $client) use ($depuneri, $logari, $jurnal) {
+            $d = $depuneri->get($client->id);
+
+            // Accesarea e ori o logare, ori o treaba facuta: cea mai noua dintre ele.
+            $accesari = array_filter([
+                optional($logari->get($client->id))->ultima,
+                optional($jurnal->get($client->id))->ultima,
+            ]);
+
+            return [
+                'id' => $client->id,
+                'denumire' => $client->denumire,
+                'cui' => $client->cui,
+                'declaratii' => $d ? (int) $d->total : 0,
+                'cuiuri' => $d ? (int) $d->cuiuri : 0,
+                'declaratii_luna_curenta' => $d ? (int) $d->luna_curenta : 0,
+                'cuiuri_luna_curenta' => $d ? (int) $d->cuiuri_luna_curenta : 0,
+                'declaratii_luna_anterioara' => $d ? (int) $d->luna_anterioara : 0,
+                'cuiuri_luna_anterioara' => $d ? (int) $d->cuiuri_luna_anterioara : 0,
+                'ultima_depunere' => $d ? Format::dataOra($d->ultima_depunere) : null,
+                'ultima_accesare' => $accesari !== [] ? Format::dataOra(max($accesari)) : null,
+            ];
+        });
+
+        return response()->json(['success' => true, 'data' => $clienti]);
+    }
+
     /** Client nou, cu primul lui cont de administrator. */
     public function creeazaClient(Request $request)
     {

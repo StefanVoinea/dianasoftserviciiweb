@@ -75,6 +75,7 @@ Route::any('/punte/{certificat}/{cale?}', 'Api\PunteController@proxy')
  */
 Route::middleware(['auth:api', 'administrator.serviciu'])->group(function () {
     Route::get('/administrare/clienti', 'Api\AdministrareController@index');
+    Route::get('/administrare/statistici', 'Api\AdministrareController@statistici');
     Route::post('/administrare/clienti', 'Api\AdministrareController@creeazaClient');
     Route::post('/administrare/clienti/{client}/utilizatori', 'Api\AdministrareController@creeazaUtilizator');
     // Periodicitatile declaratiilor, aduse din programul vechi (vector.mde)

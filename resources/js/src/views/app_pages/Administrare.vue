@@ -9,239 +9,313 @@
       {{ eroare }}
     </b-alert>
 
-    <b-card
-      class="border mb-2"
-      body-class="p-2"
+    <b-tabs
+      content-class="pt-1"
+      @input="tabSchimbat"
     >
-      <div class="d-flex align-items-center justify-content-between">
-        <h5 class="mb-0">
-          Clienții aplicației
-        </h5>
-        <div>
-          <b-button
-            variant="flat-secondary"
-            size="sm"
-            class="mr-1"
-            @click="deschideIstoric"
-          >
-            <feather-icon
-              icon="ClockIcon"
-              class="mr-50"
-            />Istoric notificări
-          </b-button>
-          <b-button
-            variant="outline-primary"
-            size="sm"
-            class="mr-1"
-            @click="deschideNotificare(null)"
-          >
-            <feather-icon
-              icon="SendIcon"
-              class="mr-50"
-            />Trimite notificare
-          </b-button>
-          <b-button
-            variant="primary"
-            size="sm"
-            @click="deschideClientNou"
-          >
-            <feather-icon
-              icon="PlusIcon"
-              class="mr-50"
-            />Client nou
-          </b-button>
-        </div>
-      </div>
-    </b-card>
-
-    <b-card
-      class="border mb-0"
-      body-class="p-1"
-    >
-      <b-table
-        :items="clienti"
-        :fields="campuri"
-        :busy="listaInCurs"
-        responsive
-        striped
-        small
-        show-empty
-        empty-text="Niciun client înregistrat."
-        class="tabel-compact mb-0"
+      <b-tab
+        title="Clienții aplicației"
+        active
       >
-        <template #table-busy>
-          <div class="text-center my-2">
-            <b-spinner class="align-middle mr-1" />
-            Se încarcă...
+        <b-card
+          class="border mb-2"
+          body-class="p-2"
+        >
+          <div class="d-flex align-items-center justify-content-end">
+            <div>
+              <b-button
+                variant="flat-secondary"
+                size="sm"
+                class="mr-1"
+                @click="deschideIstoric"
+              >
+                <feather-icon
+                  icon="ClockIcon"
+                  class="mr-50"
+                />Istoric notificări
+              </b-button>
+              <b-button
+                variant="outline-primary"
+                size="sm"
+                class="mr-1"
+                @click="deschideNotificare(null)"
+              >
+                <feather-icon
+                  icon="SendIcon"
+                  class="mr-50"
+                />Trimite notificare
+              </b-button>
+              <b-button
+                variant="primary"
+                size="sm"
+                @click="deschideClientNou"
+              >
+                <feather-icon
+                  icon="PlusIcon"
+                  class="mr-50"
+                />Client nou
+              </b-button>
+            </div>
           </div>
-        </template>
+        </b-card>
 
-        <template #cell(client)="rand">
-          <div>{{ rand.item.denumire }}</div>
-          <div class="small text-muted">
-            {{ rand.item.cui || 'fără CUI' }}
-          </div>
-        </template>
-
-        <template #cell(stare)="rand">
-          <b-badge :variant="variantaStare(rand.item)">
-            {{ textStare(rand.item) }}
-          </b-badge>
-          <div
-            v-if="rand.item.abonament && rand.item.abonament.zile_ramase !== null"
-            class="small text-muted"
+        <b-card
+          class="border mb-0"
+          body-class="p-1"
+        >
+          <b-table
+            :items="clienti"
+            :fields="campuri"
+            :busy="listaInCurs"
+            responsive
+            striped
+            small
+            show-empty
+            empty-text="Niciun client înregistrat."
+            class="tabel-compact mb-0"
           >
-            {{ rand.item.abonament.zile_ramase >= 0
-              ? rand.item.abonament.zile_ramase + ' zile rămase'
-              : 'expirat de ' + (-rand.item.abonament.zile_ramase) + ' zile' }}
-          </div>
-        </template>
+            <template #table-busy>
+              <div class="text-center my-2">
+                <b-spinner class="align-middle mr-1" />
+                Se încarcă...
+              </div>
+            </template>
 
-        <template #cell(tarif)="rand">
-          <span v-if="rand.item.abonament">{{ rand.item.abonament.tarif_lunar }} lei/lună</span>
-          <span
-            v-else
-            class="text-muted"
-          >—</span>
-        </template>
+            <template #cell(client)="rand">
+              <div>{{ rand.item.denumire }}</div>
+              <div class="small text-muted">
+                {{ rand.item.cui || 'fără CUI' }}
+              </div>
+            </template>
 
-        <template #cell(module)="rand">
-          <div v-if="rand.item.abonament">
-            <b-badge
-              v-for="modul in moduleActive(rand.item)"
-              :key="modul"
-              variant="light-primary"
-              class="mr-25"
-            >
-              {{ modul }}
-            </b-badge>
-            <span
-              v-if="!moduleActive(rand.item).length"
-              class="small text-muted"
-            >niciun modul</span>
-          </div>
-          <span
-            v-else
-            class="small text-muted"
-          >nelimitat</span>
-        </template>
+            <template #cell(stare)="rand">
+              <b-badge :variant="variantaStare(rand.item)">
+                {{ textStare(rand.item) }}
+              </b-badge>
+              <div
+                v-if="rand.item.abonament && rand.item.abonament.zile_ramase !== null"
+                class="small text-muted"
+              >
+                {{ rand.item.abonament.zile_ramase >= 0
+                  ? rand.item.abonament.zile_ramase + ' zile rămase'
+                  : 'expirat de ' + (-rand.item.abonament.zile_ramase) + ' zile' }}
+              </div>
+            </template>
 
-        <template #cell(utilizatori)="rand">
-          <div
-            v-for="user in rand.item.utilizatori"
-            :key="user.id"
-            class="d-flex align-items-center small py-25"
-          >
-            <feather-icon
-              v-if="user.administrator"
-              v-b-tooltip.hover
-              icon="ShieldIcon"
-              size="13"
-              class="text-primary mr-50"
-              title="Administrator al firmei"
-            />
-            <span :class="user.blocat ? 'text-danger' : ''">{{ user.email }}</span>
-            <b-badge
-              v-if="user.blocat"
-              variant="light-danger"
-              class="ml-50"
-            >
-              blocat
-            </b-badge>
+            <template #cell(tarif)="rand">
+              <span v-if="rand.item.abonament">{{ rand.item.abonament.tarif_lunar }} lei/lună</span>
+              <span
+                v-else
+                class="text-muted"
+              >—</span>
+            </template>
 
-            <!-- Modulele la care ajunge omul acesta. Se văd aici, în tabel,
+            <template #cell(module)="rand">
+              <div v-if="rand.item.abonament">
+                <b-badge
+                  v-for="modul in moduleActive(rand.item)"
+                  :key="modul"
+                  variant="light-primary"
+                  class="mr-25"
+                >
+                  {{ modul }}
+                </b-badge>
+                <span
+                  v-if="!moduleActive(rand.item).length"
+                  class="small text-muted"
+                >niciun modul</span>
+              </div>
+              <span
+                v-else
+                class="small text-muted"
+              >nelimitat</span>
+            </template>
+
+            <template #cell(utilizatori)="rand">
+              <div
+                v-for="user in rand.item.utilizatori"
+                :key="user.id"
+                class="d-flex align-items-center small py-25"
+              >
+                <feather-icon
+                  v-if="user.administrator"
+                  v-b-tooltip.hover
+                  icon="ShieldIcon"
+                  size="13"
+                  class="text-primary mr-50"
+                  title="Administrator al firmei"
+                />
+                <span :class="user.blocat ? 'text-danger' : ''">{{ user.email }}</span>
+                <b-badge
+                  v-if="user.blocat"
+                  variant="light-danger"
+                  class="ml-50"
+                >
+                  blocat
+                </b-badge>
+
+                <!-- Modulele la care ajunge omul acesta. Se văd aici, în tabel,
                  fiindcă altfel ar trebui deschisă fereastra fiecărui cont ca să
                  se afle cine cu ce lucrează. -->
-            <b-badge
-              v-for="nume in numeleModulelor(user.module)"
-              :key="nume"
-              variant="light-info"
-              class="ml-50"
-            >
-              {{ nume }}
-            </b-badge>
-            <span
-              v-if="!numeleModulelor(user.module).length"
-              class="ml-50 text-muted"
-            >fără module</span>
+                <b-badge
+                  v-for="nume in numeleModulelor(user.module)"
+                  :key="nume"
+                  variant="light-info"
+                  class="ml-50"
+                >
+                  {{ nume }}
+                </b-badge>
+                <span
+                  v-if="!numeleModulelor(user.module).length"
+                  class="ml-50 text-muted"
+                >fără module</span>
 
-            <b-button
-              size="sm"
-              variant="flat-secondary"
-              class="btn-icon ml-auto"
-              title="Modifică"
-              @click="deschideUtilizator(rand.item, user)"
-            >
-              <feather-icon
-                icon="Edit2Icon"
-                size="13"
-              />
-            </b-button>
-            <b-button
-              size="sm"
-              variant="flat-warning"
-              class="btn-icon"
-              title="Deconectează acum"
-              @click="deconecteaza(user)"
-            >
-              <feather-icon
-                icon="LogOutIcon"
-                size="13"
-              />
-            </b-button>
-          </div>
+                <b-button
+                  size="sm"
+                  variant="flat-secondary"
+                  class="btn-icon ml-auto"
+                  title="Modifică"
+                  @click="deschideUtilizator(rand.item, user)"
+                >
+                  <feather-icon
+                    icon="Edit2Icon"
+                    size="13"
+                  />
+                </b-button>
+                <b-button
+                  size="sm"
+                  variant="flat-warning"
+                  class="btn-icon"
+                  title="Deconectează acum"
+                  @click="deconecteaza(user)"
+                >
+                  <feather-icon
+                    icon="LogOutIcon"
+                    size="13"
+                  />
+                </b-button>
+              </div>
 
-          <b-button
-            size="sm"
-            variant="outline-primary"
-            class="mt-50"
-            @click="deschideUtilizator(rand.item, null)"
-          >
-            Cont nou
-          </b-button>
-        </template>
+              <b-button
+                size="sm"
+                variant="outline-primary"
+                class="mt-50"
+                @click="deschideUtilizator(rand.item, null)"
+              >
+                Cont nou
+              </b-button>
+            </template>
 
-        <template #cell(actiuni)="rand">
-          <b-button
-            size="sm"
-            variant="outline-primary"
-            class="mb-50"
-            @click="deschideAbonament(rand.item)"
+            <template #cell(actiuni)="rand">
+              <!-- Unul sub altul, la aceeași lățime: coloana rămâne îngustă. -->
+              <b-button
+                size="sm"
+                variant="outline-primary"
+                class="d-block butoane-actiuni mb-50"
+                @click="deschideAbonament(rand.item)"
+              >
+                Abonament
+              </b-button>
+              <!-- Periodicitățile declarațiilor, aduse din programul vechi al clientului -->
+              <b-button
+                size="sm"
+                variant="outline-primary"
+                class="d-block butoane-actiuni mb-50"
+                title="Importă periodicitățile declarațiilor din vector.mde (programul vechi al clientului)"
+                @click="deschideImportVector(rand.item)"
+              >
+                Import vector
+              </b-button>
+              <!-- Istoricul depunerilor din programul vechi, cu declarațiile și recipisele lor -->
+              <b-button
+                size="sm"
+                variant="outline-primary"
+                class="d-block butoane-actiuni mb-50"
+                title="Importă istoricul depunerilor din declmf.mde (programul vechi al clientului)"
+                @click="deschideImportDeclaratii(rand.item)"
+              >
+                Import declarații
+              </b-button>
+              <b-button
+                size="sm"
+                variant="flat-secondary"
+                class="btn-icon"
+                title="Trimite o notificare utilizatorilor acestui client"
+                @click="deschideNotificare(rand.item)"
+              >
+                <feather-icon icon="SendIcon" />
+              </b-button>
+            </template>
+          </b-table>
+        </b-card>
+      </b-tab>
+
+      <!-- Cat depune fiecare client cu aplicatia si cand a folosit-o ultima oara -->
+      <b-tab
+        title="Statistici"
+        lazy
+      >
+        <b-card
+          class="border mb-0"
+          body-class="p-1"
+        >
+          <b-table
+            :items="statistici"
+            :fields="campuriStatistici"
+            :busy="statisticiInCurs"
+            responsive
+            striped
+            small
+            show-empty
+            empty-text="Nicio depunere înregistrată."
+            class="tabel-compact mb-0"
           >
-            Abonament
-          </b-button>
-          <!-- Periodicitățile declarațiilor, aduse din programul vechi al clientului -->
-          <b-button
-            size="sm"
-            variant="outline-primary"
-            class="mb-50"
-            title="Importă periodicitățile declarațiilor din vector.mde (programul vechi al clientului)"
-            @click="deschideImportVector(rand.item)"
-          >
-            Import vector
-          </b-button>
-          <!-- Istoricul depunerilor din programul vechi, cu declarațiile și recipisele lor -->
-          <b-button
-            size="sm"
-            variant="outline-primary"
-            class="mb-50"
-            title="Importă istoricul depunerilor din declmf.mde (programul vechi al clientului)"
-            @click="deschideImportDeclaratii(rand.item)"
-          >
-            Import declarații
-          </b-button>
-          <b-button
-            size="sm"
-            variant="flat-secondary"
-            class="btn-icon"
-            title="Trimite o notificare utilizatorilor acestui client"
-            @click="deschideNotificare(rand.item)"
-          >
-            <feather-icon icon="SendIcon" />
-          </b-button>
-        </template>
-      </b-table>
-    </b-card>
+            <template #table-busy>
+              <div class="text-center my-2">
+                <b-spinner class="align-middle mr-1" />
+                Se încarcă...
+              </div>
+            </template>
+
+            <template #cell(client)="rand">
+              <div>{{ rand.item.denumire }}</div>
+              <div class="small text-muted">
+                {{ rand.item.cui || 'fără CUI' }}
+              </div>
+            </template>
+
+            <template #cell(total)="rand">
+              <div>{{ rand.item.declaratii }} declarații</div>
+              <div class="small text-muted">
+                {{ rand.item.cuiuri }} CUI-uri unice
+              </div>
+            </template>
+
+            <template #cell(luna_curenta)="rand">
+              <div>{{ rand.item.declaratii_luna_curenta }} declarații</div>
+              <div class="small text-muted">
+                {{ rand.item.cuiuri_luna_curenta }} CUI-uri
+              </div>
+            </template>
+
+            <template #cell(luna_anterioara)="rand">
+              <div>{{ rand.item.declaratii_luna_anterioara }} declarații</div>
+              <div class="small text-muted">
+                {{ rand.item.cuiuri_luna_anterioara }} CUI-uri
+              </div>
+            </template>
+
+            <template #cell(ultima_depunere)="rand">
+              {{ rand.item.ultima_depunere || '—' }}
+            </template>
+
+            <template #cell(ultima_accesare)="rand">
+              {{ rand.item.ultima_accesare || '—' }}
+            </template>
+          </b-table>
+        </b-card>
+      </b-tab>
+    </b-tabs>
 
     <!--
       Importul vectorului din programul vechi: fisierul vector.mde al
@@ -895,6 +969,19 @@ export default {
       importVectorEroare: '',
       importVectorRezultat: null,
 
+      // Statistici despre folosirea aplicatiei, pe client
+      statistici: [],
+      statisticiInCurs: false,
+      statisticiIncarcate: false,
+      campuriStatistici: [
+        { key: 'client', label: 'Client' },
+        { key: 'total', label: 'Depuse cu aplicația' },
+        { key: 'luna_curenta', label: 'Luna curentă' },
+        { key: 'luna_anterioara', label: 'Luna anterioară' },
+        { key: 'ultima_depunere', label: 'Ultima depunere' },
+        { key: 'ultima_accesare', label: 'Ultima accesare' },
+      ],
+
       // Importul depunerilor din programul vechi (declmf.mde)
       importDeclVizibil: false,
       importDeclInCurs: false,
@@ -1104,6 +1191,27 @@ export default {
       this.importVectorRezultat = null
       this.importVectorVizibil = true
     },
+    /** Statisticile se aduc la prima deschidere a filei; apoi rămân. */
+    tabSchimbat(index) {
+      if (index === 1 && !this.statisticiIncarcate) {
+        this.incarcaStatistici()
+      }
+    },
+    incarcaStatistici() {
+      this.statisticiInCurs = true
+
+      this.$http.get('/administrare/statistici')
+        .then(raspuns => {
+          this.statistici = raspuns.data.data || []
+          this.statisticiIncarcate = true
+        })
+        .catch(err => {
+          this.eroare = this.mesajEroare(err, 'Statisticile nu au putut fi încărcate')
+        })
+        .finally(() => {
+          this.statisticiInCurs = false
+        })
+    },
     deschideImportDeclaratii(client) {
       this.importDeclClient = client
       this.importDeclFisier = null
@@ -1266,6 +1374,13 @@ export default {
 </script>
 
 <style scoped>
+/* Butoanele de actiuni stau unul sub altul, la aceeasi latime. */
+.butoane-actiuni {
+  width: 100%;
+  min-width: 9.5rem;
+  white-space: nowrap;
+}
+
 .tabel-compact ::v-deep th,
 .tabel-compact ::v-deep td {
   padding: 0.4rem 0.5rem !important;
