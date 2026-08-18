@@ -971,7 +971,9 @@ export default {
      * depune ce se vede, nu ce nu se vede.
      */
     deDepus() {
-      return this.declaratii.filter(d => d.semnat && !d.index_recipisa)
+      // Istoricul importat din programul vechi (pas „finalizat") e încheiat:
+      // n-are ce căuta la depunere, oricât ar fi de semnat.
+      return this.declaratii.filter(d => d.semnat && !d.index_recipisa && d.pas !== 'finalizat')
     },
     /**
      * Declarațiile trecute de validare care așteaptă semnătura.
@@ -981,9 +983,15 @@ export default {
     deSemnat() {
       return this.declaratii.filter(d => d.pas === 'validat')
     },
-    /** Declarațiile depuse a căror recipisă n-a fost încă descărcată. */
+    /**
+     * Declarațiile depuse a căror recipisă n-a fost încă descărcată.
+     *
+     * Istoricul importat din programul vechi (pas „finalizat") rămâne pe
+     * dinafară: recipisele acelea nu mai sunt de adus din SPV.
+     */
     deDescarcat() {
-      return this.declaratii.filter(d => d.index_recipisa && !d.cale_recipisa && !d.arhiva_recipisa)
+      return this.declaratii.filter(d => d.index_recipisa && !d.cale_recipisa && !d.arhiva_recipisa
+        && d.pas !== 'finalizat')
     },
     /** Ce a adus ultima descărcare, scris pe scurt. */
     recipiseAduse() {

@@ -299,8 +299,13 @@ class AdministrareController extends Controller
             @unlink($cale);
         }
 
-        if ($rezultat['de_arhivat'] !== []) {
-            \App\Jobs\ArhiveazaDepunerileImportate::dispatch($client->id, $rezultat['de_arhivat']);
+        /*
+         * Arhivarea merge in loturi mici, cate o lucrare de coada fiecare: una
+         * singura cu mii de copieri ar depasi timpul ingaduit unei lucrari si
+         * ar fi declarata picata la mijlocul treburilor.
+         */
+        foreach (array_chunk($rezultat['de_arhivat'], 50) as $lot) {
+            \App\Jobs\ArhiveazaDepunerileImportate::dispatch($client->id, $lot);
         }
 
         Jurnal::scrie(
@@ -323,6 +328,8 @@ class AdministrareController extends Controller
                 'randuri' => $rezultat['randuri'],
                 'scrise' => $rezultat['scrise'],
                 'existente' => $rezultat['existente'],
+                'respinse' => $rezultat['respinse'],
+                'sterse' => $rezultat['sterse'],
                 'denumiri' => $rezultat['denumiri'],
                 'de_arhivat' => count($rezultat['de_arhivat']),
                 'sarite' => $rezultat['sarite'],

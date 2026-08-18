@@ -28,10 +28,16 @@ class ArhiveazaDepunerileImportate implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /** Sute de copii prin programul local tin mult; jobul nu se grabeste. */
-    public $timeout = 10800;
+    /**
+     * Un lot mic de copii prin programul local; mai mic decat retry_after-ul
+     * cozii, ca lucrarea sa nu fie data inca o data cat timp prima inca merge.
+     */
+    public $timeout = 3600;
 
     public $tries = 1;
+
+    /** Dupa atatea esecuri la rand se lasa restul: programul local nu raspunde. */
+    protected const ESECURI_LA_RAND = 5;
 
     /** @var int */
     public $companie;
@@ -59,17 +65,40 @@ class ArhiveazaDepunerileImportate implements ShouldQueue
 
             $reusite = 0;
             $esuate = 0;
+            $laRand = 0;
 
-            foreach ($this->lucrari as $lucrare) {
+            foreach ($this->lucrari as $pozitie => $lucrare) {
                 try {
                     $reusite += $this->arhiveaza($arhiva, $certificate, $lucrare);
+                    $laRand = 0;
                 } catch (\Exception $e) {
                     $esuate++;
+                    $laRand++;
 
                     Jurnal::esec(
                         'import_depuneri',
                         'Depunerea #' . $lucrare['id'] . ' nu a putut fi arhivată: ' . $e->getMessage()
                     );
+
+                    /*
+                     * Cazute mai multe la rand, pricina e una singura — programul
+                     * local oprit sau fara comanda de copiere. Restul ar cadea la
+                     * fel, dupa cate un timp de asteptare fiecare: se spune si se
+                     * lasa, in loc sa se astepte degeaba ore intregi.
+                     */
+                    if ($laRand >= self::ESECURI_LA_RAND) {
+                        Jurnal::esec(
+                            'import_depuneri',
+                            sprintf(
+                                'Arhivarea s-a oprit după %d eșecuri la rând; %d depuneri rămân nearhivate.'
+                                    . ' Porniți/actualizați programul local și importați din nou fișierul.',
+                                $laRand,
+                                count($this->lucrari) - $pozitie - 1
+                            )
+                        );
+
+                        break;
+                    }
                 }
             }
 

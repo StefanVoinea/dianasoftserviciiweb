@@ -38,7 +38,13 @@ return [
             'driver' => 'database',
             'table' => 'jobs',
             'queue' => 'default',
-            'retry_after' => 90,
+            /*
+             * Mai mare decat cea mai lunga lucrare (arhivarea unui lot de
+             * depuneri importate, cu timeout 3600): altfel coada da lucrarea
+             * inca o data cat timp prima inca merge, iar la final o declara
+             * picata cu "attempted too many times or run too long".
+             */
+            'retry_after' => (int) env('QUEUE_RETRY_AFTER', 3700),
         ],
 
         'beanstalkd' => [

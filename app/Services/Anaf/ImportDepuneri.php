@@ -65,6 +65,8 @@ class ImportDepuneri
             'randuri' => 0,
             'scrise' => 0,
             'existente' => 0,
+            'respinse' => 0,
+            'sterse' => 0,
             'denumiri' => 0,
             'de_arhivat' => [],
             'sarite' => [],
@@ -88,6 +90,18 @@ class ImportDepuneri
 
             if ($denumire !== '' && !isset($denumiri[$cui])) {
                 $denumiri[$cui] = $denumire;
+            }
+
+            /*
+             * Intra doar depunerile care au trecut: cele respinse de ANAF sunt
+             * incercari, nu istoric de pastrat. Un rand respins importat data
+             * trecuta se si sterge, ca tabelul sa ramana curat.
+             */
+            if (!$this->depusaValid($date)) {
+                $rezultat['respinse']++;
+                $rezultat['sterse'] += $this->stergeImportata($companie, $cui, $tip, $date);
+
+                continue;
             }
 
             try {
@@ -117,6 +131,50 @@ class ImportDepuneri
         $rezultat['denumiri'] = $this->completeazaDenumirile($companie, $denumiri);
 
         return $rezultat;
+    }
+
+    /**
+     * A trecut depunerea la ANAF?
+     *
+     * Starea buna incepe cu „Documentul este valid"; cea respinsa cu „Fisierul
+     * depus nu este un document valid" — inceputul deosebeste, nu cuprinsul,
+     * care contine „este valid" in amandoua. Fara stare scrisa, recipisa
+     * descarcata e semn ca depunerea a trecut.
+     */
+    protected function depusaValid(array $date): bool
+    {
+        $stare = trim((string) ($date['stare_declaratie'] ?? ''));
+
+        if ($stare !== '') {
+            return stripos($stare, 'documentul este valid') === 0;
+        }
+
+        return $this->caleLocala((string) ($date['recipisa'] ?? '')) !== null;
+    }
+
+    /**
+     * Sterge randul respins adus de un import de dinaintea filtrarii.
+     *
+     * Doar randurile cu semnatura importului (fara certificat si fara fisiere
+     * de lucru pe server): o declaratie lucrata in aplicatie nu se atinge.
+     */
+    protected function stergeImportata(int $companie, string $cui, string $tip, array $date): int
+    {
+        $index = trim((string) ($date['index_recipisa'] ?? '')) ?: null;
+
+        if ($index === null) {
+            return 0;
+        }
+
+        return AnafDeclaratie::query()->toateCompaniile()
+            ->where('company_id', $companie)
+            ->where('cui', $cui)
+            ->where('tip', $tip)
+            ->where('index_recipisa', $index)
+            ->where('pas', 'finalizat')
+            ->whereNull('certificat_id')
+            ->whereNull('cale_xml')
+            ->delete();
     }
 
     /** Scrie sau regaseste depunerea; reimportul nu dubleaza nimic. */

@@ -35,12 +35,19 @@ class ImportDepuneriTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_depunerile_intra_ca_istoric_cu_datele_pe_amandoua_formatele()
+    public function test_depunerile_valide_intra_iar_cele_respinse_raman_pe_dinafara()
     {
         $rezultat = (new ImportDepuneri())->importaCsv($this->csv(), $this->client->id);
 
         $this->assertSame(2, $rezultat['randuri']);
-        $this->assertSame(2, $rezultat['scrise']);
+        // Doar depunerea valida intra; cea respinsa de ANAF nu e istoric de pastrat.
+        $this->assertSame(1, $rezultat['scrise']);
+        $this->assertSame(1, $rezultat['respinse']);
+        $this->assertSame(
+            0,
+            AnafDeclaratie::query()->toateCompaniile()
+                ->where('company_id', $this->client->id)->where('cui', '99999999')->count()
+        );
 
         $depusa = AnafDeclaratie::query()->toateCompaniile()
             ->where('company_id', $this->client->id)
@@ -55,11 +62,40 @@ class ImportDepuneriTest extends TestCase
         // Formatul american al driverului Access se citeste ca ora romaneasca.
         $this->assertSame('04.08.2023 10:54', $depusa->data_depunere->format('d.m.Y H:i'));
 
-        // Recipisa „Eroare" nu e o cale: nu se da la arhivat.
         $lucrari = collect($rezultat['de_arhivat']);
-        $this->assertCount(2, $lucrari);
-        $this->assertNull($lucrari->firstWhere('id', '!=', $depusa->id)['recipisa']);
+        $this->assertCount(1, $lucrari);
         $this->assertStringContainsString('Recipisa_D394', $lucrari->firstWhere('id', $depusa->id)['recipisa']);
+    }
+
+    /** Randurile respinse aduse de un import de dinaintea filtrarii se sterg. */
+    public function test_reimportul_curata_randurile_respinse_aduse_inainte()
+    {
+        // Ca un import vechi: randul respins e in tabel, cu semnatura importului.
+        AnafDeclaratie::query()->toateCompaniile()->create([
+            'company_id' => $this->client->id,
+            'cui' => '99999999',
+            'tip' => 'D100',
+            'nume_fisier' => 'DEMOSRL_D100_062012_99999999.pdf',
+            'index_recipisa' => '999997283',
+            'pas' => 'finalizat',
+            'semnat' => true,
+        ]);
+        // O declaratie lucrata in aplicatie, cu acelasi index: nu se atinge.
+        $aAplicatiei = AnafDeclaratie::query()->toateCompaniile()->create([
+            'company_id' => $this->client->id,
+            'cui' => '99999999',
+            'tip' => 'D100',
+            'nume_fisier' => 'DEMOSRL_D100_062012_99999999.pdf',
+            'index_recipisa' => '999997283',
+            'pas' => 'finalizat',
+            'certificat_id' => 1,
+            'cale_xml' => 'undeva/d100.xml',
+        ]);
+
+        $rezultat = (new ImportDepuneri())->importaCsv($this->csv(), $this->client->id);
+
+        $this->assertSame(1, $rezultat['sterse']);
+        $this->assertNotNull(AnafDeclaratie::query()->toateCompaniile()->find($aAplicatiei->id));
     }
 
     public function test_firmele_fara_denumire_o_primesc_iar_reimportul_nu_dubleaza()
@@ -92,7 +128,7 @@ class ImportDepuneriTest extends TestCase
         $dinNou = (new ImportDepuneri())->importaCsv($this->csv(), $this->client->id);
 
         $this->assertSame(0, $dinNou['scrise']);
-        $this->assertSame(2, $dinNou['existente']);
+        $this->assertSame(1, $dinNou['existente']);
     }
 
     /** Un CSV mic, in forma exportului din declmf.mde. */

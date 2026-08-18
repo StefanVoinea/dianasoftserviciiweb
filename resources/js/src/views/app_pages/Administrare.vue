@@ -425,7 +425,11 @@
         {{ importDeclRezultat.randuri }} rânduri citite:
         {{ importDeclRezultat.scrise }} declarații noi,
         {{ importDeclRezultat.existente }} deja existente,
+        {{ importDeclRezultat.respinse }} respinse de ANAF (nu se importă),
         {{ importDeclRezultat.denumiri }} denumiri de firmă completate.
+        <span v-if="importDeclRezultat.sterse">
+          {{ importDeclRezultat.sterse }} rânduri respinse, aduse de un import mai vechi, au fost șterse.
+        </span>
         <div
           v-if="importDeclRezultat.de_arhivat"
           class="small mt-50"
