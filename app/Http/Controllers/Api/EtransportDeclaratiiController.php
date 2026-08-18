@@ -303,7 +303,7 @@ class EtransportDeclaratiiController extends Controller
         }
 
         foreach ($adrese as $adresa) {
-            \Illuminate\Support\Facades\Mail::to($adresa)->send(new \App\Mail\EtransportUitEmail($declaratie));
+            \Illuminate\Support\Facades\Mail::to($adresa)->send(\App\Mail\EtransportUitEmail::dinDeclaratie($declaratie));
         }
 
         Jurnal::scrie(

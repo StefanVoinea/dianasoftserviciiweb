@@ -210,6 +210,50 @@ class EtransportAnafController extends Controller
         return response()->json(['success' => true, 'data' => $raspuns]);
     }
 
+    /** Trimite pe email codul UIT al unei notificări preluate de la ANAF. */
+    public function trimiteEmail(Request $request, EtransportNotificare $notificare)
+    {
+        if (!$notificare->uit) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Notificarea nu are un cod UIT de trimis.',
+            ], 422);
+        }
+
+        $date = $request->validate(['adrese' => 'required|string|max:500']);
+
+        $adrese = array_filter(array_map('trim', preg_split('/[,;\s]+/', $date['adrese'])));
+
+        $gresite = array_filter($adrese, function ($adresa) {
+            return !filter_var($adresa, FILTER_VALIDATE_EMAIL);
+        });
+
+        if ($adrese === [] || $gresite !== []) {
+            return response()->json([
+                'success' => false,
+                'message' => $gresite !== []
+                    ? 'Adresa „' . reset($gresite) . '" nu arată a email.'
+                    : 'Scrieți cel puțin o adresă de email.',
+            ], 422);
+        }
+
+        foreach ($adrese as $adresa) {
+            \Illuminate\Support\Facades\Mail::to($adresa)->send(\App\Mail\EtransportUitEmail::dinNotificare($notificare));
+        }
+
+        Jurnal::scrie(
+            'etransport_declaratie',
+            'A trimis codul UIT ' . $notificare->uit . ' către ' . implode(', ', $adrese),
+            ['adrese' => $adrese],
+            $notificare->cod_decl
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Codul UIT a plecat către ' . implode(', ', $adrese) . '.',
+        ]);
+    }
+
     /** Notificările în care CIF-ul figurează ca organizator de transport. */
     public function transportator(Request $request, EtransportClient $client)
     {

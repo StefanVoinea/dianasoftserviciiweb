@@ -339,6 +339,17 @@
               >
                 <feather-icon icon="RefreshCwIcon" />
               </b-button>
+              <b-button
+                v-if="rand.item.uit"
+                v-b-tooltip.hover.top.window.v-light
+                size="sm"
+                variant="outline-secondary"
+                class="btn-icon ml-25"
+                title="Trimite codul UIT pe email"
+                @click="deschideEmail(rand.item)"
+              >
+                <feather-icon icon="MailIcon" />
+              </b-button>
             </template>
           </b-table>
         </b-card>
@@ -351,6 +362,27 @@
           size="lg"
         >
           <pre class="small mb-0">{{ stareRaspuns }}</pre>
+        </b-modal>
+
+        <!-- Trimiterea codului UIT pe email -->
+        <b-modal
+          v-model="emailVizibil"
+          :title="`Trimite codul UIT ${emailUit || ''}`"
+          :ok-disabled="!emailAdrese.trim() || emailInCurs"
+          ok-title="Trimite"
+          cancel-title="Renunță"
+          @ok.prevent="trimiteEmailUit"
+        >
+          <b-form-input
+            v-model="emailAdrese"
+            autofocus
+            placeholder="sofer@firma.ro, dispecer@firma.ro"
+            @keyup.enter="trimiteEmailUit"
+          />
+          <small class="text-muted">
+            Mai multe adrese se despart prin virgulă. Emailul cuprinde codul UIT,
+            vehiculul și data transportului.
+          </small>
         </b-modal>
       </b-tab>
     </b-tabs>
@@ -378,6 +410,11 @@ export default {
       depunereInCurs: false,
       stareVizibila: false,
       stareRaspuns: '',
+      emailVizibil: false,
+      emailAdrese: '',
+      emailUit: '',
+      emailNotificareId: null,
+      emailInCurs: false,
       mod: 'certificat',
       oauthConfigurat: false,
       oauthRedirect: '',
@@ -525,6 +562,28 @@ export default {
         })
         .finally(() => {
           this.depunereInCurs = false
+        })
+    },
+    deschideEmail(notificare) {
+      this.emailNotificareId = notificare.id
+      this.emailUit = notificare.uit
+      this.emailVizibil = true
+    },
+    trimiteEmailUit() {
+      if (!this.emailAdrese.trim() || this.emailInCurs) return
+
+      this.emailInCurs = true
+
+      this.$http.post(`/anaf-etransport/notificari/${this.emailNotificareId}/email`, { adrese: this.emailAdrese })
+        .then(raspuns => {
+          this.emailVizibil = false
+          this.info = raspuns.data.message
+        })
+        .catch(err => {
+          this.eroare = this.mesajEroare(err, 'Emailul nu a putut fi trimis')
+        })
+        .finally(() => {
+          this.emailInCurs = false
         })
     },
     verificaStarea(notificare) {

@@ -218,6 +218,7 @@ Route::middleware(['auth:api', 'companie', 'modul:etransport'])->group(function 
     Route::post('/anaf-etransport/depune', 'Api\EtransportAnafController@depune');
     Route::get('/anaf-etransport/stare', 'Api\EtransportAnafController@stare');
     Route::get('/anaf-etransport/transportator', 'Api\EtransportAnafController@transportator');
+    Route::post('/anaf-etransport/notificari/{notificare}/email', 'Api\EtransportAnafController@trimiteEmail');
 
     // Declaratiile lucrate in aplicatie, pentru obtinerea UIT-ului.
     Route::get('/anaf-etransport/declaratii/nomenclatoare', 'Api\EtransportDeclaratiiController@nomenclatoare');

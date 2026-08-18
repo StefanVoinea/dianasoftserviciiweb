@@ -14,7 +14,7 @@ class EtransportUitEmailTest extends TestCase
 {
     public function test_emailul_poarta_uitul_vehiculul_si_data()
     {
-        $email = new EtransportUitEmail(new EtransportDeclaratie([
+        $email = EtransportUitEmail::dinDeclaratie(new EtransportDeclaratie([
             'uit' => '3E3G8N2TARTF4A48',
             'cif_declarant' => '15196216',
             'tip_operatiune' => 10,
@@ -38,5 +38,31 @@ class EtransportUitEmailTest extends TestCase
         $this->assertStringContainsString('14.08.2026', $continut);
         $this->assertStringContainsString('TEDDY S.p.A.', $continut);
         $this->assertStringContainsString('2 feluri', $continut);
+    }
+
+    /** Acelasi email pleaca si dintr-o notificare preluata de la ANAF. */
+    public function test_emailul_se_face_si_din_notificare()
+    {
+        $email = EtransportUitEmail::dinNotificare(new \App\Models\EtransportNotificare([
+            'uit' => '4A48TARTF3E3G8N2',
+            'cod_decl' => '15208744',
+            'tip_op' => 10,
+            'pc_den' => 'STORE-LAB S.R.L.',
+            'tr_den' => 'JUNIOR SPEED SRL',
+            'nr_veh' => 'CJ08JSP',
+            'nr_rem1' => 'CJ06RYL',
+            'data_transp' => '2026-02-03',
+            'nr_linii' => 21,
+        ]));
+
+        $email->build();
+
+        $this->assertStringContainsString('4A48TARTF3E3G8N2', $email->subject);
+
+        $continut = $email->render();
+
+        $this->assertStringContainsString('CJ08JSP + CJ06RYL', $continut);
+        $this->assertStringContainsString('03.02.2026', $continut);
+        $this->assertStringContainsString('JUNIOR SPEED SRL', $continut);
     }
 }
