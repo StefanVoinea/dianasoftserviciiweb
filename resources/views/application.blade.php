@@ -8,7 +8,7 @@
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <!-- <link rel="icon" href="<%= BASE_URL %>favicon.ico"> -->
 
-   <title>{{env("APP_NAME")}}</title>
+   <title>{{config('app.name')}}</title>
 
   <!-- Splash Screen/Loader Styles -->
   <link rel="stylesheet" type="text/css" href="{{ asset(mix('css/loader.css')) }}" />
@@ -27,7 +27,7 @@
 
 <body>
   <noscript>
-    <strong>{{"We're sorry but ".env('APP_NAME')." doesn't work properly without JavaScript enabled. Please enable it to continue."}}</strong>
+    <strong>{{"We're sorry but ".config('app.name')." doesn't work properly without JavaScript enabled. Please enable it to continue."}}</strong>
   </noscript>
   <div id="loading-bg">
     <div class="loading-logo">
@@ -43,11 +43,12 @@
   </div>
 
 <script>
-        window.asset_path="{{env('ASSET_URL')."/"}}"
-        window.api_url="{{env('API_URL')."/"}}"
-        window.app_name="{{env('APP_NAME')}}"
-        window.versiune="vers. {{env('APP_VERS')}}"
-        
+        {{-- Prin config(), nu env(): cu configuratia in cache, env() e gol aici. --}}
+        window.asset_path="{{config('app.asset_url')."/"}}"
+        window.api_url="{{config('app.api_url')."/"}}"
+        window.app_name="{{config('app.name')}}"
+        window.versiune="vers. {{config('app.vers')}}"
+
     </script>
   <script src="{{ asset(mix('js/app.js')) }}"></script>
 

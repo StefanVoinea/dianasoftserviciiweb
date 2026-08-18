@@ -64,6 +64,17 @@ return [
     'asset_url' => env('ASSET_URL', null),
 
     /*
+     * Adresa API-ului si versiunea, pentru pagina care porneste aplicatia.
+     *
+     * Stau in configurare, nu citite cu env() direct din blade: cu configuratia
+     * in cache (php artisan config:cache), env() intoarce gol in afara
+     * fisierelor de config, pagina posta la /login in loc de /api/login si
+     * nimeni nu se mai putea loga.
+     */
+    'api_url' => env('API_URL'),
+    'vers' => env('APP_VERS'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
