@@ -275,6 +275,57 @@ class EtransportDeclaratiiController extends Controller
         ]);
     }
 
+    /**
+     * Declarația Intrastat, întocmită din declarațiile e-Transport cu UIT.
+     *
+     * Fișierul XML pe schema INS se descarcă și se încarcă în aplicația
+     * Intrastat (online sau offline), care îl validează și îl depune.
+     */
+    public function intrastat(Request $request, \App\Services\Anaf\Etransport\IntrastatXml $intrastat)
+    {
+        $date = $request->validate([
+            'luna' => 'required|integer|min:1|max:12',
+            'anul' => 'required|integer|min:2000|max:2100',
+            'flux' => 'required|in:sosiri,expedieri',
+            'nume' => 'required|string|max:100',
+            'prenume' => 'required|string|max:100',
+            'telefon' => 'required|string|max:30',
+            'email' => 'nullable|email|max:100',
+            'incoterm' => 'required|string|in:EXW,FCA,FAS,FOB,CFR,CIF,CPT,CIP,DAP,DPU,DDP',
+        ]);
+
+        $companie = \App\Support\ContextCompanie::curenta();
+        $firma = $companie ? \App\Models\Company::find($companie) : null;
+
+        try {
+            $rezultat = $intrastat->genereaza((int) $date['luna'], (int) $date['anul'], $date['flux'], [
+                'cif' => $this->cifClientului() ?: '',
+                'firma' => optional($firma)->denumire ?: '',
+                'nume' => $date['nume'],
+                'prenume' => $date['prenume'],
+                'telefon' => $date['telefon'],
+                'email' => $date['email'] ?? null,
+                'incoterm' => $date['incoterm'],
+            ]);
+        } catch (EtransportException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        Jurnal::scrie(
+            'etransport_declaratie',
+            sprintf(
+                'A întocmit declarația Intrastat (%s, %02d/%d): %d linii din %d declarații e-Transport',
+                $date['flux'],
+                $date['luna'],
+                $date['anul'],
+                $rezultat['linii'],
+                $rezultat['declaratii']
+            )
+        );
+
+        return response()->json(['success' => true, 'data' => $rezultat]);
+    }
+
     /** Trimite codul UIT pe email, șoferului sau partenerului. */
     public function trimiteEmail(Request $request, EtransportDeclaratie $declaratie)
     {

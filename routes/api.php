@@ -228,6 +228,7 @@ Route::middleware(['auth:api', 'companie', 'modul:etransport'])->group(function 
     Route::get('/anaf-etransport/declaratii/coduri-vamale', 'Api\EtransportDeclaratiiController@coduriVamale');
     Route::get('/anaf-etransport/declaratii/curs', 'Api\EtransportDeclaratiiController@curs');
     Route::post('/anaf-etransport/declaratii/importa', 'Api\EtransportDeclaratiiController@importa');
+    Route::post('/anaf-etransport/declaratii/intrastat', 'Api\EtransportDeclaratiiController@intrastat');
     Route::get('/anaf-etransport/declaratii', 'Api\EtransportDeclaratiiController@index');
     Route::post('/anaf-etransport/declaratii', 'Api\EtransportDeclaratiiController@store');
     Route::get('/anaf-etransport/declaratii/{declaratie}', 'Api\EtransportDeclaratiiController@show');

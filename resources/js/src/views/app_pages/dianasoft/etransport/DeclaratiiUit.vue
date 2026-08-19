@@ -45,6 +45,20 @@
           style="width: auto"
           @change="incarcaLista"
         />
+
+        <!-- Intrastat-ul lunar iese din aceleasi date, gata declarate la UIT -->
+        <b-button
+          variant="outline-primary"
+          size="sm"
+          class="ml-auto"
+          @click="deschideIntrastat"
+        >
+          <feather-icon
+            icon="FileTextIcon"
+            class="mr-25"
+          />
+          Declarația Intrastat
+        </b-button>
       </div>
 
       <b-table
@@ -766,6 +780,104 @@
       </div>
     </div>
 
+    <!--
+      Declaratia Intrastat, intocmita din declaratiile e-Transport cu UIT ale
+      lunii alese. Fisierul XML se incarca apoi in aplicatia Intrastat a INS,
+      care il valideaza si il depune.
+    -->
+    <b-modal
+      v-model="intrastatVizibil"
+      title="Declarația Intrastat"
+      :ok-title="intrastatInCurs ? 'Se întocmește...' : 'Generează XML'"
+      cancel-title="Renunță"
+      :ok-disabled="intrastatInCurs || !intrastat.nume || !intrastat.prenume || !intrastat.telefon"
+      @ok.prevent="genereazaIntrastat"
+    >
+      <p class="text-muted small">
+        Declarația se întocmește din declarațiile e-Transport cu UIT ale lunii
+        alese: sosirile din achizițiile intracomunitare, expedierile din
+        livrările intracomunitare, cu liniile adunate pe cod NC8 și țară.
+        Fișierul XML se încarcă în aplicația Intrastat (INS), care îl validează
+        și îl depune.
+      </p>
+
+      <b-row>
+        <b-col cols="4">
+          <label class="small mb-0">Luna</label>
+          <b-form-select
+            v-model="intrastat.luna"
+            :options="[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]"
+          />
+        </b-col>
+        <b-col cols="4">
+          <label class="small mb-0">Anul</label>
+          <b-form-input
+            v-model.number="intrastat.anul"
+            type="number"
+            min="2000"
+            max="2100"
+          />
+        </b-col>
+        <b-col cols="4">
+          <label class="small mb-0">Fluxul</label>
+          <b-form-select
+            v-model="intrastat.flux"
+            :options="[
+              { value: 'sosiri', text: 'Sosiri (AIC)' },
+              { value: 'expedieri', text: 'Expedieri (LIC)' },
+            ]"
+          />
+        </b-col>
+      </b-row>
+
+      <b-row class="mt-1">
+        <b-col cols="6">
+          <label class="small mb-0">Condiția de livrare (Incoterm)</label>
+          <b-form-select
+            v-model="intrastat.incoterm"
+            :options="['EXW', 'FCA', 'FAS', 'FOB', 'CFR', 'CIF', 'CPT', 'CIP', 'DAP', 'DPU', 'DDP']"
+          />
+        </b-col>
+      </b-row>
+
+      <hr>
+      <p class="text-muted small mb-1">
+        Persoana de contact, cerută de INS în declarație:
+      </p>
+      <b-row>
+        <b-col cols="6">
+          <label class="small mb-0">Nume*</label>
+          <b-form-input v-model="intrastat.nume" />
+        </b-col>
+        <b-col cols="6">
+          <label class="small mb-0">Prenume*</label>
+          <b-form-input v-model="intrastat.prenume" />
+        </b-col>
+      </b-row>
+      <b-row class="mt-1">
+        <b-col cols="6">
+          <label class="small mb-0">Telefon*</label>
+          <b-form-input v-model="intrastat.telefon" />
+        </b-col>
+        <b-col cols="6">
+          <label class="small mb-0">Email</label>
+          <b-form-input
+            v-model="intrastat.email"
+            type="email"
+          />
+        </b-col>
+      </b-row>
+
+      <b-alert
+        v-if="intrastatEroare"
+        show
+        variant="danger"
+        class="py-1 px-2 mt-1 mb-0"
+      >
+        {{ intrastatEroare }}
+      </b-alert>
+    </b-modal>
+
     <!-- Trimiterea codului UIT pe email -->
     <b-modal
       v-model="emailVizibil"
@@ -848,6 +960,12 @@ export default {
       grupate: true,
       greutateBrutaTotala: null,
       filtruStare: '',
+      intrastatVizibil: false,
+      intrastatInCurs: false,
+      intrastatEroare: '',
+      intrastat: {
+        luna: 1, anul: 2026, flux: 'sosiri', incoterm: 'EXW', nume: '', prenume: '', telefon: '', email: '',
+      },
       emailVizibil: false,
       emailAdrese: '',
       emailUit: '',
@@ -1237,6 +1355,66 @@ export default {
         })
         .catch(err => {
           this.eroare = this.mesajEroare(err, 'Starea nu s-a putut verifica')
+        })
+    },
+    deschideIntrastat() {
+      this.intrastatEroare = ''
+
+      // Luna incheiata e cea care se declara de obicei.
+      const lunaTrecuta = new Date()
+      lunaTrecuta.setDate(1)
+      lunaTrecuta.setMonth(lunaTrecuta.getMonth() - 1)
+
+      this.intrastat.luna = lunaTrecuta.getMonth() + 1
+      this.intrastat.anul = lunaTrecuta.getFullYear()
+
+      // Persoana de contact ramane de la o luna la alta.
+      try {
+        const salvat = JSON.parse(window.localStorage.getItem('intrastat_contact'))
+        if (salvat) {
+          this.intrastat = { ...this.intrastat, ...salvat }
+        }
+      } catch (e) {
+        // setare veche sau stricata — campurile raman goale
+      }
+
+      this.intrastatVizibil = true
+    },
+    genereazaIntrastat() {
+      this.intrastatEroare = ''
+      this.intrastatInCurs = true
+
+      window.localStorage.setItem('intrastat_contact', JSON.stringify({
+        flux: this.intrastat.flux,
+        incoterm: this.intrastat.incoterm,
+        nume: this.intrastat.nume,
+        prenume: this.intrastat.prenume,
+        telefon: this.intrastat.telefon,
+        email: this.intrastat.email,
+      }))
+
+      this.$http.post('/anaf-etransport/declaratii/intrastat', this.intrastat)
+        .then(raspuns => {
+          const rezultat = raspuns.data.data
+
+          // Fisierul se descarca pe loc, gata de incarcat in aplicatia Intrastat.
+          const url = window.URL.createObjectURL(new Blob([rezultat.xml], { type: 'application/xml' }))
+          const legatura = document.createElement('a')
+          legatura.href = url
+          legatura.download = rezultat.nume
+          legatura.click()
+          setTimeout(() => window.URL.revokeObjectURL(url), 60000)
+
+          this.intrastatVizibil = false
+          this.info = `Declarația Intrastat: ${rezultat.linii} linii din ${rezultat.declaratii} declarații, `
+            + `${rezultat.valoare.toLocaleString('ro-RO')} lei. Fișierul ${rezultat.nume} s-a descărcat — `
+            + 'se încarcă în aplicația Intrastat (INS) pentru validare și depunere.'
+        })
+        .catch(err => {
+          this.intrastatEroare = this.mesajEroare(err, 'Declarația Intrastat nu a putut fi întocmită')
+        })
+        .finally(() => {
+          this.intrastatInCurs = false
         })
     },
     deschideEmail(declaratie) {
