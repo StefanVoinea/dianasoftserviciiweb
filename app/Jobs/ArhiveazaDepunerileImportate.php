@@ -139,7 +139,9 @@ class ArhiveazaDepunerileImportate implements ShouldQueue
 
         $certificate->foloseste($certificat);
 
-        $denumire = $declaratie->den_firma ?: optional($societate)->denumire;
+        // Dosarul poarta denumirea din Entitati inrolate — acolo s-a completat
+        // la import unde lipsea; cea de pe declaratie ramane doar de rezerva.
+        $denumire = optional($societate)->denumire ?: $declaratie->den_firma;
         $dosarFirma = ArhivaService::dosarFirma($denumire, $declaratie->cui);
         $dosarTip = ArhivaService::curata($declaratie->tip) ?: 'Diverse';
 

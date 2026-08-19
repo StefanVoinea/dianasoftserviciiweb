@@ -267,10 +267,44 @@ class AdministrareController extends Controller
      * recipisele — aflate pe calculatorul clientului — se copiaza in arhiva
      * printr-o lucrare in fundal, prin programul local.
      */
+    /**
+     * Anii din fisierul declmf.mde, cu numarul depunerilor bune din fiecare:
+     * fereastra de import ii arata, iar omul alege ce ani sa aduca.
+     */
+    public function aniiDeclaratiilor(Request $request, Company $client, VectorMde $mde, \App\Services\Anaf\ImportDepuneri $import)
+    {
+        $request->validate(['fisier' => 'required|file|max:102400']);
+
+        $fisier = $request->file('fisier');
+        $extensie = strtolower($fisier->getClientOriginalExtension() ?: 'mde');
+
+        if (!in_array($extensie, ['mde', 'mdb', 'accdb', 'csv'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Se acceptă fișiere Access (.mde, .mdb, .accdb) sau CSV-ul tabelului depuneri.',
+            ], 422);
+        }
+
+        $cale = $fisier->getRealPath() . '.' . $extensie;
+        copy($fisier->getRealPath(), $cale);
+
+        try {
+            $ani = $import->anii($mde->inCsv($cale, 'depuneri'));
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        } finally {
+            @unlink($cale);
+        }
+
+        return response()->json(['success' => true, 'data' => $ani]);
+    }
+
     public function importaDeclaratii(Request $request, Company $client, VectorMde $mde, \App\Services\Anaf\ImportDepuneri $import)
     {
         $request->validate([
             'fisier' => 'required|file|max:102400',
+            'ani' => 'nullable|array',
+            'ani.*' => 'integer',
         ]);
 
         $fisier = $request->file('fisier');
@@ -287,7 +321,11 @@ class AdministrareController extends Controller
         copy($fisier->getRealPath(), $cale);
 
         try {
-            $rezultat = $import->importaCsv($mde->inCsv($cale, 'depuneri'), $client->id);
+            $rezultat = $import->importaCsv(
+                $mde->inCsv($cale, 'depuneri'),
+                $client->id,
+                array_map('intval', $request->input('ani', []))
+            );
         } catch (\Exception $e) {
             Jurnal::esec(
                 'import_depuneri',
@@ -330,6 +368,7 @@ class AdministrareController extends Controller
                 'existente' => $rezultat['existente'],
                 'respinse' => $rezultat['respinse'],
                 'sterse' => $rezultat['sterse'],
+                'in_alti_ani' => $rezultat['in_alti_ani'],
                 'denumiri' => $rezultat['denumiri'],
                 'de_arhivat' => count($rezultat['de_arhivat']),
                 'sarite' => $rezultat['sarite'],

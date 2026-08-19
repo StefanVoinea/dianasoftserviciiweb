@@ -81,6 +81,7 @@ Route::middleware(['auth:api', 'administrator.serviciu'])->group(function () {
     // Periodicitatile declaratiilor, aduse din programul vechi (vector.mde)
     Route::post('/administrare/clienti/{client}/import-vector', 'Api\AdministrareController@importaVector');
     Route::post('/administrare/clienti/{client}/import-declaratii', 'Api\AdministrareController@importaDeclaratii');
+    Route::post('/administrare/clienti/{client}/import-declaratii/ani', 'Api\AdministrareController@aniiDeclaratiilor');
     Route::put('/administrare/clienti/{client}/abonament', 'Api\AdministrareController@salveazaAbonament');
     Route::put('/administrare/utilizatori/{utilizator}', 'Api\AdministrareController@actualizeazaUtilizator');
     Route::post('/administrare/utilizatori/{utilizator}/deconectare', 'Api\AdministrareController@deconecteaza');

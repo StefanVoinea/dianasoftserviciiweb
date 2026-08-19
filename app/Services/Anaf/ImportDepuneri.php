@@ -32,51 +32,24 @@ class ImportDepuneri
      *     sarite: array<int, string>
      * }
      */
-    public function importaCsv(string $cale, int $companie): array
+    public function importaCsv(string $cale, int $companie, array $ani = []): array
     {
-        $fisier = fopen($cale, 'r');
-
-        if ($fisier === false) {
-            throw new \RuntimeException('Fișierul nu a putut fi citit: ' . $cale);
-        }
-
-        $antet = fgetcsv($fisier);
-
-        if ($antet === false) {
-            fclose($fisier);
-
-            throw new \RuntimeException('CSV-ul este gol.');
-        }
-
-        $antet[0] = preg_replace('/^\xEF\xBB\xBF/', '', $antet[0]);
-        $antet = array_map(function ($coloana) {
-            return strtolower(trim((string) $coloana));
-        }, $antet);
-
-        if (!in_array('cui', $antet, true) || !in_array('tip_declaratie', $antet, true)) {
-            fclose($fisier);
-
-            throw new \RuntimeException(
-                'Fișierul nu arată a tabelul „depuneri": lipsesc coloanele CUI și Tip_declaratie.'
-            );
-        }
-
         $rezultat = [
             'randuri' => 0,
             'scrise' => 0,
             'existente' => 0,
             'respinse' => 0,
             'sterse' => 0,
+            'in_alti_ani' => 0,
             'denumiri' => 0,
             'de_arhivat' => [],
             'sarite' => [],
         ];
 
         $denumiri = [];
+        $deScris = [];
 
-        while (($rand = fgetcsv($fisier)) !== false) {
-            $date = array_combine($antet, array_pad($rand, count($antet), ''));
-
+        foreach ($this->randurile($cale) as $date) {
             $cui = preg_replace('/\D/', '', (string) ($date['cui'] ?? ''));
             $tip = strtoupper(trim((string) ($date['tip_declaratie'] ?? '')));
 
@@ -86,10 +59,17 @@ class ImportDepuneri
 
             $rezultat['randuri']++;
 
+            // Denumirea e buna de la orice rand, chiar din anii sau starile sarite.
             $denumire = trim((string) ($date['den_firma'] ?? ''));
 
             if ($denumire !== '' && !isset($denumiri[$cui])) {
                 $denumiri[$cui] = $denumire;
+            }
+
+            if ($ani !== [] && !in_array((int) ($date['anul'] ?? 0), $ani, true)) {
+                $rezultat['in_alti_ani']++;
+
+                continue;
             }
 
             /*
@@ -103,6 +83,26 @@ class ImportDepuneri
 
                 continue;
             }
+
+            $deScris[] = [$cui, $tip, $date];
+        }
+
+        /*
+         * Denumirile se pun intai la Entitati inrolate, acolo unde lipsesc:
+         * ele sunt numele dupa care se boteaza si dosarele arhivei, deci
+         * trebuie sa fie la locul lor inainte de a scrie vreo declaratie.
+         */
+        $rezultat['denumiri'] = $this->completeazaDenumirile($companie, $denumiri);
+
+        // Denumirea folosita e cea din Entitati inrolate (veche sau abia pusa).
+        $inrolate = AnafSocietate::query()->toateCompaniile()
+            ->where('company_id', $companie)
+            ->whereIn('cif', array_map('strval', array_keys($denumiri)))
+            ->whereNotNull('denumire')
+            ->pluck('denumire', 'cif');
+
+        foreach ($deScris as [$cui, $tip, $date]) {
+            $denumire = trim((string) $inrolate->get($cui, '')) ?: ($denumiri[$cui] ?? '');
 
             try {
                 $declaratie = $this->scrie($companie, $cui, $tip, $denumire, $date);
@@ -126,11 +126,79 @@ class ImportDepuneri
             }
         }
 
-        fclose($fisier);
-
-        $rezultat['denumiri'] = $this->completeazaDenumirile($companie, $denumiri);
-
         return $rezultat;
+    }
+
+    /**
+     * Anii din fisier, cu numarul depunerilor bune din fiecare — pentru
+     * fereastra din care omul alege ce ani sa importe.
+     *
+     * @return array<int, array{an: int, depuneri: int}> de la anul nou spre vechi
+     */
+    public function anii(string $cale): array
+    {
+        $ani = [];
+
+        foreach ($this->randurile($cale) as $date) {
+            $cui = preg_replace('/\D/', '', (string) ($date['cui'] ?? ''));
+            $tip = strtoupper(trim((string) ($date['tip_declaratie'] ?? '')));
+
+            if ($cui === '' || $tip === '' || !$this->depusaValid($date)) {
+                continue;
+            }
+
+            $an = (int) ($date['anul'] ?? 0);
+            $ani[$an] = ($ani[$an] ?? 0) + 1;
+        }
+
+        krsort($ani);
+
+        $lista = [];
+
+        foreach ($ani as $an => $depuneri) {
+            $lista[] = ['an' => $an, 'depuneri' => $depuneri];
+        }
+
+        return $lista;
+    }
+
+    /**
+     * Randurile CSV-ului, cu antetul potrivit pe fiecare.
+     *
+     * @return \Generator<array<string, string>>
+     */
+    protected function randurile(string $cale): \Generator
+    {
+        $fisier = fopen($cale, 'r');
+
+        if ($fisier === false) {
+            throw new \RuntimeException('Fișierul nu a putut fi citit: ' . $cale);
+        }
+
+        try {
+            $antet = fgetcsv($fisier);
+
+            if ($antet === false) {
+                throw new \RuntimeException('CSV-ul este gol.');
+            }
+
+            $antet[0] = preg_replace('/^\xEF\xBB\xBF/', '', $antet[0]);
+            $antet = array_map(function ($coloana) {
+                return strtolower(trim((string) $coloana));
+            }, $antet);
+
+            if (!in_array('cui', $antet, true) || !in_array('tip_declaratie', $antet, true)) {
+                throw new \RuntimeException(
+                    'Fișierul nu arată a tabelul „depuneri": lipsesc coloanele CUI și Tip_declaratie.'
+                );
+            }
+
+            while (($rand = fgetcsv($fisier)) !== false) {
+                yield array_combine($antet, array_pad($rand, count($antet), ''));
+            }
+        } finally {
+            fclose($fisier);
+        }
     }
 
     /**

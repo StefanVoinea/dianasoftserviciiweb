@@ -386,10 +386,10 @@
     <b-modal
       v-model="importDeclVizibil"
       :title="`Import declarații — ${importDeclClient ? importDeclClient.denumire : ''}`"
-      :ok-title="importDeclInCurs ? 'Se importă...' : 'Importă'"
+      :ok-title="importDeclInCurs ? 'Se lucrează...' : (importDeclAni.length ? 'Importă anii aleși' : 'Citește anii')"
       cancel-title="Renunță"
-      :ok-disabled="!importDeclFisier || importDeclInCurs"
-      @ok.prevent="importaDeclaratii"
+      :ok-disabled="!importDeclFisier || importDeclInCurs || (importDeclAni.length > 0 && !importDeclAniAlesi.length)"
+      @ok.prevent="importDeclAni.length ? importaDeclaratii() : citesteAnii()"
     >
       <p class="text-muted small">
         Alegeți fișierul <strong>declmf.mde</strong> din programul vechi al clientului
@@ -406,6 +406,38 @@
         placeholder="Alegeți fișierul..."
         browse-text="Răsfoiește"
       />
+
+      <!-- Anii din fisier, cu depunerile bune din fiecare: se importa doar cei bifati -->
+      <div
+        v-if="importDeclAni.length"
+        class="mt-1"
+      >
+        <div class="d-flex align-items-center justify-content-between">
+          <label class="mb-0">Anii de importat</label>
+          <b-button
+            size="sm"
+            variant="flat-primary"
+            class="py-0 px-50"
+            @click="alegeTotiAnii"
+          >
+            <small>{{ importDeclAniAlesi.length === importDeclAni.length ? 'niciunul' : 'toți' }}</small>
+          </b-button>
+        </div>
+        <b-form-checkbox-group
+          v-model="importDeclAniAlesi"
+          stacked
+          class="ani-import"
+        >
+          <b-form-checkbox
+            v-for="an in importDeclAni"
+            :key="an.an"
+            :value="an.an"
+          >
+            {{ an.an || 'fără an' }}
+            <span class="text-muted small">— {{ an.depuneri }} depuneri</span>
+          </b-form-checkbox>
+        </b-form-checkbox-group>
+      </div>
 
       <b-alert
         v-if="importDeclEroare"
@@ -426,6 +458,7 @@
         {{ importDeclRezultat.scrise }} declarații noi,
         {{ importDeclRezultat.existente }} deja existente,
         {{ importDeclRezultat.respinse }} respinse de ANAF (nu se importă),
+        {{ importDeclRezultat.in_alti_ani }} în afara anilor aleși,
         {{ importDeclRezultat.denumiri }} denumiri de firmă completate.
         <span v-if="importDeclRezultat.sterse">
           {{ importDeclRezultat.sterse }} rânduri respinse, aduse de un import mai vechi, au fost șterse.
@@ -993,6 +1026,9 @@ export default {
       importDeclFisier: null,
       importDeclEroare: '',
       importDeclRezultat: null,
+      // Anii gasiti in fisier si cei bifati de om
+      importDeclAni: [],
+      importDeclAniAlesi: [],
 
       utilizatorVizibil: false,
       utilizator: {},
@@ -1027,6 +1063,14 @@ export default {
   computed: {
     optiuniClienti() {
       return this.clienti.map(client => ({ value: client.id, text: client.denumire }))
+    },
+  },
+  watch: {
+    // Alt fisier inseamna alti ani: ce era citit pentru cel vechi nu mai e bun.
+    importDeclFisier() {
+      this.importDeclAni = []
+      this.importDeclAniAlesi = []
+      this.importDeclRezultat = null
     },
   },
   created() {
@@ -1221,11 +1265,49 @@ export default {
       this.importDeclFisier = null
       this.importDeclEroare = ''
       this.importDeclRezultat = null
+      this.importDeclAni = []
+      this.importDeclAniAlesi = []
       this.importDeclVizibil = true
     },
     /**
-     * Trimite fișierul declmf.mde și scrie istoricul depunerilor pe clientul
-     * ales. Fereastra rămâne deschisă, ca rezultatul să poată fi citit.
+     * Primul pas: fișierul se citește doar ca să spună ce ani cuprinde,
+     * cu numărul depunerilor bune din fiecare. Nu se scrie încă nimic.
+     */
+    citesteAnii() {
+      this.importDeclEroare = ''
+      this.importDeclRezultat = null
+      this.importDeclInCurs = true
+
+      const date = new FormData()
+      date.append('fisier', this.importDeclFisier)
+
+      this.$http.post(`/administrare/clienti/${this.importDeclClient.id}/import-declaratii/ani`, date)
+        .then(raspuns => {
+          this.importDeclAni = raspuns.data.data || []
+          // Toti anii vin bifati; omul debifeaza ce nu vrea.
+          this.importDeclAniAlesi = this.importDeclAni.map(an => an.an)
+
+          if (!this.importDeclAni.length) {
+            this.importDeclEroare = 'Fișierul nu are nicio depunere validă de importat.'
+          }
+        })
+        .catch(err => {
+          this.importDeclEroare = err.response && err.response.data && err.response.data.message
+            ? err.response.data.message
+            : 'Fișierul nu a putut fi citit.'
+        })
+        .finally(() => {
+          this.importDeclInCurs = false
+        })
+    },
+    alegeTotiAnii() {
+      this.importDeclAniAlesi = this.importDeclAniAlesi.length === this.importDeclAni.length
+        ? []
+        : this.importDeclAni.map(an => an.an)
+    },
+    /**
+     * Al doilea pas: trimite fișierul și anii bifați; se scrie istoricul pe
+     * clientul ales. Fereastra rămâne deschisă, ca rezultatul să poată fi citit.
      */
     importaDeclaratii() {
       this.importDeclEroare = ''
@@ -1234,11 +1316,11 @@ export default {
 
       const date = new FormData()
       date.append('fisier', this.importDeclFisier)
+      this.importDeclAniAlesi.forEach(an => date.append('ani[]', an))
 
       this.$http.post(`/administrare/clienti/${this.importDeclClient.id}/import-declaratii`, date)
         .then(raspuns => {
           this.importDeclRezultat = raspuns.data.data
-          this.importDeclFisier = null
         })
         .catch(err => {
           this.importDeclEroare = err.response && err.response.data && err.response.data.message
@@ -1378,6 +1460,13 @@ export default {
 </script>
 
 <style scoped>
+/* Lista anilor de importat: multi ani nu au de ce sa lungeasca fereastra. */
+.ani-import {
+  max-height: 14rem;
+  overflow-y: auto;
+  display: block;
+}
+
 /* Butoanele de actiuni stau unul sub altul, la aceeasi latime. */
 .butoane-actiuni {
   width: 100%;

@@ -131,6 +131,41 @@ class ImportDepuneriTest extends TestCase
         $this->assertSame(1, $dinNou['existente']);
     }
 
+    /** Anii din fisier se spun cu depunerile bune, iar importul ii respecta. */
+    public function test_anii_se_citesc_iar_importul_ia_doar_anii_alesi()
+    {
+        $ani = (new ImportDepuneri())->anii($this->csv());
+
+        // Doar depunerea valida conteaza; cea respinsa (2012) nu apare.
+        $this->assertSame([['an' => 2023, 'depuneri' => 1]], $ani);
+
+        $rezultat = (new ImportDepuneri())->importaCsv($this->csv(), $this->client->id, [2019]);
+
+        $this->assertSame(0, $rezultat['scrise']);
+        // Ambele randuri (2012 si 2023) raman pe dinafara anului ales.
+        $this->assertSame(2, $rezultat['in_alti_ani']);
+    }
+
+    /** Denumirea pusa de om la Entitati inrolate bate denumirea din fisier. */
+    public function test_arhivarea_si_declaratia_poarta_denumirea_din_entitati_inrolate()
+    {
+        AnafSocietate::query()->toateCompaniile()->create([
+            'company_id' => $this->client->id,
+            'cif' => '21452670',
+            'denumire' => 'LEONIM VEST SRL - NUME PUS DE OM',
+        ]);
+
+        (new ImportDepuneri())->importaCsv($this->csv(), $this->client->id);
+
+        $this->assertSame(
+            'LEONIM VEST SRL - NUME PUS DE OM',
+            AnafDeclaratie::query()->toateCompaniile()
+                ->where('company_id', $this->client->id)
+                ->where('cui', '21452670')
+                ->value('den_firma')
+        );
+    }
+
     /** Un CSV mic, in forma exportului din declmf.mde. */
     protected function csv(): string
     {
