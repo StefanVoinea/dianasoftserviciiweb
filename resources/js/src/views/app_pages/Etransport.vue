@@ -46,21 +46,60 @@
               </b-row>
 
               <div class="d-flex align-items-center mt-2">
-                <b-button
-                  variant="primary"
+                <!-- Apăsarea preia acum; din săgeată se alege manual sau automat -->
+                <b-dropdown
+                  split
                   size="sm"
+                  variant="primary"
                   :disabled="!cif || sincronizareInCurs"
-                  @click="sincronizeaza"
+                  @click="sincronizeaza()"
                 >
-                  <b-spinner
-                    v-if="sincronizareInCurs"
-                    small
-                    class="mr-1"
-                  />
-                  Preia
-                </b-button>
+                  <template #button-content>
+                    <b-spinner
+                      v-if="sincronizareInCurs"
+                      small
+                      class="mr-1"
+                    />
+                    Preia{{ automat.activ ? ' automat' : '' }}
+                  </template>
+
+                  <b-dropdown-item
+                    :active="!automat.activ"
+                    @click="automat.activ = false"
+                  >
+                    Preia
+                  </b-dropdown-item>
+                  <b-dropdown-item
+                    :active="automat.activ"
+                    @click="automat.activ = true"
+                  >
+                    Preia automat
+                  </b-dropdown-item>
+                </b-dropdown>
                 <small class="text-muted ml-2">
                   Maximum 60 de zile. Se preiau stările finale și notificările cu erori.
+                </small>
+              </div>
+
+              <div class="automat-notificari mt-1">
+                <div
+                  v-if="automat.activ"
+                  class="d-flex align-items-center"
+                >
+                  <small class="text-primary mr-1">la</small>
+                  <b-form-select
+                    v-model.number="automat.minute"
+                    size="sm"
+                    class="lista-minute"
+                    :options="optiuniMinute"
+                  />
+                </div>
+
+                <small class="text-muted">
+                  <span v-if="ultimaPreluare">
+                    Ultima preluare: {{ ultimaPreluare }} · {{ notificariAduse }}
+                  </span>
+                  <span v-else>Nicio preluare încă</span>
                 </small>
               </div>
             </b-card>
@@ -401,6 +440,19 @@ export default {
       zile: 30,
       cifDepunere: '',
       fisier: null,
+
+      // Preluarea repetată, ca la recipisele din SPV Curier
+      automat: { activ: false, minute: 10 },
+      optiuniMinute: [
+        { value: 5, text: '5 minute' },
+        { value: 10, text: '10 minute' },
+        { value: 15, text: '15 minute' },
+        { value: 30, text: '30 minute' },
+        { value: 60, text: '60 minute' },
+      ],
+      cronometru: null,
+      ultimaPreluare: '',
+      ultimaPreluareNumar: 0,
       notificari: [],
       filtre: { uit: '', cif: '', doar_erori: false },
       info: '',
@@ -431,8 +483,33 @@ export default {
       ],
     }
   },
+  computed: {
+    notificariAduse() {
+      if (!this.ultimaPreluareNumar) return 'fără notificări noi'
+
+      return this.ultimaPreluareNumar === 1 ? 'o notificare nouă' : `${this.ultimaPreluareNumar} notificări noi`
+    },
+  },
+  watch: {
+    // Orice schimbare a setării o ține minte și repornește cronometrul.
+    'automat.activ': function reporneste() {
+      this.salveazaSetarea()
+      this.reglaCronometrul()
+    },
+    'automat.minute': function reporneste() {
+      this.salveazaSetarea()
+      this.reglaCronometrul()
+    },
+  },
+  beforeDestroy() {
+    // Fără asta, cronometrul ar cere notificări și după plecarea din pagină.
+    this.opresteCronometrul()
+  },
   created() {
     document.title = `${window.app_name} -> Dispecer e-Transport`
+
+    this.incarcaSetarea()
+    this.reglaCronometrul()
 
     // Cererile merg autentificate și în contextul societății selectate.
     const token = window.localStorage.getItem('accessToken')
@@ -519,15 +596,29 @@ export default {
           this.listaInCurs = false
         })
     },
-    sincronizeaza() {
+    /**
+     * @param {boolean} tacut pornit de cronometru: nu deranjează cu mesaje
+     *                        când n-a venit nimic nou
+     */
+    sincronizeaza(tacut = false) {
       this.eroare = ''
-      this.info = ''
       this.sincronizareInCurs = true
 
       this.$http.post('/anaf-etransport/sincronizeaza', { cif: this.cif, zile: this.zile })
         .then(raspuns => {
           const r = raspuns.data.data
-          this.info = `${r.preluate} notificări primite, ${r.noi} noi, ${r.cu_erori} cu erori.`
+
+          this.ultimaPreluare = this.acum()
+          this.ultimaPreluareNumar = r.noi || 0
+          window.localStorage.setItem('etransport_ultima_preluare', JSON.stringify({
+            la: this.ultimaPreluare,
+            noi: this.ultimaPreluareNumar,
+          }))
+
+          if (!tacut || r.noi > 0) {
+            this.info = `${r.preluate} notificări primite, ${r.noi} noi, ${r.cu_erori} cu erori.`
+          }
+
           this.incarcaLista()
         })
         .catch(err => {
@@ -536,6 +627,60 @@ export default {
         .finally(() => {
           this.sincronizareInCurs = false
         })
+    },
+    /** Momentul de acum, scris ca peste tot în modul: zz.ll.aaaa hh:mm:ss. */
+    acum() {
+      const d = new Date()
+      const doua = n => String(n).padStart(2, '0')
+
+      return `${doua(d.getDate())}.${doua(d.getMonth() + 1)}.${d.getFullYear()} `
+        + `${doua(d.getHours())}:${doua(d.getMinutes())}:${doua(d.getSeconds())}`
+    },
+    incarcaSetarea() {
+      try {
+        const salvat = JSON.parse(window.localStorage.getItem('etransport_preluare_automat'))
+
+        if (salvat && typeof salvat.minute === 'number' && salvat.minute > 0) {
+          const permise = this.optiuniMinute.map(o => o.value)
+          const minute = permise.indexOf(salvat.minute) !== -1
+            ? salvat.minute
+            : permise.reduce((a, b) => (Math.abs(b - salvat.minute) < Math.abs(a - salvat.minute) ? b : a))
+
+          this.automat = { activ: !!salvat.activ, minute }
+        }
+
+        const ultima = JSON.parse(window.localStorage.getItem('etransport_ultima_preluare'))
+
+        if (ultima) {
+          this.ultimaPreluare = ultima.la || ''
+          this.ultimaPreluareNumar = ultima.noi || 0
+        }
+      } catch (e) {
+        // setare veche sau stricată — se rămâne pe valorile implicite
+      }
+    },
+    salveazaSetarea() {
+      window.localStorage.setItem('etransport_preluare_automat', JSON.stringify(this.automat))
+    },
+    opresteCronometrul() {
+      if (this.cronometru) {
+        window.clearInterval(this.cronometru)
+        this.cronometru = null
+      }
+    },
+    reglaCronometrul() {
+      this.opresteCronometrul()
+
+      const minute = Number(this.automat.minute)
+
+      if (!this.automat.activ || !minute || minute < 1) return
+
+      this.cronometru = window.setInterval(() => {
+        // Fără CIF nu are ce prelua, iar peste o preluare pornită nu se calcă.
+        if (this.cif && !this.sincronizareInCurs) {
+          this.sincronizeaza(true)
+        }
+      }, minute * 60 * 1000)
     },
     depune() {
       this.eroare = ''
@@ -606,3 +751,18 @@ export default {
   },
 }
 </script>
+
+<style scoped>
+/* Lista de intervale: doar cat sa incapa "60 minute". */
+.lista-minute {
+  width: 6.5rem;
+  height: 1.6rem;
+  padding: 0 1.2rem 0 0.4rem;
+  line-height: 1.2;
+  background-position: right 0.35rem center;
+}
+
+.automat-notificari small {
+  font-size: 0.72rem;
+}
+</style>
