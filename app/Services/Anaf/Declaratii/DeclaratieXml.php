@@ -176,6 +176,34 @@ class DeclaratieXml
         ];
     }
 
+    /**
+     * Intregeste identificarea din numele fisierului, cand XML-ul n-a spus-o.
+     *
+     * Unele programe de contabilitate scot PDF-uri (mai ales D406/SAF-T) al
+     * caror XML atasat nu tine CUI-ul si perioada unde le cauta analiza — dar
+     * numele fisierului le poarta: „FIRMA_D406_47587115_31-07-2026_Inf-semnat.pdf".
+     * Fara CUI, declaratia nu se leaga de firma, recipisa nu se potriveste, iar
+     * omul vede liniute in loc de firma.
+     */
+    public function completeazaDinNume(array $meta, string $numeFisier): array
+    {
+        $tip = preg_quote((string) ($meta['tip'] ?? ''), '/');
+
+        if (empty($meta['cui']) && $tip !== ''
+            && preg_match('/_' . $tip . '_(\d{2,10})(?:_|\.|$)/i', $numeFisier, $gasit)) {
+            $meta['cui'] = $gasit[1];
+        }
+
+        // 31-07-2026 sau 31.07.2026: ziua din urma a perioadei raportate.
+        if ((empty($meta['luna']) || empty($meta['anul']))
+            && preg_match('/(\d{1,2})[-.](\d{1,2})[-.](\d{4})/', $numeFisier, $gasit)) {
+            $meta['luna'] = $meta['luna'] ?? (int) $gasit[2];
+            $meta['anul'] = $meta['anul'] ?? (int) $gasit[3];
+        }
+
+        return $meta;
+    }
+
     public function tipDinRadacina(string $radacina, ?string $namespace = null): string
     {
         $tip = $this->tipDinNamespace($namespace);

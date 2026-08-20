@@ -152,6 +152,9 @@ class DeclaratiiController extends Controller
             throw $e;
         }
 
+        // Ce n-a spus XML-ul (CUI, perioada) se poate citi din numele fisierului.
+        $meta = $analizor->completeazaDinNume($meta, $incarcat->getClientOriginalName());
+
         $declaratie = AnafDeclaratie::create(array_merge($this->campuriDin($meta), [
             'nume_fisier' => $incarcat->getClientOriginalName(),
             'cale_xml' => $caleXml,
@@ -191,6 +194,9 @@ class DeclaratiiController extends Controller
 
             throw $e;
         }
+
+        // Ce n-a spus XML-ul (CUI, perioada) se poate citi din numele fisierului.
+        $meta = $analizor->completeazaDinNume($meta, $incarcat->getClientOriginalName());
 
         $declaratie = AnafDeclaratie::create(array_merge($this->campuriDin($meta), [
             'nume_fisier' => $incarcat->getClientOriginalName(),
@@ -685,6 +691,12 @@ class DeclaratiiController extends Controller
             'data_depunere' => now(),
             'pas' => 'depus',
             'stare_declaratie' => null,
+            /*
+             * PDF-urile venite gata semnate sar peste semnare, care scria
+             * certificatul; fara el, recipisa s-ar cauta apoi cu alt token.
+             * Se retine deci certificatul cu care s-a depus.
+             */
+            'certificat_id' => $declaratie->certificat_id ?: app(CertificatService::class)->idCurent(),
         ]);
 
         // In arhiva clientului, documentul primeste acum indicele de incarcare

@@ -4,6 +4,7 @@ namespace App\Services\Anaf\Declaratii;
 
 use App\Models\AnafCertificat;
 use App\Models\AnafDeclaratie;
+use App\Models\AnafSocietate;
 use App\Services\Anaf\Arhiva\ArhivaService;
 use App\Services\Anaf\Spv\CertificatService;
 use App\Services\Anaf\Spv\SpvClient;
@@ -189,6 +190,8 @@ class RecipisaService
 
     public function verificaDeclaratie(AnafDeclaratie $declaratie, array $mesaje = []): bool
     {
+        $this->intregeste($declaratie);
+
         $mesaj = $this->potrivesteMesaj($declaratie, $mesaje);
 
         if ($mesaj !== null) {
@@ -198,6 +201,50 @@ class RecipisaService
         $this->preiaStareaPublica($declaratie);
 
         return false;
+    }
+
+    /**
+     * Intregeste declaratiile ramase fara CUI sau fara certificat.
+     *
+     * PDF-urile din alte programe (mai ales D406/SAF-T) au intrat o vreme fara
+     * CUI — analiza XML nu-l gasea — si fara certificat, ca veneau gata
+     * semnate. Fara ele, recipisa nu se potrivea si firma aparea cu liniute.
+     * Numele fisierului le poarta insa pe amandoua; aici se pun la locul lor,
+     * inclusiv pentru randurile intrate inainte de indreptarea incarcarii.
+     */
+    protected function intregeste(AnafDeclaratie $declaratie): void
+    {
+        $deScris = [];
+
+        if (!trim((string) $declaratie->cui) && $declaratie->nume_fisier) {
+            $meta = app(DeclaratieXml::class)->completeazaDinNume([
+                'tip' => $declaratie->tip,
+                'cui' => null,
+                'luna' => $declaratie->luna,
+                'anul' => $declaratie->anul,
+            ], $declaratie->nume_fisier);
+
+            if (!empty($meta['cui'])) {
+                $deScris['cui'] = $meta['cui'];
+                $deScris['luna'] = $declaratie->luna ?: $meta['luna'];
+                $deScris['anul'] = $declaratie->anul ?: $meta['anul'];
+            }
+        }
+
+        $cui = $deScris['cui'] ?? $declaratie->cui;
+
+        if ($cui && (!$declaratie->den_firma || !$declaratie->certificat_id)) {
+            $societate = AnafSocietate::where('cif', $cui)->first();
+
+            if ($societate) {
+                $deScris['den_firma'] = $declaratie->den_firma ?: $societate->denumire;
+                $deScris['certificat_id'] = $declaratie->certificat_id ?: $societate->certificat_id;
+            }
+        }
+
+        if ($deScris !== []) {
+            $declaratie->update(array_filter($deScris));
+        }
     }
 
     /** Mesajul SPV de tip RECIPISA al carui text contine indicele de incarcare. */

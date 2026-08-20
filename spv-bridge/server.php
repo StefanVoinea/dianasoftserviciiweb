@@ -825,7 +825,7 @@ function asigura_cheia($config, $rastimp = 600)
     return $stare;
 }
 
-function spv_cere(array $config, $tinta)
+function spv_cere(array $config, $tinta, $incercari = 3)
 {
     cere_amprenta($config);
 
@@ -849,7 +849,7 @@ function spv_cere(array $config, $tinta)
         $cheia = 'necunoscut';
     }
 
-    for ($incercare = 1; $incercare <= 3; $incercare++) {
+    for ($incercare = 1; $incercare <= $incercari; $incercare++) {
         $rezultat = executa_curl($config, $tinta, array(
             'location',
             'cookie-jar = ' . curl_valoare($config['cookie_jar']),
@@ -1285,7 +1285,16 @@ if ($metoda === 'GET' && preg_match('#^/spv/([A-Za-z0-9_\-/.]+)$#', $calea, $pot
         $tinta .= '?' . $_SERVER['QUERY_STRING'];
     }
 
-    $rezultat = spv_cere($config, $tinta);
+    /*
+     * „cerere" inscrie o solicitare la ANAF, deci nu se reincearca: la un
+     * timeout, ANAF poate sa fi primit cererea desi raspunsul nu a mai ajuns,
+     * iar reincercarea o inregistra inca o data — clientii primeau cate 2-3
+     * fise rol la o singura apasare. Citirile (lista, descarcare, stare) raman
+     * pe cele 3 incercari: repetate, ele nu strica nimic.
+     */
+    $incercari = strpos($potrivire[1], 'cerere') === 0 ? 1 : 3;
+
+    $rezultat = spv_cere($config, $tinta, $incercari);
 
     if ($rezultat['status'] >= 100) {
         trimite_fisier($rezultat['status'], $rezultat['content_type'], $rezultat['fisier_corp']);
