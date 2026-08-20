@@ -390,26 +390,34 @@ class DeclaratieXml
      *
      * La D406 tot ce o identifica — firma si perioada — sta in <Header>, iar
      * restul fisierului are sute de mii de elemente. Cautarea porneste de acolo.
+     *
+     * Se umbla prin DOM, pe numele local: SAF-T-ul are namespace implicit
+     * (xmlns="mfp:anaf:dgti:d406..."), iar children() al SimpleXML nu intoarce
+     * copiii dintr-un namespace implicit — <Header> nu se gasea niciodata, si
+     * declaratia intra fara CUI.
      */
-    protected function antetul(\SimpleXMLElement $xml): \SimpleXMLElement
+    protected function antetul(\SimpleXMLElement $xml): \DOMElement
     {
-        foreach ($xml->children() as $copil) {
-            if (strtolower($copil->getName()) === 'header') {
+        $radacina = dom_import_simplexml($xml);
+
+        for ($copil = $radacina->firstChild; $copil !== null; $copil = $copil->nextSibling) {
+            if ($copil instanceof \DOMElement && strcasecmp($copil->localName, 'header') === 0) {
                 return $copil;
             }
         }
 
-        return $xml;
+        return $radacina;
     }
 
     /**
      * Prima valoare non-goala a unui element cu unul dintre numele cautate.
      *
-     * Cautarea are un buget de elemente: intr-un SAF-T, o cautare fara raspuns
-     * ar strabate tot fisierul si ar tine cererea in loc minute bune.
+     * Numele se compara pe partea locala, fara namespace. Cautarea are un
+     * buget de elemente: intr-un SAF-T, o cautare fara raspuns ar strabate tot
+     * fisierul si ar tine cererea in loc minute bune.
      */
     private function cautaElement(
-        \SimpleXMLElement $xml,
+        \DOMElement $element,
         array $nume,
         int $adancime = 0,
         ?\stdClass $buget = null
@@ -420,13 +428,17 @@ class DeclaratieXml
 
         $buget = $buget ?: (object) ['ramas' => self::ELEMENTE_CAUTATE];
 
-        foreach ($xml->children() as $copil) {
+        for ($copil = $element->firstChild; $copil !== null; $copil = $copil->nextSibling) {
+            if (!$copil instanceof \DOMElement) {
+                continue;
+            }
+
             if (--$buget->ramas < 0) {
                 return null;
             }
 
-            if (in_array(strtolower($copil->getName()), $nume, true)) {
-                $valoare = trim((string) $copil);
+            if (in_array(strtolower($copil->localName), $nume, true)) {
+                $valoare = trim($copil->textContent);
 
                 if ($valoare !== '') {
                     return $valoare;

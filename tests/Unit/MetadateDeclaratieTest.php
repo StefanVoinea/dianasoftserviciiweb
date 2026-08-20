@@ -108,6 +108,38 @@ XML);
     }
 
     /**
+     * SAF-T scris cu namespace cu prefix, cum il scot alte programe de
+     * contabilitate.
+     *
+     * SimpleXML::children() nu intoarce copiii cu prefix de namespace, asa ca
+     * <Header> nu se gasea deloc: declaratia intra fara CUI si fara denumire,
+     * recipisa nu se mai potrivea, iar firma aparea cu liniute in lista.
+     */
+    public function test_saf_t_cu_prefix_de_namespace_se_citeste_la_fel(): void
+    {
+        $meta = $this->analizeaza(<<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<nsSAFT:AuditFile xmlns:nsSAFT="mfp:anaf:dgti:d406:declaratie:v1">
+  <nsSAFT:Header>
+    <nsSAFT:SelectionCriteria>
+      <nsSAFT:SelectionStartDate>2026-07-01</nsSAFT:SelectionStartDate>
+    </nsSAFT:SelectionCriteria>
+    <nsSAFT:Company>
+      <nsSAFT:RegistrationNumber>47587115</nsSAFT:RegistrationNumber>
+      <nsSAFT:Name>SILVIU SRL</nsSAFT:Name>
+    </nsSAFT:Company>
+  </nsSAFT:Header>
+</nsSAFT:AuditFile>
+XML);
+
+        $this->assertSame('D406', $meta['tip']);
+        $this->assertSame('47587115', $meta['cui']);
+        $this->assertSame('SILVIU SRL', $meta['den_firma']);
+        $this->assertSame(7, $meta['luna']);
+        $this->assertSame(2026, $meta['anul']);
+    }
+
+    /**
      * Un SAF-T are sute de mii de elemente si nicio identificare in atribute.
      *
      * Cautarea trebuie sa se opreasca sus, nu sa parcurga tot fisierul: altfel
