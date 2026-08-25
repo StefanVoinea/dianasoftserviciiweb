@@ -1,7 +1,9 @@
 <template>
   <div>
+    <!-- In formular mesajele stau langa butoane, jos: acolo se uita omul
+         dupa apasare, iar cu multe linii capul paginii nici nu se vede. -->
     <b-alert
-      v-if="info"
+      v-if="info && !declaratia"
       show
       variant="info"
       class="py-2"
@@ -10,7 +12,7 @@
     </b-alert>
 
     <b-alert
-      v-if="eroare"
+      v-if="eroare && !declaratia"
       show
       variant="danger"
       class="py-2"
@@ -709,11 +711,14 @@
             />
           </b-col>
           <b-col md="2">
-            <label class="small mb-0">Observații</label>
+            <!-- La „Altele" ANAF cere scris ce fel de document e (regula BR-026) -->
+            <label class="small mb-0">Observații{{ document.tip === 9999 ? '*' : '' }}</label>
             <b-form-input
               v-model="document.observatii"
               size="sm"
               :disabled="!editabila"
+              :state="document.tip === 9999 && !document.observatii ? false : null"
+              :placeholder="document.tip === 9999 ? 'ce fel de document este' : ''"
             />
           </b-col>
           <b-col
@@ -778,6 +783,25 @@
           Verifică starea la ANAF
         </b-button>
       </div>
+
+      <!-- Raspunsul depunerii, chiar sub butoane: aici se uita omul dupa apasare -->
+      <b-alert
+        v-if="info"
+        show
+        variant="info"
+        class="py-2"
+      >
+        {{ info }}
+      </b-alert>
+
+      <b-alert
+        v-if="eroare"
+        show
+        variant="danger"
+        class="py-2"
+      >
+        {{ eroare }}
+      </b-alert>
     </div>
 
     <!--
@@ -1197,6 +1221,9 @@ export default {
       }
       if (antet.partener_cod && !this.declaratia.partener_cod) {
         this.declaratia.partener_cod = antet.partener_cod
+      }
+      if (antet.partener_tara && !this.declaratia.partener_tara) {
+        this.declaratia.partener_tara = antet.partener_tara
       }
       if (antet.document_numar) {
         this.declaratia.documente.push({

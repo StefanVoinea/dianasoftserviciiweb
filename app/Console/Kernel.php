@@ -35,6 +35,16 @@ class Kernel extends ConsoleKernel
         // Avertizare pe email inainte de expirarea certificatelor digitale
         $schedule->command('anaf:certificate-expira')->dailyAt('08:00')->withoutOverlapping();
 
+        /*
+         * Cursul BNR se anunta in zilele bancare pe la 13:00. Nefiind
+         * programata, preluarea statuse din aprilie, iar butonul „Curs BNR"
+         * din e-Transport dadea mereu acelasi curs, al ultimei zile din tabel.
+         * A doua rulare, dupa-amiaza, prinde zilele in care anuntul a
+         * intarziat; scrierea nu dubleaza nimic, deci pot rula amandoua.
+         */
+        $schedule->command('curs:preia')->weekdays()->at('13:30')->withoutOverlapping();
+        $schedule->command('curs:preia')->weekdays()->at('17:00')->withoutOverlapping();
+
         // Verificarea dosarelor urmarite in Portal Just, din ora in ora.
         // withoutOverlapping opreste o pornire noua cat timp cea anterioara
         // inca ruleaza, ca listele lungi sa nu se suprapuna.

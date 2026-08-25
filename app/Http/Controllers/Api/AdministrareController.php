@@ -376,6 +376,31 @@ class AdministrareController extends Controller
         ]);
     }
 
+    /**
+     * Un token de acces pentru contul altcuiva: administratorul serviciului se
+     * conecteaza ca acel utilizator, vede aplicatia intocmai cum o vede el si
+     * poate lamuri pe viu ce i se intampla.
+     *
+     * Doar contul din config('app.super_admin') ajunge aici — grupul de rute
+     * trece prin middleware-ul "administrator.serviciu". Conectarea se
+     * consemneaza in jurnal, cu amandoua conturile.
+     */
+    public function impersoneaza(Request $request, User $utilizator)
+    {
+        $token = $utilizator->createToken('impersonare administrator')->accessToken;
+
+        Jurnal::scrie(
+            'administrare_client',
+            'S-a conectat ca „' . $utilizator->email . '" (' . $utilizator->name . ')'
+                . ' din contul ' . optional($request->user())->email
+        );
+
+        return response()->json([
+            'success' => true,
+            'access_token' => $token,
+        ]);
+    }
+
     public function creeazaUtilizator(Request $request, Company $client)
     {
         $date = $request->validate([

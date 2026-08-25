@@ -202,6 +202,18 @@ class DeclaratieXml
             }
         }
 
+        /*
+         * Regula ANAF BR-026: documentul de tip „Altele" (9999) trebuie sa
+         * spuna in observatii ce fel de document e. Prinsa aici, pe romaneste,
+         * nu la ANAF cu un cod de eroare.
+         */
+        foreach ($declaratie->documente ?: [] as $numar => $document) {
+            if ((int) ($document['tip'] ?? 0) === 9999 && trim((string) ($document['observatii'] ?? '')) === '') {
+                $lipsuri[] = 'observațiile documentului ' . ($numar + 1)
+                    . ' — la tipul „Altele" ANAF cere scris în observații ce fel de document este';
+            }
+        }
+
         if ($lipsuri !== []) {
             throw new EtransportException('Declarația nu e completă. Lipsesc: ' . implode('; ', $lipsuri) . '.');
         }

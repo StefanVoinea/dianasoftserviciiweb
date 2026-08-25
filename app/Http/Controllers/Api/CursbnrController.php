@@ -218,26 +218,28 @@ class CursbnrController extends Controller
     {    
         try{
          $this->xmlDocument = file_get_contents("https://curs.bnr.ro/nbrfxrates.xml");
-                                                    
+
          $this->parseXMLDocument();
-         $curs_EUR=new Cursbnr();
-         $curs_EUR->tip_valuta="EUR";
-         $curs_EUR->data_comunicarii= $this->date;
-         $curs_EUR->data=Carbon::tomorrow();
-         $curs_EUR->curs=$this->preiaCurs("EUR");
-         $curs_USD=new Cursbnr();
-         $curs_USD->tip_valuta="USD";
-         $curs_USD->data_comunicarii= $this->date;
-         $curs_USD->data=Carbon::tomorrow();
-         $curs_USD->curs=$this->preiaCurs("USD");
-         
-         //if (CursBNR(Carbon::tomorrow(),"EUR") != $curs_EUR->curs)
-         //{
-            $curs_EUR->save();  
-            $curs_USD->save();   
+
+         /*
+          * Cursul anuntat azi se aplica maine. Scrierea nu dubleaza: comanda
+          * ruleaza si la 13:30, si la 18:00, iar randul zilei se scrie o
+          * singura data — a doua rulare doar l-ar rescrie cu aceeasi valoare.
+          */
+         $curs_EUR = Cursbnr::updateOrCreate(
+             ['tip_valuta' => 'EUR', 'data' => dateFormatStocare(Carbon::tomorrow())],
+             ['data_comunicarii' => $this->date, 'curs' => $this->preiaCurs("EUR")]
+         );
+         $curs_USD = Cursbnr::updateOrCreate(
+             ['tip_valuta' => 'USD', 'data' => dateFormatStocare(Carbon::tomorrow())],
+             ['data_comunicarii' => $this->date, 'curs' => $this->preiaCurs("USD")]
+         );
+
+         // Emailul pleaca o data pe zi, la primul curs scris, nu la fiecare rulare.
+         if ($curs_EUR->wasRecentlyCreated || $curs_USD->wasRecentlyCreated) {
             Mail::to("stefan.voinea@gmail.com")
                  ->send(new CursbnrEmail($curs_EUR,$curs_USD));
-        // }
+         }
 
         } catch (\Exception $e) {
             $user=User::where("id",1)->get()->first();

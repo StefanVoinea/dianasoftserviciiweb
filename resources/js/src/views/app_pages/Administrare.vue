@@ -194,6 +194,18 @@
                     size="13"
                   />
                 </b-button>
+                <b-button
+                  size="sm"
+                  variant="flat-primary"
+                  class="btn-icon"
+                  title="Conectează-te ca acest utilizator"
+                  @click="conecteazaCa(user)"
+                >
+                  <feather-icon
+                    icon="UserCheckIcon"
+                    size="13"
+                  />
+                </b-button>
               </div>
 
               <b-button
@@ -1229,6 +1241,46 @@ export default {
           })
           .catch(err => {
             this.eroare = this.mesajEroare(err, 'Deconectarea a eșuat')
+          })
+      })
+    },
+    /**
+     * Se conectează ca acel utilizator: sesiunea de administrator e înlocuită
+     * cu a lui, întocmai ca la o autentificare obișnuită. Înapoi la contul de
+     * administrator se ajunge prin deconectare și logare din nou.
+     */
+    conecteazaCa(user) {
+      this.$bvModal.msgBoxConfirm(
+        `Vă conectați ca „${user.email}"? Sesiunea de administrator se închide; reveniti la ea logându-vă din nou.`,
+        { title: 'Conectare ca alt utilizator', okTitle: 'Conectează-mă', cancelTitle: 'Renunță' },
+      ).then(confirmat => {
+        if (!confirmat) return
+
+        this.$http.post(`/administrare/utilizatori/${user.id}/impersoneaza`)
+          .then(raspuns => {
+            const token = raspuns.data.access_token
+
+            // Aceiasi pasi ca la autentificare: tokenul, apoi omul si societatea lui.
+            window.localStorage.setItem('access_token', token)
+            window.localStorage.setItem('accessToken', token)
+            window.localStorage.removeItem('societateaCurenta')
+            window.localStorage.removeItem('anaf_certificat_activ')
+            this.$http.defaults.headers.common.Authorization = `Bearer ${token}`
+            delete this.$http.defaults.headers.common.AuthorizationHeader
+
+            return this.$store.dispatch('app/retrieveUser').then(utilizator => {
+              const companii = utilizator.data.companies || []
+
+              if (companii.length) {
+                window.localStorage.setItem('societateaCurenta', JSON.stringify(companii[0]))
+              }
+
+              // Aplicatia porneste de la zero, cu meniul si drepturile lui.
+              window.location.href = '/'
+            })
+          })
+          .catch(err => {
+            this.eroare = this.mesajEroare(err, 'Conectarea ca alt utilizator a eșuat')
           })
       })
     },

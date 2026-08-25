@@ -57,6 +57,32 @@ class EtransportDeclaratieXmlTest extends TestCase
         }
     }
 
+    /** Regula ANAF BR-026: documentul „Altele" fara observatii se opreste aici. */
+    public function test_documentul_altele_fara_observatii_se_spune_pe_romaneste()
+    {
+        $declaratie = $this->declaratia([
+            'documente' => [['tip' => 9999, 'numar' => '10067639', 'data' => '2026-08-11']],
+        ]);
+
+        try {
+            (new DeclaratieXml())->construieste($declaratie);
+            $this->fail('Documentul „Altele" fără observații ar fi trebuit oprit.');
+        } catch (EtransportException $e) {
+            $this->assertStringContainsString('Altele', $e->getMessage());
+            $this->assertStringContainsString('observații', $e->getMessage());
+        }
+
+        // Cu observatiile scrise, trece si le poarta in XML.
+        $declaratie = $this->declaratia([
+            'documente' => [['tip' => 9999, 'numar' => '10067639', 'data' => '2026-08-11', 'observatii' => 'aviz intern']],
+        ]);
+
+        $xml = (new DeclaratieXml())->construieste($declaratie);
+
+        $this->assertStringContainsString('tipDocument="9999"', $xml);
+        $this->assertStringContainsString('observatii="aviz intern"', $xml);
+    }
+
     /** O linie fara greutate bruta opreste declaratia cu numarul liniei. */
     public function test_linia_fara_greutate_bruta_se_spune_cu_numarul_ei()
     {

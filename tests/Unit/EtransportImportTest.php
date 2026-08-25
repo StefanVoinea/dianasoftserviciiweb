@@ -44,6 +44,8 @@ class EtransportImportTest extends TestCase
 
         $this->assertSame('TEDDY S.P.A.', $rezultat['antet']['partener_denumire']);
         $this->assertSame('00953910403', $rezultat['antet']['partener_cod']);
+        // Tara partenerului sta pe randul cu Vat N: „Italy ... Vat N: ...".
+        $this->assertSame('IT', $rezultat['antet']['partener_tara']);
         $this->assertSame('10038435', $rezultat['antet']['document_numar']);
         $this->assertSame('2026-05-08', $rezultat['antet']['document_data']);
         $this->assertSame('EUR', $rezultat['antet']['valuta']);
