@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\EtransportCodVamal;
 use App\Models\EtransportDeclaratie;
+use App\Models\EtransportGestiune;
 use App\Services\Anaf\Etransport\DeclaratieXml;
 use App\Services\Anaf\Etransport\EtransportClient;
 use App\Services\Anaf\Etransport\EtransportException;
@@ -39,6 +40,9 @@ class EtransportDeclaratiiController extends Controller
                     'tip_operatiune' => $d->tip_operatiune,
                     'operatiune' => Nomenclatoare::TIPURI_OPERATIUNE[$d->tip_operatiune] ?? null,
                     'partener' => $d->partener_denumire,
+                    // Magazinul (destinatia finala), pentru clientii cu retea de magazine
+                    'magazin' => $d->loc_final['magazin_denumire'] ?? null,
+                    'magazin_cod' => $d->loc_final['magazin_cod'] ?? null,
                     'vehicul' => trim(implode(' + ', array_filter([$d->nr_vehicul, $d->nr_remorca1, $d->nr_remorca2]))),
                     'data_transport' => Format::data($d->data_transport),
                     'nr_linii' => count($d->linii ?: []),
@@ -272,6 +276,167 @@ class EtransportDeclaratiiController extends Controller
             'success' => true,
             'data' => $this->detalii($declaratie->fresh()),
             'raspuns' => $raspuns,
+        ]);
+    }
+
+    /** Gestiunile (magazinele) clientului, pentru lista de selecție a magazinului. */
+    public function gestiuni(Request $request)
+    {
+        if (!$this->importPermis($request)) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => EtransportGestiune::orderBy('denumire')
+                ->get(['id', 'cod', 'cod_furnizor', 'denumire', 'prescurtare']),
+        ]);
+    }
+
+    /**
+     * Reține o gestiune nouă sau îndreaptă una existentă (după codul furnizorului).
+     *
+     * Ciornele care poartă acel cod de magazin primesc pe loc denumirea nouă,
+     * ca lista și formularul transportatorului să o folosească de îndată.
+     */
+    public function salveazaGestiune(Request $request)
+    {
+        if (!$this->importPermis($request)) {
+            return response()->json(['success' => false, 'message' => 'Gestiunile nu sunt deschise pentru acest utilizator.'], 403);
+        }
+
+        $date = $request->validate([
+            'cod_furnizor' => 'required|string|max:30',
+            'denumire' => 'required|string|max:200',
+            'cod' => 'nullable|string|max:20',
+            'prescurtare' => 'nullable|string|max:100',
+        ]);
+
+        $date['cod_furnizor'] = mb_strtoupper(trim($date['cod_furnizor']));
+
+        $gestiune = EtransportGestiune::where('cod_furnizor', $date['cod_furnizor'])->first();
+
+        if ($gestiune) {
+            $gestiune->update($date);
+        } else {
+            $gestiune = EtransportGestiune::create($date);
+        }
+
+        $ciorne = EtransportDeclaratie::where('stare', 'ciorna')
+            ->where('loc_final->magazin_cod', $date['cod_furnizor'])
+            ->get();
+
+        foreach ($ciorne as $ciorna) {
+            $ciorna->update([
+                'loc_final' => ['magazin_denumire' => $gestiune->denumire] + $ciorna->loc_final,
+            ]);
+        }
+
+        Jurnal::scrie(
+            'etransport_declaratie',
+            'A reținut gestiunea ' . $gestiune->denumire . ' (' . $gestiune->cod_furnizor . ')'
+                . ($ciorne->isNotEmpty() ? ', pusă pe ' . $ciorne->count() . ' ciorne' : '')
+        );
+
+        return response()->json(['success' => true, 'data' => $gestiune, 'ciorne_actualizate' => $ciorne->count()]);
+    }
+
+    /**
+     * Arhiva zilnică a furnizorului: câte o ciornă pe fiecare factură din ea.
+     *
+     * Același drept ca la importul de fișiere: parserele sunt scrise pe
+     * formatele furnizorilor clientului.
+     */
+    public function importaArhiva(Request $request, \App\Services\Anaf\Etransport\Import\ImportArhiva $import)
+    {
+        if (!$this->importPermis($request)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Importul de fișiere nu e deschis pentru acest utilizator.',
+            ], 403);
+        }
+
+        $request->validate(['fisier' => 'required|file|max:51200']);
+
+        $fisier = $request->file('fisier');
+
+        try {
+            $rezultat = $import->importa(
+                $fisier->getRealPath(),
+                $this->cifClientului(),
+                optional($request->user())->id
+            );
+        } catch (EtransportException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        Jurnal::scrie(
+            'etransport_declaratie',
+            sprintf(
+                'A importat arhiva %s: %d ciorne de declarație create',
+                $fisier->getClientOriginalName(),
+                count($rezultat['ciorne'])
+            )
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => $rezultat['ciorne'],
+            'avertismente' => $rezultat['avertismente'],
+            'gestiuni_noi' => $rezultat['gestiuni_noi'],
+        ]);
+    }
+
+    /**
+     * Formularul cu codurile UIT pentru transportator: cate o foaie pe magazin.
+     * Cu adrese de email date, fisierul pleaca si pe mail, prin coada.
+     */
+    public function formularTransportator(Request $request, \App\Services\Anaf\Etransport\FormularTransportator $formular)
+    {
+        $date = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer',
+            'adrese' => 'nullable|string|max:500',
+        ]);
+
+        try {
+            $rezultat = $formular->genereaza(array_map('intval', $date['ids']));
+        } catch (EtransportException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        $adrese = array_filter(array_map('trim', preg_split('/[,;\s]+/', (string) ($date['adrese'] ?? ''))));
+        $gresite = array_filter($adrese, function ($adresa) {
+            return !filter_var($adresa, FILTER_VALIDATE_EMAIL);
+        });
+
+        if ($gresite !== []) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Adresa „' . reset($gresite) . '" nu arată a email.',
+            ], 422);
+        }
+
+        foreach ($adrese as $adresa) {
+            \Illuminate\Support\Facades\Mail::to($adresa)->send(
+                new \App\Mail\FormularTransportatorEmail($rezultat['nume'], $rezultat['continut'], $rezultat['foi'])
+            );
+        }
+
+        Jurnal::scrie(
+            'etransport_declaratie',
+            'A întocmit formularul cu coduri UIT pentru transportator (' . $rezultat['foi'] . ' foi)'
+                . ($adrese !== [] ? ' și l-a trimis către ' . implode(', ', $adrese) : '')
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'nume' => $rezultat['nume'],
+                'foi' => $rezultat['foi'],
+                'continut' => base64_encode($rezultat['continut']),
+                'trimis_catre' => array_values($adrese),
+            ],
         ]);
     }
 

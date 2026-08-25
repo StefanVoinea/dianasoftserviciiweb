@@ -48,11 +48,40 @@
           @change="incarcaLista"
         />
 
-        <!-- Intrastat-ul lunar iese din aceleasi date, gata declarate la UIT -->
+        <!-- Arhiva zilnica a furnizorului: cate o ciorna pe fiecare factura -->
+        <b-button
+          v-if="importPermis"
+          variant="outline-primary"
+          size="sm"
+          class="ml-2"
+          @click="arhivaVizibila = true"
+        >
+          <feather-icon
+            icon="ArchiveIcon"
+            class="mr-25"
+          />
+          Import arhivă
+        </b-button>
+
+        <!-- Formularul cu codurile UIT pentru transportator -->
         <b-button
           variant="outline-primary"
           size="sm"
           class="ml-auto"
+          @click="deschideFormular"
+        >
+          <feather-icon
+            icon="TruckIcon"
+            class="mr-25"
+          />
+          Formular transportator
+        </b-button>
+
+        <!-- Intrastat-ul lunar iese din aceleasi date, gata declarate la UIT -->
+        <b-button
+          variant="outline-primary"
+          size="sm"
+          class="ml-1"
           @click="deschideIntrastat"
         >
           <feather-icon
@@ -99,6 +128,18 @@
           </div>
           <div class="small text-muted">
             {{ rand.item.partener || '' }}
+          </div>
+        </template>
+
+        <template #cell(magazin)="rand">
+          <div class="small">
+            {{ rand.item.magazin || '-' }}
+          </div>
+          <div
+            v-if="rand.item.magazin_cod"
+            class="small text-muted"
+          >
+            {{ rand.item.magazin_cod }}
           </div>
         </template>
 
@@ -632,6 +673,47 @@
         </b-row>
       </b-card>
 
+      <!-- Magazinul (destinatia finala), din arhiva importata; ramane editabil -->
+      <b-card
+        v-if="importPermis"
+        class="border mb-2"
+        body-class="p-2"
+      >
+        <h6 class="mb-1">
+          Magazin (destinația finală)
+        </h6>
+        <b-row>
+          <b-col md="5">
+            <label class="small mb-0">Gestiunea</label>
+            <b-form-select
+              :value="(declaratia.loc_final && declaratia.loc_final.magazin_cod) || ''"
+              :options="optiuniGestiuni"
+              size="sm"
+              :disabled="!editabila"
+              @change="alegeGestiunea"
+            />
+          </b-col>
+          <b-col md="3">
+            <label class="small mb-0">Cod magazin</label>
+            <b-form-input
+              :value="declaratia.loc_final && declaratia.loc_final.magazin_cod"
+              size="sm"
+              :disabled="!editabila"
+              @input="$set(declaratia.loc_final, 'magazin_cod', $event)"
+            />
+          </b-col>
+          <b-col md="4">
+            <label class="small mb-0">Denumire magazin</label>
+            <b-form-input
+              :value="declaratia.loc_final && declaratia.loc_final.magazin_denumire"
+              size="sm"
+              :disabled="!editabila"
+              @input="$set(declaratia.loc_final, 'magazin_denumire', $event)"
+            />
+          </b-col>
+        </b-row>
+      </b-card>
+
       <!-- Traseul -->
       <b-row>
         <b-col md="6">
@@ -803,6 +885,198 @@
         {{ eroare }}
       </b-alert>
     </div>
+
+    <!--
+      Arhiva zilnica a furnizorului (ZIP): T02 cu liniile pe coduri vamale si
+      D01 cu destinatia finala. Din ea se fac cate o ciorna pe fiecare factura,
+      cu magazinul si adresa de descarcare gata puse.
+    -->
+    <b-modal
+      v-model="arhivaVizibila"
+      title="Import arhivă zilnică"
+      :ok-title="arhivaInCurs ? 'Se importă...' : 'Importă arhiva'"
+      cancel-title="Renunță"
+      :ok-disabled="!arhivaFisier || arhivaInCurs"
+      @ok.prevent="importaArhiva"
+    >
+      <p class="text-muted small">
+        Alegeți arhiva ZIP primită de la furnizor pentru o zi de livrare.
+        Pentru fiecare factură se face câte o ciornă de declarație, cu liniile,
+        partenerul, valoarea în lei la cursul zilei facturii și locul de
+        descărcare (magazinul) din distinta D01. Rămân de completat vehiculul,
+        transportatorul și data transportului.
+      </p>
+
+      <b-form-file
+        v-model="arhivaFisier"
+        accept=".zip"
+        placeholder="Alegeți arhiva..."
+        browse-text="Răsfoiește"
+      />
+
+      <b-alert
+        v-if="arhivaEroare"
+        show
+        variant="danger"
+        class="py-1 px-2 mt-1 mb-0"
+      >
+        {{ arhivaEroare }}
+      </b-alert>
+
+      <b-alert
+        v-if="arhivaRezultat"
+        show
+        variant="success"
+        class="py-1 px-2 mt-1 mb-0"
+      >
+        {{ arhivaRezultat.ciorne.length }} ciorne create:
+        <ul class="mb-0 pl-1 small">
+          <li
+            v-for="ciorna in arhivaRezultat.ciorne"
+            :key="ciorna.id"
+          >
+            Factura {{ ciorna.factura }}<span v-if="ciorna.magazin"> — {{ ciorna.magazin }}</span>
+          </li>
+        </ul>
+        <div
+          v-if="arhivaRezultat.avertismente.length"
+          class="small mt-50 text-danger"
+        >
+          {{ arhivaRezultat.avertismente.join(' | ') }}
+        </div>
+      </b-alert>
+    </b-modal>
+
+    <!--
+      Un cod de magazin nou, intalnit la import: utilizatorul spune cum se
+      numeste gestiunea la el, iar de atunci codul se recunoaste singur.
+    -->
+    <b-modal
+      v-model="gestiuneVizibila"
+      title="Gestiune nouă"
+      :ok-title="gestiuneInCurs ? 'Se salvează...' : 'Salvează gestiunea'"
+      cancel-title="Mai târziu"
+      no-close-on-backdrop
+      :ok-disabled="!gestiuneNoua || !gestiuneNoua.denumire || gestiuneInCurs"
+      @ok.prevent="salveazaGestiunea"
+      @cancel="urmatoareaGestiune"
+    >
+      <template v-if="gestiuneNoua">
+        <p class="text-muted small mb-1">
+          În arhivă a apărut codul de magazin
+          <strong>{{ gestiuneNoua.cod_furnizor }}</strong>
+          <span v-if="gestiuneNoua.denumire_furnizor"> ({{ gestiuneNoua.denumire_furnizor }})</span>,
+          care nu e încă în lista gestiunilor. Spuneți cum se numește la dumneavoastră
+          și se va recunoaște singur de acum înainte.
+        </p>
+
+        <label class="small mb-0">Denumirea gestiunii*</label>
+        <b-form-input
+          v-model="gestiuneNoua.denumire"
+          size="sm"
+          class="mb-1"
+          placeholder="ex.: 2276 Pitesti"
+        />
+
+        <b-row>
+          <b-col md="4">
+            <label class="small mb-0">Cod intern</label>
+            <b-form-input
+              v-model="gestiuneNoua.cod"
+              size="sm"
+              placeholder="ex.: 2276"
+            />
+          </b-col>
+          <b-col md="8">
+            <label class="small mb-0">Prescurtare (foaia din formular)</label>
+            <b-form-input
+              v-model="gestiuneNoua.prescurtare"
+              size="sm"
+              placeholder="ex.: Pitesti"
+            />
+          </b-col>
+        </b-row>
+
+        <b-alert
+          v-if="gestiuneEroare"
+          show
+          variant="danger"
+          class="py-1 px-2 mt-1 mb-0"
+        >
+          {{ gestiuneEroare }}
+        </b-alert>
+
+        <p
+          v-if="gestiuniNoi.length"
+          class="text-muted small mt-1 mb-0"
+        >
+          Mai sunt {{ gestiuniNoi.length }} coduri noi de lămurit după acesta.
+        </p>
+      </template>
+    </b-modal>
+
+    <!--
+      Formularul cu codurile UIT pentru transportator: cate o foaie pe magazin,
+      cu punctul de trecere, vehiculul si locul de descarcare. Se descarca si,
+      cu adrese scrise, pleaca si pe email.
+    -->
+    <b-modal
+      v-model="formularVizibil"
+      title="Formular transportator (coduri UIT)"
+      :ok-title="formularInCurs ? 'Se întocmește...' : 'Generează'"
+      cancel-title="Renunță"
+      :ok-disabled="!formularIdAlese.length || formularInCurs"
+      @ok.prevent="genereazaFormular"
+    >
+      <p class="text-muted small">
+        Alegeți declarațiile cu UIT care merg în același transport: fișierul
+        are câte o foaie pe magazin, cu codul UIT al fiecărei facturi. Cu
+        adrese scrise, fișierul pleacă și pe email.
+      </p>
+
+      <div class="d-flex align-items-center justify-content-between">
+        <label class="mb-0">Declarațiile cu UIT</label>
+        <b-button
+          size="sm"
+          variant="flat-primary"
+          class="py-0 px-50"
+          @click="alegeToateFormular"
+        >
+          <small>{{ formularIdAlese.length === declaratiiCuUit.length ? 'niciuna' : 'toate' }}</small>
+        </b-button>
+      </div>
+      <b-form-checkbox-group
+        v-model="formularIdAlese"
+        stacked
+        class="lista-formular"
+      >
+        <b-form-checkbox
+          v-for="d in declaratiiCuUit"
+          :key="d.id"
+          :value="d.id"
+        >
+          {{ d.uit }}
+          <span class="text-muted small">
+            — {{ d.partener || '' }}{{ d.data_transport ? ', transport ' + d.data_transport : '' }}
+          </span>
+        </b-form-checkbox>
+      </b-form-checkbox-group>
+
+      <label class="small mb-0 mt-1">Trimite și pe email (opțional)</label>
+      <b-form-input
+        v-model="formularAdrese"
+        placeholder="transportator@firma.ro, dispecer@firma.ro"
+      />
+
+      <b-alert
+        v-if="formularEroare"
+        show
+        variant="danger"
+        class="py-1 px-2 mt-1 mb-0"
+      >
+        {{ formularEroare }}
+      </b-alert>
+    </b-modal>
 
     <!--
       Declaratia Intrastat, intocmita din declaratiile e-Transport cu UIT ale
@@ -984,6 +1258,22 @@ export default {
       grupate: true,
       greutateBrutaTotala: null,
       filtruStare: '',
+      arhivaVizibila: false,
+      arhivaInCurs: false,
+      arhivaFisier: null,
+      arhivaEroare: '',
+      arhivaRezultat: null,
+      gestiuni: [],
+      gestiuniNoi: [],
+      gestiuneNoua: null,
+      gestiuneVizibila: false,
+      gestiuneInCurs: false,
+      gestiuneEroare: '',
+      formularVizibil: false,
+      formularInCurs: false,
+      formularIdAlese: [],
+      formularAdrese: '',
+      formularEroare: '',
       intrastatVizibil: false,
       intrastatInCurs: false,
       intrastatEroare: '',
@@ -1001,22 +1291,32 @@ export default {
       importInCurs: false,
       salvareInCurs: false,
       depunereInCurs: false,
-      campuriLista: [
+      // Coloanele listei stau la computed: magazinul se vede doar la clientii
+      // cu retea de magazine (cei cu drept de import).
+    }
+  },
+  computed: {
+    editabila() {
+      return !this.declaratia || this.declaratia.poate_fi_modificata
+    },
+    /** Declaratiile cu UIT din lista, de pus in formularul transportatorului. */
+    declaratiiCuUit() {
+      return this.declaratii.filter(d => d.uit)
+    },
+    campuriLista() {
+      return [
         { key: 'stare', label: 'Stare / UIT' },
         { key: 'cif_declarant', label: 'Declarant' },
         { key: 'operatiune', label: 'Operațiune / partener' },
+        // Magazinul vine din arhiva importata: are rost doar la cine importa.
+        ...(this.importPermis ? [{ key: 'magazin', label: 'Magazin' }] : []),
         { key: 'vehicul', label: 'Vehicul' },
         { key: 'data_transport', label: 'Transport' },
         { key: 'nr_linii', label: 'Linii' },
         { key: 'valoare_lei', label: 'Valoare lei' },
         { key: 'creata_la', label: 'Creată la' },
         { key: 'actiuni', label: '' },
-      ],
-    }
-  },
-  computed: {
-    editabila() {
-      return !this.declaratia || this.declaratia.poate_fi_modificata
+      ]
     },
     optiuniTipOperatiune() {
       return this.perechi(this.nomenclatoare.tipuri_operatiune)
@@ -1045,6 +1345,21 @@ export default {
       const permise = (this.nomenclatoare.scopuri_pe_operatiune || {})[tip] || []
 
       return permise.map(cod => ({ value: cod, text: this.nomenclatoare.scopuri[cod] || cod }))
+    },
+    /** Gestiunile pentru lista de selectie a magazinului, cu codul curent daca e strain de lista. */
+    optiuniGestiuni() {
+      const optiuni = [
+        { value: '', text: '— alegeți gestiunea —' },
+        ...this.gestiuni.map(g => ({ value: g.cod_furnizor, text: `${g.denumire} (${g.cod_furnizor})` })),
+      ]
+
+      const cod = this.declaratia && this.declaratia.loc_final && this.declaratia.loc_final.magazin_cod
+
+      if (cod && !this.gestiuni.some(g => g.cod_furnizor === cod)) {
+        optiuni.push({ value: cod, text: `${cod} (gestiune nouă)` })
+      }
+
+      return optiuni
     },
     /** Ce fel de loc cere traseul la operatiunea aleasa (ptf / birou_vamal / adresa). */
     felTraseu() {
@@ -1083,6 +1398,10 @@ export default {
           this.nomenclatoare = raspuns.data
           this.importPermis = !!raspuns.data.import_permis
           this.cifImplicit = raspuns.data.cif_implicit || ''
+
+          if (this.importPermis) {
+            this.incarcaGestiunile()
+          }
 
           // Nomenclatoarele pot sosi dupa ce omul a apucat sa deschida ciorna.
           if (this.declaratia && !this.declaratia.id && !this.declaratia.cif_declarant) {
@@ -1384,6 +1703,129 @@ export default {
           this.eroare = this.mesajEroare(err, 'Starea nu s-a putut verifica')
         })
     },
+    importaArhiva() {
+      this.arhivaEroare = ''
+      this.arhivaRezultat = null
+      this.arhivaInCurs = true
+
+      const formular = new FormData()
+      formular.append('fisier', this.arhivaFisier)
+
+      this.$http.post('/anaf-etransport/declaratii/importa-arhiva', formular, { headers: { 'Content-Type': 'multipart/form-data' } })
+        .then(raspuns => {
+          this.arhivaRezultat = { ciorne: raspuns.data.data || [], avertismente: raspuns.data.avertismente || [] }
+          this.arhivaFisier = null
+          this.incarcaLista()
+
+          // Codurile de magazin nestiute: omul spune pe rand cum se numesc gestiunile.
+          this.gestiuniNoi = raspuns.data.gestiuni_noi || []
+          this.urmatoareaGestiune()
+        })
+        .catch(err => {
+          this.arhivaEroare = this.mesajEroare(err, 'Importul arhivei a eșuat')
+        })
+        .finally(() => {
+          this.arhivaInCurs = false
+        })
+    },
+    incarcaGestiunile() {
+      this.$http.get('/anaf-etransport/declaratii/gestiuni')
+        .then(raspuns => {
+          this.gestiuni = raspuns.data.data || []
+        })
+        .catch(() => {})
+    },
+    alegeGestiunea(codFurnizor) {
+      const gestiune = this.gestiuni.find(g => g.cod_furnizor === codFurnizor)
+
+      this.$set(this.declaratia.loc_final, 'magazin_cod', codFurnizor || null)
+
+      if (gestiune) {
+        this.$set(this.declaratia.loc_final, 'magazin_denumire', gestiune.denumire)
+      }
+    },
+    /** Scoate din coada urmatorul cod nou de gestiune si deschide fereastra lui. */
+    urmatoareaGestiune() {
+      const noua = this.gestiuniNoi.shift()
+
+      this.gestiuneEroare = ''
+      this.gestiuneNoua = noua
+        ? {
+          cod_furnizor: noua.cod_furnizor,
+          denumire_furnizor: noua.denumire_furnizor,
+          denumire: noua.denumire_furnizor || '',
+          cod: '',
+          prescurtare: '',
+        }
+        : null
+      this.gestiuneVizibila = !!noua
+    },
+    salveazaGestiunea() {
+      this.gestiuneEroare = ''
+      this.gestiuneInCurs = true
+
+      this.$http.post('/anaf-etransport/declaratii/gestiuni', {
+        cod_furnizor: this.gestiuneNoua.cod_furnizor,
+        denumire: this.gestiuneNoua.denumire,
+        cod: this.gestiuneNoua.cod || null,
+        prescurtare: this.gestiuneNoua.prescurtare || null,
+      })
+        .then(() => {
+          this.incarcaGestiunile()
+          this.incarcaLista()
+          this.urmatoareaGestiune()
+        })
+        .catch(err => {
+          this.gestiuneEroare = this.mesajEroare(err, 'Gestiunea nu s-a putut salva')
+        })
+        .finally(() => {
+          this.gestiuneInCurs = false
+        })
+    },
+    deschideFormular() {
+      this.formularEroare = ''
+      // Toate cele cu UIT vin bifate; omul scoate ce nu pleaca in transportul asta.
+      this.formularIdAlese = this.declaratiiCuUit.map(d => d.id)
+      this.formularVizibil = true
+    },
+    alegeToateFormular() {
+      this.formularIdAlese = this.formularIdAlese.length === this.declaratiiCuUit.length
+        ? []
+        : this.declaratiiCuUit.map(d => d.id)
+    },
+    genereazaFormular() {
+      this.formularEroare = ''
+      this.formularInCurs = true
+
+      this.$http.post('/anaf-etransport/declaratii/formular-transportator', {
+        ids: this.formularIdAlese,
+        adrese: this.formularAdrese || null,
+      })
+        .then(raspuns => {
+          const rezultat = raspuns.data.data
+
+          // Fisierul se descarca pe loc, din raspuns.
+          const octeti = Uint8Array.from(atob(rezultat.continut), litera => litera.charCodeAt(0))
+          const url = window.URL.createObjectURL(new Blob([octeti], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          }))
+          const legatura = document.createElement('a')
+          legatura.href = url
+          legatura.download = rezultat.nume
+          legatura.click()
+          setTimeout(() => window.URL.revokeObjectURL(url), 60000)
+
+          this.formularVizibil = false
+          this.info = `Formularul cu ${rezultat.foi} foi s-a descărcat${
+            rezultat.trimis_catre.length ? ` și a plecat către ${rezultat.trimis_catre.join(', ')}.` : '.'}`
+        })
+        .catch(err => {
+          this.formularEroare = this.mesajEroare(err, 'Formularul nu a putut fi întocmit')
+        })
+        .finally(() => {
+          this.formularInCurs = false
+        })
+    },
     deschideIntrastat() {
       this.intrastatEroare = ''
 
@@ -1476,3 +1918,12 @@ export default {
   },
 }
 </script>
+
+<style scoped>
+/* Lista declaratiilor din formularul transportatorului: multe nu lungesc fereastra. */
+.lista-formular {
+  max-height: 14rem;
+  overflow-y: auto;
+  display: block;
+}
+</style>

@@ -20,8 +20,8 @@ class ImportRaportText implements ParserFisier
     protected const LINIE = '/^\s+([A-Z]{2})\s+\S.*?\s{2,}(\d{4,8})\s+(.+?)\s{2,}([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([A-Z]{3})\s+([\d.,]+)\s*$/u';
 
     /**
-     * Tarile cum le scrie raportul (pe englezeste), aduse la codul din
-     * declaratie. Grecia e „EL" la ANAF, nu „GR".
+     * Tarile cum le scrie raportul — pe englezeste in cele noi, pe italiana in
+     * cele vechi — aduse la codul din declaratie. Grecia e „EL" la ANAF.
      */
     protected const TARI = [
         'italy' => 'IT', 'germany' => 'DE', 'france' => 'FR', 'spain' => 'ES',
@@ -31,6 +31,10 @@ class ImportRaportText implements ParserFisier
         'croatia' => 'HR', 'denmark' => 'DK', 'sweden' => 'SE', 'finland' => 'FI',
         'ireland' => 'IE', 'lithuania' => 'LT', 'latvia' => 'LV', 'estonia' => 'EE',
         'luxembourg' => 'LU', 'malta' => 'MT', 'cyprus' => 'CY', 'romania' => 'RO',
+        'italia' => 'IT', 'germania' => 'DE', 'francia' => 'FR', 'spagna' => 'ES',
+        'ungheria' => 'HU', 'polonia' => 'PL', 'paesi bassi' => 'NL', 'belgio' => 'BE',
+        'grecia' => 'EL', 'portogallo' => 'PT', 'repubblica ceca' => 'CZ',
+        'slovacchia' => 'SK', 'croazia' => 'HR',
     ];
 
     public function citeste(string $cale): array
@@ -67,22 +71,26 @@ class ImportRaportText implements ParserFisier
         return ['linii' => $linii, 'antet' => $antet];
     }
 
+    /**
+     * Rapoartele vechi (2024) au antetul pe italiana — Mittente, P.IVA,
+     * Numero documento ... del —, cele noi pe engleza. Se citesc amandoua.
+     */
     protected function citesteAntetul(string $rand, array &$antet): void
     {
-        if (preg_match('/^\s*Sender\.*\s*:\s*(.+?)\s*$/i', $rand, $gasit)) {
+        if (preg_match('/^\s*(?:Sender|Mittente)\.*\s*:\s*(.+?)\s*$/i', $rand, $gasit)) {
             $antet['partener_denumire'] = $gasit[1];
         }
 
-        if (preg_match('/Vat\s*N\s*:\s*(\S+)/i', $rand, $gasit)) {
+        if (preg_match('/(?:Vat\s*N|P\.?\s?IVA)\s*:\s*(\S+)/i', $rand, $gasit)) {
             $antet['partener_cod'] = $gasit[1];
         }
 
         /*
          * Tara partenerului sta pe acelasi rand cu codul lui de TVA:
-         * „Italy    Vat N: 00953910403". Doar randul acesta se citeste —
-         * blocul Receiver (Romania) n-are Vat N si ramane pe dinafara.
+         * „Italy    Vat N: 00953910403" sau „Italia   P.IVA: ...". Doar randul
+         * acesta se citeste — blocul destinatarului (Romania) n-are codul.
          */
-        if (preg_match('/^\s*([A-Za-z][A-Za-z ]+?)\s{2,}Vat\s*N\s*:/i', $rand, $gasit)) {
+        if (preg_match('/^\s*([A-Za-z][A-Za-z ]+?)\s{2,}(?:Vat\s*N|P\.?\s?IVA)\s*:/i', $rand, $gasit)) {
             $tara = self::TARI[strtolower(trim($gasit[1]))] ?? null;
 
             if ($tara !== null) {
@@ -90,7 +98,7 @@ class ImportRaportText implements ParserFisier
             }
         }
 
-        if (preg_match('/^\s*Doc number\.*\s*:\s*(\S+)\s+of\s+(\d{2}\.\d{2}\.\d{4})/i', $rand, $gasit)) {
+        if (preg_match('/^\s*(?:Doc number|Numero documento)\.*\s*:\s*(\S+)\s+(?:of|del)\s+(\d{2}\.\d{2}\.\d{4})/i', $rand, $gasit)) {
             $antet['document_numar'] = $gasit[1];
             $antet['document_data'] = \Carbon\Carbon::createFromFormat('d.m.Y', $gasit[2])->format('Y-m-d');
         }
