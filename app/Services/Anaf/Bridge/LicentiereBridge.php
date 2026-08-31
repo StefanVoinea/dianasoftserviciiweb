@@ -87,7 +87,10 @@ class LicentiereBridge
             'licenta_bridge',
             'A licențiat programul local al certificatului ' . $certificat->cn
                 . ' până la ' . $licenta['date']['expira'],
-            ['masina' => $identitate['masina']]
+            ['masina' => $identitate['masina']],
+            null,
+            true,
+            Jurnal::BRIDGE
         );
 
         return ['emisa' => true, 'expira' => $licenta['date']['expira'], 'motiv' => null];

@@ -13,18 +13,33 @@ use Illuminate\Support\Facades\Auth;
  */
 class Jurnal
 {
+    /**
+     * Cine a facut lucrarea, cand n-a facut-o un om.
+     *
+     * Programul de pe calculatorul clientului lucreaza singur — aduce fisiere
+     * din dosarul urmarit, semneaza cu tokenul, isi cere licenta — si nu se
+     * legitimeaza cu contul nimanui. In jurnal, randurile lui apareau drept
+     * „necunoscut", desi se stie foarte bine cine le-a facut.
+     */
+    public const BRIDGE = 'Bridge local';
+
+    /**
+     * @param ?string $autor cine a facut lucrarea, cand n-a facut-o un om
+     *                       (vezi Jurnal::BRIDGE)
+     */
     public static function scrie(
         string $actiune,
         string $descriere,
         array $context = [],
         ?string $cif = null,
-        bool $reusit = true
+        bool $reusit = true,
+        ?string $autor = null
     ): AnafJurnal {
         $user = self::utilizator();
 
         return AnafJurnal::create([
             'user_id' => optional($user)->id,
-            'user_nume' => self::numeUtilizator($user),
+            'user_nume' => self::autorul($user, $autor),
             'user_email' => optional($user)->email,
             'actiune' => $actiune,
             'descriere' => mb_substr($descriere, 0, 500),
@@ -37,9 +52,46 @@ class Jurnal
     }
 
     /** Varianta pentru operatii esuate — apare distinct in jurnal. */
-    public static function esec(string $actiune, string $descriere, array $context = [], ?string $cif = null): AnafJurnal
+    public static function esec(
+        string $actiune,
+        string $descriere,
+        array $context = [],
+        ?string $cif = null,
+        ?string $autor = null
+    ): AnafJurnal {
+        return self::scrie($actiune, $descriere, $context, $cif, false, $autor);
+    }
+
+    /**
+     * Cine a facut lucrarea.
+     *
+     * Intai omul autentificat; apoi cine s-a spus anume (lucrarile pornite din
+     * program, care se fac prin bridge-ul de la client); apoi, daca cererea vine
+     * de la programul local, chiar el.
+     *
+     * Randul ramane fara nume numai cand nu se stie cu adevarat cine a lucrat.
+     */
+    protected static function autorul($user, ?string $autor): ?string
     {
-        return self::scrie($actiune, $descriere, $context, $cif, false);
+        return self::numeUtilizator($user)
+            ?: $autor
+            ?: (self::vineDeLaProgramulLocal() ? self::BRIDGE : null);
+    }
+
+    /**
+     * Cererea vine de la programul de pe calculatorul clientului?
+     *
+     * El se legitimeaza cu codul lui de instalare, pus tot pe „Authorization:
+     * Bearer" — dar codul acela nu e un jeton al aplicatiei, si tocmai de aici
+     * se cunoaste: jetoanele aplicatiei au trei bucati despartite de puncte.
+     */
+    protected static function vineDeLaProgramulLocal(): bool
+    {
+        if (!app()->bound('request')) {
+            return false;
+        }
+
+        return (string) request()->bearerToken() !== '' && !self::pareTokenulAplicatiei();
     }
 
     /** Cat text incape intr-o valoare din context, in caractere. */

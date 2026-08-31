@@ -127,7 +127,8 @@ class MonitorizareFolder
                     'A preluat din dosarul urmărit declarația ' . $declaratie->tip
                         . ' pentru ' . $declaratie->cui . ' și ' . $this->ispravaDupaPas($declaratie),
                     ['fisier' => $fisier['nume']],
-                    $declaratie->cui
+                    $declaratie->cui,
+                    Jurnal::BRIDGE
                 );
             } catch (\Exception $e) {
                 /*
@@ -638,7 +639,8 @@ class MonitorizareFolder
                 'Arhivarea locală a declarației ' . $declaratie->tip . ' pentru ' . $declaratie->cui
                     . ' a eșuat: ' . $e->getMessage(),
                 [],
-                $declaratie->cui
+                $declaratie->cui,
+                Jurnal::BRIDGE
             );
         }
 
@@ -712,7 +714,8 @@ class MonitorizareFolder
             'monitorizare_folder',
             'Declarația „' . $fisier . '" din dosarul urmărit nu a putut fi prelucrată: ' . $motiv,
             ['fisier' => $fisier, 'anuntati' => $adrese],
-            $cui
+            $cui,
+            Jurnal::BRIDGE
         );
 
         foreach ($adrese as $adresa) {
@@ -790,7 +793,10 @@ class MonitorizareFolder
              */
             Jurnal::esec(
                 'monitorizare_folder',
-                'Fișierul „' . $nume . '" nu a putut fi mutat din dosarul urmărit: ' . $e->getMessage()
+                'Fișierul „' . $nume . '" nu a putut fi mutat din dosarul urmărit: ' . $e->getMessage(),
+                [],
+                null,
+                Jurnal::BRIDGE
             );
         }
     }
