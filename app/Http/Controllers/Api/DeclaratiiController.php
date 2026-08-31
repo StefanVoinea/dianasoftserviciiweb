@@ -1105,18 +1105,24 @@ class DeclaratiiController extends Controller
 
     /**
      * Continutul XML-ului, ca explicatia sa poata arata linia si coloana de
-     * corectat. Fisierele foarte mari (SAF-T) se sar: cautarea in ele ar tine
-     * cererea in loc, fara folos real.
+     * corectat.
+     *
+     * Limita a fost pana acum de 20 MB, de teama ca fisierele mari ar tine
+     * cererea in loc — si tocmai un SAF-T de 20,01 MB a ramas fara indrumare,
+     * adica fisierul la care cautarea de mana e cea mai grea. Masurat, un SAF-T
+     * de 20 MB cu 18 erori se citeste si se talmaceste in 0,15 secunde; ce
+     * apasa cu adevarat e memoria, nu timpul, si de aceea limita ramane — dar
+     * asezata acolo unde chiar incepe sa doara.
      */
+    protected const XML_PENTRU_LOCALIZARE = 120 * 1024 * 1024;
+
     protected function xmlPentruLocalizare(AnafDeclaratie $declaratie): ?string
     {
         if (!$declaratie->cale_xml || !Storage::exists($declaratie->cale_xml)) {
             return null;
         }
 
-        $limita = 20 * 1024 * 1024;
-
-        if (Storage::size($declaratie->cale_xml) > $limita) {
+        if (Storage::size($declaratie->cale_xml) > self::XML_PENTRU_LOCALIZARE) {
             return null;
         }
 

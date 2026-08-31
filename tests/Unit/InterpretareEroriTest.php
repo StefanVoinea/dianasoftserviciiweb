@@ -795,6 +795,55 @@ class InterpretareEroriTest extends TestCase
         $this->assertStringNotContainsString('certificatului inițial', $problema['de_corectat']);
     }
 
+    /**
+     * La SAF-T, locul se afla din calea sectiunii, nu dintr-o valoare cautata.
+     *
+     * Erorile de acolo nu spun ce valoare e gresita — „atribut prezent dar vid
+     * nepermis", fara sa spuna care —, ci a cata sectiune este. Pana acum,
+     * negasind ce cauta, wizardul nu spunea nimic: tocmai la fisierul in care
+     * cautarea de mana e cea mai grea, omul ramanea fara indrumare.
+     */
+    public function test_la_saft_locul_se_afla_din_calea_sectiunii(): void
+    {
+        $xml = "<AuditFile>\n<GeneralLedgerEntries><Journal>\n"
+            . "<Transaction><Description>prima</Description></Transaction>\n"
+            . "<Transaction><Description></Description></Transaction>\n"
+            . "</Journal></GeneralLedgerEntries></AuditFile>";
+
+        $erori = 'E: GeneralLedgerEntries (1) sectiune Journal (1) sectiune Transaction (2)'
+            . " sectiune Description (1)\n eroare atribut: : atribut prezent dar vid nepermis";
+
+        $locatie = $this->serviciu()->interpreteaza($erori, $this->declaratie(), $xml)['probleme'][0]['locatie'];
+
+        $this->assertNotNull($locatie, 'calea secțiunii duce singură la elementul reclamat');
+        $this->assertSame(4, $locatie['linie'], 'a doua tranzacție, nu prima');
+        $this->assertStringContainsString('Description', $locatie['potrivire']);
+    }
+
+    /**
+     * Numele sectiunii se ia intreg, nu ca inceput de nume.
+     *
+     * „<Account" se potriveste si cu „<AccountID", si cu „<AccountDescription":
+     * numarand asa, a doua sectiune „Account" cadea in cu totul alta parte a
+     * fisierului — si arata omului un cont care n-avea nicio vina.
+     */
+    public function test_numele_sectiunii_nu_se_confunda_cu_unul_care_incepe_la_fel(): void
+    {
+        $xml = "<MasterFiles><GeneralLedgerAccounts>\n"
+            . "<Account><AccountID>2133</AccountID><AccountDescription>Mijloace</AccountDescription></Account>\n"
+            . "<Account><AccountID>600</AccountID><AccountDescription>Materii</AccountDescription></Account>\n"
+            . '</GeneralLedgerAccounts></MasterFiles>';
+
+        $erori = 'E: MasterFiles (1) sectiune GeneralLedgerAccounts (1) sectiune Account (2)'
+            . " sectiune AccountID (1)\n eroare regula: AccountID: ID-ul contului [600]"
+            . ' trebuie sa se gaseasca in planul de conturi.';
+
+        $locatie = $this->serviciu()->interpreteaza($erori, $this->declaratie(), $xml)['probleme'][0]['locatie'];
+
+        $this->assertSame(3, $locatie['linie'], 'a doua secțiune Account, cea cu contul 600');
+        $this->assertStringContainsString('600', $locatie['text']);
+    }
+
     /** Un mesaj nerecunoscut se arata ca atare, nu se ascunde si nu se inventeaza. */
     public function test_mesajul_nerecunoscut_ramane_vizibil(): void
     {

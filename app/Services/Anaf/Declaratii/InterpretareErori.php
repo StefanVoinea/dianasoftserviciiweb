@@ -389,9 +389,16 @@ class InterpretareErori
     }
 
     /**
-     * De unde sa inceapa cautarea: antetul sectiunii spune a cata repetare este
-     * („E: op1 (2)" — a doua sectiune op1), iar fara asta s-ar arata mereu prima
-     * aparitie, care de multe ori nu e cea gresita.
+     * De unde sa inceapa cautarea: chiar de la elementul reclamat.
+     *
+     * Antetul sectiunii e o cale intreaga, cu cate un numar de ordine la fiecare
+     * treapta — „GeneralLedgerEntries (1) sectiune Journal (1) sectiune
+     * Transaction (1621) sectiune Description (1)". Se merge pe ea treapta cu
+     * treapta: in fiecare, se numara aparitiile de la locul parintelui incolo.
+     *
+     * Asa se ajunge chiar la elementul gresit, nu doar in preajma lui — ceea ce
+     * la SAF-T e singura cale, fiindca acolo erorile nu spun ce valoare e
+     * gresita, ci a cata sectiune e.
      */
     protected function inceputulSectiunii(string $xml, ?array $sectiune): int
     {
@@ -399,36 +406,64 @@ class InterpretareErori
             return 0;
         }
 
-        // Se ia ultima repetare mai mare decat 1: ea restrange cel mai mult.
         if (!preg_match_all('/(\S+?)\s*\((\d+)\)/u', $sectiune['nume'], $m, PREG_SET_ORDER)) {
-            return 0;
-        }
-
-        $tinta = null;
-
-        foreach ($m as $pereche) {
-            if ((int) $pereche[2] > 1) {
-                $tinta = $pereche;
-            }
-        }
-
-        if ($tinta === null) {
             return 0;
         }
 
         $pozitie = 0;
 
-        for ($i = 0; $i < (int) $tinta[2]; $i++) {
-            $gasit = strpos($xml, '<' . $tinta[1], $i === 0 ? 0 : $pozitie + 1);
+        foreach ($m as $treapta) {
+            $gasit = $this->aCataAparitie($xml, '<' . $treapta[1], (int) $treapta[2], $pozitie);
 
-            if ($gasit === false) {
-                return 0;
+            /*
+             * O treapta negasita nu strica ce s-a aflat pana atunci: mai bine
+             * randul parintelui decat niciun rand. Se intampla la elementele
+             * scrise scurt, fara eticheta de deschidere de sine statatoare.
+             */
+            if ($gasit === null) {
+                break;
             }
 
             $pozitie = $gasit;
         }
 
         return $pozitie;
+    }
+
+    /**
+     * A cata aparitie a unei etichete, incepand de la un loc dat.
+     *
+     * Numele se ia intreg, nu ca inceput de nume: „<Account" se potriveste si cu
+     * „<AccountID", si cu „<AccountDescription", iar numarand asa, a 56-a
+     * sectiune „Account" cadea in cu totul alta parte a fisierului. De aceea
+     * dupa nume trebuie sa urmeze ce incheie o eticheta — „>", un spatiu sau
+     * „/".
+     *
+     * @return ?int locul ei, sau null daca nu sunt atatea
+     */
+    protected function aCataAparitie(string $xml, string $eticheta, int $aCata, int $deLa): ?int
+    {
+        $gasite = 0;
+        $cauta = $deLa;
+
+        while (true) {
+            $gasit = strpos($xml, $eticheta, $cauta);
+
+            if ($gasit === false) {
+                return null;
+            }
+
+            $cauta = $gasit + 1;
+            $dupa = $xml[$gasit + strlen($eticheta)] ?? '';
+
+            if (strpos(">/ \t\r\n", $dupa) === false) {
+                continue;
+            }
+
+            if (++$gasite >= max($aCata, 1)) {
+                return $gasit;
+            }
+        }
     }
 
     /**
@@ -445,7 +480,12 @@ class InterpretareErori
      */
     protected function localizeaza(?string $xml, array $candidati, ?array $sectiune = null): ?array
     {
-        if ($xml === null || $candidati === []) {
+        /*
+         * Lipsa unei valori de cautat nu mai inseamna ca nu se poate spune
+         * nimic: calea sectiunii duce singura la elementul reclamat. La SAF-T,
+         * unde erorile nu spun ce valoare e gresita, ea e tot ce avem.
+         */
+        if ($xml === null) {
             return null;
         }
 
@@ -479,7 +519,18 @@ class InterpretareErori
             }
         }
 
-        if ($cauta === null || $pozitie === false) {
+        /*
+         * Fara nicio valoare de cautat — asa sunt mai toate erorile de SAF-T,
+         * care spun „atribut prezent dar vid nepermis", fara sa spuna care —
+         * ramane calea sectiunii. Ea duce chiar la elementul reclamat, si e tot
+         * ce-i trebuie omului ca sa deschida fisierul la randul bun.
+         */
+        if (($cauta === null || $pozitie === false) && $deLa > 0) {
+            $cauta = '<' . ($this->elementulSectiunii($sectiune) ?: '');
+            $pozitie = $deLa;
+        }
+
+        if ($cauta === null || $cauta === '<' || $pozitie === false) {
             return null;
         }
 
@@ -488,7 +539,9 @@ class InterpretareErori
         // Numararea randurilor merge pe octeti: "\n" ocupa un singur octet.
         $linie = substr_count($xml, "\n", 0, $pozitie) + 1;
 
-        $inceputRand = $pozitie > 0 ? strrpos(substr($xml, 0, $pozitie), "\n") : false;
+        // Cautarea inapoi se face pe loc, fara sa se taie o copie a fisierului:
+        // la un SAF-T de zeci de megaocteti, copia aceea s-ar face la fiecare eroare.
+        $inceputRand = $pozitie > 0 ? strrpos($xml, "\n", $pozitie - strlen($xml)) : false;
         $inceputRand = $inceputRand === false ? 0 : $inceputRand + 1;
 
         $sfarsitRand = strpos($xml, "\n", $inceputRand);
