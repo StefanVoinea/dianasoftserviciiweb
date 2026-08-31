@@ -158,6 +158,8 @@ Route::middleware(['auth:api', 'companie.anaf', 'modul:spv'])->group(function ()
     // Consistenta SAF-T: ce spune unealta ANAF despre liniile din jurnale
     Route::post('/declaratii/{declaratie}/verifica-consistenta', 'Api\DeclaratiiController@verificaConsistenta');
     Route::get('/declaratii/{declaratie}/consistenta', 'Api\DeclaratiiController@consistenta');
+    // Decontul depus fata in fata cu cel care iese din SAF-T
+    Route::get('/declaratii/{declaratie}/potrivire', 'Api\DeclaratiiController@potrivire');
     // Decontul de TVA, socotit din jurnalele SAF-T
     Route::post('/declaratii/{declaratie}/decont', 'Api\DeclaratiiController@decont');
     // Acelasi decont, scris ca declaratie D300 de depus

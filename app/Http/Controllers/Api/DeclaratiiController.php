@@ -13,6 +13,7 @@ use App\Services\Anaf\Declaratii\CurataXml;
 use App\Services\Anaf\Declaratii\D300\AntetD300;
 use App\Services\Anaf\Declaratii\D300\DecontDinSaft;
 use App\Services\Anaf\Declaratii\D300\DecontFormular;
+use App\Services\Anaf\Declaratii\D300\PotrivireDecont;
 use App\Services\Anaf\Declaratii\D300\DecontXml;
 use App\Services\Anaf\Declaratii\D300\RanduriD300;
 use App\Services\Anaf\Declaratii\DeclaratieException;
@@ -801,6 +802,21 @@ class DeclaratiiController extends Controller
         return $lista;
     }
 
+    /** Randurile care nu se potrivesc, cerute cand se deschide fereastra. */
+    public function potrivire(AnafDeclaratie $declaratie)
+    {
+        $detalii = json_decode((string) $declaratie->potrivire_detalii, true) ?: [];
+
+        return response()->json([
+            'success' => true,
+            'data' => $detalii + [
+                'stare' => $declaratie->potrivire_stare,
+                'numar' => (int) $declaratie->potrivire_numar,
+                'potrivit_la' => Format::dataOra($declaratie->potrivire_la),
+            ],
+        ]);
+    }
+
     /** Rezultatul scris pe declaratie, gata de aratat. */
     protected function consistentaDin(AnafDeclaratie $declaratie): array
     {
@@ -1382,7 +1398,73 @@ class DeclaratiiController extends Controller
          * aici, unde trec si incarcarea, si revalidarea, ca sa nu ramana pe
          * seama cuiva sa-si aduca aminte de ea inainte de depunere.
          */
-        return $this->verificaSaft($declaratie);
+        $declaratie = $this->verificaSaft($declaratie);
+
+        /*
+         * Iar decontul si SAF-T-ul aceleiasi luni se pun fata in fata: daca nu
+         * spun acelasi lucru, una din ele e gresita. Se face in amandoua
+         * sensurile — la validarea D300 se cauta D406, si pe dos —, iar cand se
+         * gaseste perechea, si ea se insemneaza, ca sa se vada din amandoua
+         * partile.
+         */
+        return $this->potrivesteDecontul($declaratie);
+    }
+
+    /**
+     * Decontul si SAF-T-ul aceleiasi luni, pusi fata in fata.
+     *
+     * Nu opreste nimic: o declaratie care nu se potriveste ramane valida si se
+     * poate depune. Potrivirea e o parere, si se scrie ca atare — dar se scrie
+     * pe amandoua declaratiile, fiindca cine se uita la una vrea sa stie si de
+     * cealalta.
+     */
+    protected function potrivesteDecontul(AnafDeclaratie $declaratie): AnafDeclaratie
+    {
+        if (!in_array($declaratie->tip, ['D300', 'D406'], true)) {
+            return $declaratie;
+        }
+
+        /*
+         * O declaratie respinsa la validare n-are ce spune despre alta: cifrele
+         * ei n-au trecut nici macar de ANAF. Se compara dupa ce trece.
+         */
+        if ($declaratie->pas !== 'validat') {
+            return $declaratie;
+        }
+
+        if (!Schema::hasColumn('anaf_declaratii', 'potrivire_stare')) {
+            return $declaratie;
+        }
+
+        $potrivire = app(PotrivireDecont::class)->pentru($declaratie);
+
+        $this->scriePotrivirea($declaratie, $potrivire);
+
+        /*
+         * Perechea a fost validata mai demult, cand cealalta declaratie inca nu
+         * era in aplicatie; acum se stie si despre ea, asa ca i se scrie si ei
+         * raspunsul — altfel ar ramane cu „n-are cu ce fi comparata".
+         */
+        if (!empty($potrivire['perechea']['id'])) {
+            $perechea = AnafDeclaratie::find($potrivire['perechea']['id']);
+
+            if ($perechea) {
+                $this->scriePotrivirea($perechea, app(PotrivireDecont::class)->pentru($perechea));
+            }
+        }
+
+        return $declaratie->fresh();
+    }
+
+    /** Rezultatul potrivirii, scris pe declaratie. */
+    protected function scriePotrivirea(AnafDeclaratie $declaratie, array $potrivire): void
+    {
+        $declaratie->update([
+            'potrivire_stare' => $potrivire['stare'],
+            'potrivire_numar' => $potrivire['numar'],
+            'potrivire_detalii' => json_encode($potrivire, JSON_UNESCAPED_UNICODE),
+            'potrivire_la' => now(),
+        ]);
     }
 
     /**
@@ -1486,6 +1568,9 @@ class DeclaratiiController extends Controller
             'clasificare' => RecipisaService::clasifica($declaratie->stare_declaratie),
             // Consistenta se verifica numai la SAF-T; la restul, butonul n-are ce cauta.
             'are_consistenta' => $declaratie->tip === 'D406',
+            // Potrivirea are rost numai intre cele doua declaratii ale aceleiasi luni.
+            'are_potrivire' => in_array($declaratie->tip, ['D300', 'D406'], true),
+            'potrivire_la' => Format::dataOra($declaratie->potrivire_la),
             'verificare_la' => Format::dataOra($declaratie->verificare_la),
             'certificat_nume' => optional($declaratie->certificat)->cn,
             'data_depunere' => Format::dataOra($declaratie->data_depunere),

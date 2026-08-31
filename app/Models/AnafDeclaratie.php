@@ -21,6 +21,7 @@ class AnafDeclaratie extends Model
         'data_depunere' => 'datetime',
         'data_recipisa' => 'datetime',
         'verificare_la' => 'datetime',
+        'potrivire_la' => 'datetime',
     ];
 
     /**
@@ -30,7 +31,7 @@ class AnafDeclaratie extends Model
      * lista, ar face raspunsul de zeci de MB. Se cer separat, cand se deschide
      * fereastra cu ele (vezi DeclaratiiController@consistenta).
      */
-    protected $hidden = ['verificare_erori'];
+    protected $hidden = ['verificare_erori', 'potrivire_detalii'];
 
     public function certificat()
     {

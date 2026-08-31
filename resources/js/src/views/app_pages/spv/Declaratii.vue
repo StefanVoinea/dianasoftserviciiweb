@@ -607,6 +607,49 @@
           </b-button>
         </template>
 
+        <!-- D300 și D406 ale aceleiași luni vorbesc despre același lucru: dacă
+             nu spun la fel, una din ele e greșită — iar ANAF face chiar
+             comparația asta. -->
+        <template #cell(potrivire)="rand">
+          <span
+            v-if="!rand.item.are_potrivire"
+            class="text-muted"
+          >-</span>
+          <b-badge
+            v-else-if="rand.item.potrivire_stare === 'potrivit'"
+            variant="light-success"
+            class="badge-apasabil"
+            title="Decontul iese la fel din SAF-T; apasă pentru amănunte"
+            @click="deschidePotrivirea(rand.item)"
+          >
+            se potrivește
+          </b-badge>
+          <b-badge
+            v-else-if="rand.item.potrivire_stare === 'diferente'"
+            variant="light-danger"
+            class="badge-apasabil"
+            title="Apasă pentru rândurile care nu se potrivesc"
+            @click="deschidePotrivirea(rand.item)"
+          >
+            {{ rand.item.potrivire_numar }}
+            {{ rand.item.potrivire_numar === 1 ? 'rând' : 'rânduri' }}
+          </b-badge>
+          <b-badge
+            v-else-if="rand.item.potrivire_stare === 'imposibil'"
+            variant="light-warning"
+            class="badge-apasabil"
+            title="Comparația nu s-a putut face; apasă pentru motiv"
+            @click="deschidePotrivirea(rand.item)"
+          >
+            nu s-a putut
+          </b-badge>
+          <span
+            v-else
+            class="text-muted"
+            title="Nu există declarația pereche a aceleiași luni"
+          >fără pereche</span>
+        </template>
+
         <template #cell(index_recipisa)="rand">
           <span
             v-if="rand.item.index_recipisa"
@@ -1058,6 +1101,115 @@
       </div>
     </b-modal>
 
+    <!-- Decontul depus, pus față în față cu cel care iese din SAF-T -->
+    <b-modal
+      v-model="potrivireVizibila"
+      size="lg"
+      ok-only
+      ok-title="Închide"
+      scrollable
+      modal-class="modul-spv"
+    >
+      <template #modal-title>
+        <feather-icon
+          icon="GitCompareIcon"
+          size="18"
+          class="text-primary mr-50"
+        />
+        D300 față în față cu SAF-T
+        <span
+          v-if="potrivireDeclaratie"
+          class="small text-muted ml-50"
+        >
+          {{ potrivireDeclaratie.cui }} — {{ potrivireDeclaratie.luna }}/{{ potrivireDeclaratie.anul }}
+        </span>
+      </template>
+
+      <b-alert
+        :show="potrivireEroare !== ''"
+        variant="danger"
+      >
+        <div class="alert-body">
+          {{ potrivireEroare }}
+        </div>
+      </b-alert>
+
+      <div
+        v-if="potrivireInCurs"
+        class="d-flex align-items-center text-muted my-2"
+      >
+        <b-spinner
+          small
+          class="mr-1"
+        />
+        Citesc rezultatul...
+      </div>
+
+      <div v-if="potrivireDate">
+        <b-alert
+          show
+          :variant="potrivireDate.stare === 'potrivit' ? 'success' : 'warning'"
+        >
+          <div class="alert-body">
+            <strong>{{ potrivireDate.titlu }}</strong>
+            <div class="small mt-25">
+              {{ potrivireDate.explicatie }}
+            </div>
+            <div
+              v-if="potrivireDate.perechea"
+              class="small mt-50 text-muted"
+            >
+              Comparat cu {{ potrivireDate.perechea.tip }}:
+              {{ potrivireDate.perechea.nume_fisier }}
+            </div>
+          </div>
+        </b-alert>
+
+        <b-table
+          v-if="potrivireDate.diferente && potrivireDate.diferente.length"
+          :items="potrivireDate.diferente"
+          :fields="campuriPotrivire"
+          responsive
+          small
+          striped
+          class="tabel-compact"
+        >
+          <template #cell(rand)="rand">
+            <div>
+              <span class="font-weight-bold">Rândul {{ rand.item.rand }}</span>
+              <b-badge
+                variant="light-secondary"
+                class="ml-50"
+              >
+                {{ rand.item.fel }}
+              </b-badge>
+              <small class="text-muted ml-50">{{ rand.item.atribut }}</small>
+            </div>
+            <div class="small text-muted">
+              {{ rand.item.denumire }}
+            </div>
+          </template>
+          <template #cell(din_saft)="rand">
+            <span class="text-nowrap">{{ leiDeAfisat(rand.item.din_saft) }}</span>
+          </template>
+          <template #cell(din_d300)="rand">
+            <span class="text-nowrap">{{ leiDeAfisat(rand.item.din_d300) }}</span>
+          </template>
+          <template #cell(diferenta)="rand">
+            <span class="text-nowrap text-danger">{{ leiDeAfisat(rand.item.diferenta) }}</span>
+          </template>
+        </b-table>
+
+        <div
+          v-if="potrivireDate.potrivit_la"
+          class="small text-muted"
+        >
+          Comparat la {{ potrivireDate.potrivit_la }}. Se face din nou la fiecare validare
+          a oricăreia dintre cele două declarații.
+        </div>
+      </div>
+    </b-modal>
+
     <!-- Decontul de TVA scos din jurnalele SAF-T -->
     <b-modal
       v-model="decontVizibil"
@@ -1291,6 +1443,19 @@ export default {
         { key: 'taxbase', label: 'Bază' },
         { key: 'taxamount', label: 'TVA' },
       ],
+      // Potrivirea dintre decontul depus și cel din SAF-T
+      potrivireVizibila: false,
+      potrivireInCurs: false,
+      potrivireEroare: '',
+      potrivireDate: null,
+      potrivireDeclaratie: null,
+      campuriPotrivire: [
+        { key: 'rand', label: 'Rând' },
+        { key: 'din_saft', label: 'Din SAF-T', class: 'text-right' },
+        { key: 'din_d300', label: 'Din D300', class: 'text-right' },
+        { key: 'diferenta', label: 'Diferență', class: 'text-right' },
+      ],
+
       // Decontul de TVA scos din SAF-T, în fereastra lui
       decontVizibil: false,
       decontInCurs: false,
@@ -1336,6 +1501,7 @@ export default {
         { key: 'pas', label: 'Stare flux' },
         { key: 'eroare', label: 'Eroare' },
         { key: 'consistenta', label: 'Consistență' },
+        { key: 'potrivire', label: 'D300 ↔ SAF-T' },
         { key: 'index_recipisa', label: 'Index încărcare' },
         { key: 'data_depunere', label: 'Depusă la' },
         { key: 'stare_declaratie', label: 'Rezultat ANAF' },
@@ -2046,6 +2212,26 @@ export default {
         })
         .finally(() => {
           this.consistentaInCurs = false
+        })
+    },
+
+    /** Rândurile care nu se potrivesc, aduse de la server. */
+    deschidePotrivirea(declaratie) {
+      this.potrivireDeclaratie = declaratie
+      this.potrivireDate = null
+      this.potrivireEroare = ''
+      this.potrivireVizibila = true
+      this.potrivireInCurs = true
+
+      this.$http.get(`/declaratii/${declaratie.id}/potrivire`)
+        .then(raspuns => {
+          this.potrivireDate = raspuns.data.data
+        })
+        .catch(err => {
+          this.potrivireEroare = this.mesajEroare(err, 'Rezultatul comparației nu a putut fi citit')
+        })
+        .finally(() => {
+          this.potrivireInCurs = false
         })
     },
 

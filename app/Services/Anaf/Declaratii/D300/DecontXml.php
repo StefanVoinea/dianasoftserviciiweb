@@ -120,15 +120,15 @@ class DecontXml
     }
 
     /**
-     * Randurile decontului, sub numele lor din schema.
+     * Decontul, adus in randurile declaratiei: atributul din schema => lei.
      *
-     * Cele ramase la zero nu se scriu: declaratia are peste o suta de randuri,
-     * iar intr-o luna obisnuita se umplu cateva. Ce lipseste e zero si pentru
-     * ANAF.
+     * Se foloseste si la scrierea declaratiei, si la punerea ei fata in fata cu
+     * o D300 depusa altundeva (vezi PotrivireDecont). De aceea sta deoparte, cu
+     * toate randurile — si cele ramase la zero.
      *
-     * @return array<string, string>
+     * @return array<string, int>
      */
-    protected function sumele(array $randuri): array
+    public function randurileDeclaratiei(array $randuri): array
     {
         $valori = [];
 
@@ -138,10 +138,26 @@ class DecontXml
 
         $this->socotesteRandurileScoase($valori);
 
-        // Ce a ramas zero nu se scrie: pentru ANAF, lipsa inseamna tot zero.
-        return array_map('strval', array_filter($valori, function ($leu) {
-            return $leu !== 0;
-        }));
+        return $valori;
+    }
+
+    /**
+     * Randurile scrise in declaratie.
+     *
+     * Cele ramase la zero nu se scriu: declaratia are peste o suta de randuri,
+     * iar intr-o luna obisnuita se umplu cateva. Ce lipseste e zero si pentru
+     * ANAF.
+     *
+     * @return array<string, string>
+     */
+    protected function sumele(array $randuri): array
+    {
+        return array_map('strval', array_filter(
+            $this->randurileDeclaratiei($randuri),
+            function ($leu) {
+                return $leu !== 0;
+            }
+        ));
     }
 
     /**
