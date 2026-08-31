@@ -561,6 +561,52 @@
           >-</span>
         </template>
 
+        <!-- Consistența SAF-T: ce spune unealta ANAF despre liniile din jurnale.
+             Validarea zice dacă declarația e bine întocmită; asta, dacă cifrele
+             din ea se potrivesc între ele. -->
+        <template #cell(consistenta)="rand">
+          <span
+            v-if="!rand.item.are_consistenta"
+            class="text-muted"
+          >-</span>
+          <b-badge
+            v-else-if="rand.item.verificare_stare === 'curata'"
+            variant="light-success"
+            class="badge-apasabil"
+            title="Nicio neconcordanță; apasă pentru amănunte"
+            @click="deschideConsistenta(rand.item)"
+          >
+            curată
+          </b-badge>
+          <b-badge
+            v-else-if="rand.item.verificare_stare === 'erori'"
+            variant="light-danger"
+            class="badge-apasabil"
+            title="Apasă pentru liniile de îndreptat"
+            @click="deschideConsistenta(rand.item)"
+          >
+            {{ rand.item.verificare_numar }} {{ rand.item.verificare_numar === 1 ? 'linie' : 'linii' }}
+          </b-badge>
+          <b-badge
+            v-else-if="rand.item.verificare_stare === 'imposibil'"
+            variant="light-warning"
+            class="badge-apasabil"
+            title="Verificarea nu a putut fi făcută; apasă pentru motiv"
+            @click="deschideConsistenta(rand.item)"
+          >
+            nu s-a putut
+          </b-badge>
+          <b-button
+            v-else
+            size="sm"
+            variant="flat-primary"
+            :disabled="ocupat === rand.item.id"
+            @click="verificaConsistenta(rand.item)"
+          >
+            Verifică
+          </b-button>
+        </template>
+
         <template #cell(index_recipisa)="rand">
           <span
             v-if="rand.item.index_recipisa"
@@ -633,6 +679,17 @@
             @click="actiune(rand.item, 'depune')"
           >
             Depune
+          </b-button>
+          <!-- Decontul de TVA scos din jurnalele SAF-T; deocamdată doar de văzut -->
+          <b-button
+            v-if="rand.item.are_consistenta && rand.item.cale_xml"
+            size="sm"
+            variant="outline-primary"
+            class="mr-1 mb-1"
+            :disabled="ocupat === rand.item.id"
+            @click="deschideDecontul(rand.item)"
+          >
+            Decont TVA
           </b-button>
           <!-- Documentele pot sta pe server sau doar în arhiva de la client -->
           <b-button
@@ -849,6 +906,314 @@
         </div>
       </div>
     </b-modal>
+
+    <!-- Consistența SAF-T: liniile pe care unealta ANAF le-a găsit nepotrivite -->
+    <b-modal
+      v-model="consistentaVizibila"
+      size="xl"
+      ok-only
+      ok-title="Închide"
+      scrollable
+      modal-class="modul-spv"
+    >
+      <template #modal-title>
+        <feather-icon
+          icon="CheckSquareIcon"
+          size="18"
+          class="text-primary mr-50"
+        />
+        Consistența SAF-T
+        <span
+          v-if="consistentaDeclaratie"
+          class="small text-muted ml-50"
+        >
+          {{ consistentaDeclaratie.cui }} — {{ consistentaDeclaratie.luna }}/{{ consistentaDeclaratie.anul }}
+        </span>
+      </template>
+
+      <b-alert
+        :show="consistentaEroare !== ''"
+        variant="danger"
+      >
+        <div class="alert-body">
+          {{ consistentaEroare }}
+        </div>
+      </b-alert>
+
+      <div
+        v-if="consistentaInCurs"
+        class="d-flex align-items-center text-muted my-2"
+      >
+        <b-spinner
+          small
+          class="mr-1"
+        />
+        Trec prin liniile declarației...
+      </div>
+
+      <div v-if="consistentaDate">
+        <div class="d-flex align-items-center justify-content-between mb-1">
+          <small
+            v-if="consistentaDate.verificat_la"
+            class="text-muted"
+          >
+            Verificată la {{ consistentaDate.verificat_la }}
+          </small>
+          <span v-else />
+
+          <b-button
+            size="sm"
+            variant="outline-primary"
+            :disabled="consistentaInCurs"
+            @click="verificaConsistenta(consistentaDeclaratie)"
+          >
+            Verifică din nou
+          </b-button>
+        </div>
+
+        <!-- Verificarea nu s-a putut face: motivul, spus pe înțelesul omului -->
+        <b-alert
+          :show="consistentaDate.stare === 'imposibil'"
+          variant="warning"
+        >
+          <div class="alert-body">
+            {{ consistentaDate.mesaj }}
+          </div>
+        </b-alert>
+
+        <b-alert
+          :show="consistentaDate.stare === 'curata'"
+          variant="success"
+        >
+          <div class="alert-body">
+            Nicio neconcordanță. Cifrele din jurnale se potrivesc între ele:
+            cont, cod TVA, cotă, bază și taxă.
+          </div>
+        </b-alert>
+
+        <!-- Datele declarației, așa cum le-a citit unealta ANAF -->
+        <div
+          v-if="consistentaDate.antet && consistentaDate.antet.registrationnumber"
+          class="small text-muted mb-1"
+        >
+          {{ consistentaDate.antet.name }} ({{ consistentaDate.antet.registrationnumber }}) —
+          perioada {{ consistentaDate.antet.selectionstartdate }} … {{ consistentaDate.antet.selectionenddate }},
+          {{ consistentaDate.antet.numberofentries }} note contabile,
+          total debit {{ consistentaDate.antet.totaldebit }} / credit {{ consistentaDate.antet.totalcredit }}.
+        </div>
+
+        <!-- Întâi de unde se apucă: câte linii a prins fiecare test -->
+        <b-card
+          v-for="test in consistentaDate.pe_teste"
+          :key="test.cod"
+          class="border mb-1"
+          body-class="p-1"
+        >
+          <div class="d-flex align-items-center mb-50">
+            <b-badge variant="light-danger">
+              {{ test.numar }} {{ test.numar === 1 ? 'linie' : 'linii' }}
+            </b-badge>
+            <strong class="ml-1">{{ test.titlu }}</strong>
+            <b-badge
+              variant="light-secondary"
+              class="ml-1"
+            >
+              {{ test.cod }}
+            </b-badge>
+          </div>
+          <div class="small mb-50">
+            {{ test.verifica }}
+          </div>
+          <div class="small">
+            <strong>De făcut:</strong> {{ test.de_facut }}
+          </div>
+        </b-card>
+
+        <b-table
+          v-if="consistentaDate.erori && consistentaDate.erori.length"
+          :items="consistentaDate.erori"
+          :fields="campuriConsistenta"
+          responsive
+          small
+          striped
+          class="tabel-compact mt-1"
+        >
+          <template #cell(test)="rand">
+            <b-badge
+              variant="light-danger"
+              :title="rand.item.test.titlu"
+            >
+              {{ rand.item.test.cod }}
+            </b-badge>
+          </template>
+        </b-table>
+
+        <div
+          v-if="consistentaDate.trunchiat"
+          class="small text-muted"
+        >
+          Se arată primele {{ consistentaDate.erori.length }} linii din {{ consistentaDate.numar }}.
+          Îndreaptă-le pe acestea și verifică din nou: de obicei aceeași greșeală le ține pe toate.
+        </div>
+      </div>
+    </b-modal>
+
+    <!-- Decontul de TVA scos din jurnalele SAF-T -->
+    <b-modal
+      v-model="decontVizibil"
+      size="lg"
+      scrollable
+      modal-class="modul-spv"
+    >
+      <template #modal-title>
+        <feather-icon
+          icon="FileTextIcon"
+          size="18"
+          class="text-primary mr-50"
+        />
+        Decont TVA din SAF-T
+        <span
+          v-if="decontDate"
+          class="small text-muted ml-50"
+        >
+          {{ decontDate.denumire }} ({{ decontDate.cif }}) — {{ decontDate.luna }}/{{ decontDate.an }}
+        </span>
+      </template>
+
+      <b-alert
+        :show="decontEroare !== ''"
+        variant="danger"
+      >
+        <div class="alert-body">
+          {{ decontEroare }}
+        </div>
+      </b-alert>
+
+      <div
+        v-if="decontInCurs"
+        class="d-flex align-items-center text-muted my-2"
+      >
+        <b-spinner
+          small
+          class="mr-1"
+        />
+        Trec prin jurnalele declarației...
+      </div>
+
+      <div v-if="decontDate">
+        <!-- De ce a ieșit decontul așa cum a ieșit. Pe fișierele în care
+             programul de contabilitate n-a pus coduri TVA pe notele contabile,
+             asta e tot ce are omul de citit. -->
+        <b-alert
+          show
+          :variant="decontDate.lamurire.stare === 'bun' ? 'success' : 'warning'"
+        >
+          <div class="alert-body">
+            <strong>{{ decontDate.lamurire.titlu }}</strong>
+            <div class="small mt-25">
+              {{ decontDate.lamurire.explicatie }}
+            </div>
+            <div
+              v-if="decontDate.lamurire.de_facut"
+              class="small mt-50"
+            >
+              <strong>De făcut:</strong> {{ decontDate.lamurire.de_facut }}
+            </div>
+          </div>
+        </b-alert>
+
+        <!-- Antetul declarației nu se află în SAF-T; se ia din fișa firmei -->
+        <b-alert
+          v-if="decontDate.antet && !decontDate.antet.gata"
+          show
+          variant="warning"
+          class="py-1 px-2"
+        >
+          <div class="alert-body">
+            <strong>Antetul declarației e neîntregit.</strong>
+            Mai lipsesc: {{ decontDate.antet.lipsesc.join(', ') }}.
+            Se completează o dată, la <em>Entități → Date pentru declarații</em>,
+            și se iau de acolo la fiecare declarație.
+          </div>
+        </b-alert>
+
+        <b-table
+          v-if="decontDate.randuri.length"
+          :items="decontDate.randuri"
+          :fields="campuriDecont"
+          responsive
+          small
+          striped
+          class="tabel-compact"
+        >
+          <template #cell(eticheta)="rand">
+            <div v-if="rand.item.rand">
+              <span class="font-weight-bold">Rândul {{ rand.item.rand }}</span>
+              <b-badge
+                variant="light-secondary"
+                class="ml-50"
+              >
+                {{ rand.item.fel }}
+              </b-badge>
+              <!-- Numele din XML-ul D300, pentru cine îl caută acolo -->
+              <small
+                v-if="rand.item.atribut"
+                class="text-muted ml-50"
+              >{{ rand.item.atribut }}</small>
+              <div class="small text-muted">
+                {{ rand.item.denumire }}
+              </div>
+            </div>
+            <span
+              v-else
+              class="text-muted"
+            >{{ rand.item.camp }}</span>
+          </template>
+          <template #cell(valoare)="rand">
+            <span class="text-nowrap">{{ leiDeAfisat(rand.item.valoare) }}</span>
+          </template>
+        </b-table>
+
+      </div>
+
+      <!-- Exporturile stau lângă închidere: sunt ce are omul de făcut cu decontul -->
+      <template #modal-footer="{ ok }">
+        <b-button
+          v-if="decontDate && decontDate.randuri.length"
+          variant="outline-primary"
+          :disabled="decontInCurs"
+          title="Scrie datele pentru PDF-ul inteligent al ANAF (soft A). Se încarcă în Acrobat Reader, din Import Data."
+          @click="descarcaDecontFormular"
+        >
+          <feather-icon
+            icon="FileIcon"
+            size="14"
+            class="mr-50"
+          />
+          Export XML D300 pentru PDF-ul ANAF
+        </b-button>
+        <b-button
+          v-if="decontDate && decontDate.randuri.length"
+          variant="primary"
+          :disabled="decontInCurs"
+          title="Scrie declarația D300 într-un fișier XML, gata de validat și depus"
+          @click="descarcaDecontXml"
+        >
+          <feather-icon
+            icon="DownloadIcon"
+            size="14"
+            class="mr-50"
+          />
+          Export XML D300 pentru DUKIntegrator
+        </b-button>
+        <b-button
+          variant="secondary"
+          @click="ok()"
+        >
+          Închide
+        </b-button>
+      </template>
+    </b-modal>
   </div>
 </template>
 
@@ -905,6 +1270,37 @@ export default {
       cronometru: null,
       ultimaDescarcare: '',
       ultimaDescarcareNumar: 0,
+      // Consistența SAF-T, în fereastra ei: declarația, rezultatul, mersul cererii
+      consistentaVizibila: false,
+      consistentaInCurs: false,
+      consistentaEroare: '',
+      consistentaDeclaratie: null,
+      consistentaDate: null,
+      campuriConsistenta: [
+        { key: 'test', label: 'Test' },
+        { key: 'transactionid', label: 'Notă' },
+        { key: 'recordid', label: 'Linie' },
+        { key: 'accountid', label: 'Cont' },
+        { key: 'customerid', label: 'Client' },
+        { key: 'supplierid', label: 'Furnizor' },
+        { key: 'debitamount', label: 'Debit' },
+        { key: 'creditamount', label: 'Credit' },
+        { key: 'taxtype', label: 'Tip taxă' },
+        { key: 'taxcode', label: 'Cod TVA' },
+        { key: 'taxpercentage', label: 'Cotă' },
+        { key: 'taxbase', label: 'Bază' },
+        { key: 'taxamount', label: 'TVA' },
+      ],
+      // Decontul de TVA scos din SAF-T, în fereastra lui
+      decontVizibil: false,
+      decontInCurs: false,
+      decontEroare: '',
+      decontDate: null,
+      decontDeclaratie: null,
+      campuriDecont: [
+        { key: 'eticheta', label: 'Rând' },
+        { key: 'valoare', label: 'Valoare', class: 'text-right' },
+      ],
       // Id-urile declarațiilor la care eroarea e arătată întreagă
       eroriDesfasurate: [],
       eroare: '',
@@ -939,6 +1335,7 @@ export default {
         { key: 'perioada', label: 'Perioada' },
         { key: 'pas', label: 'Stare flux' },
         { key: 'eroare', label: 'Eroare' },
+        { key: 'consistenta', label: 'Consistență' },
         { key: 'index_recipisa', label: 'Index încărcare' },
         { key: 'data_depunere', label: 'Depusă la' },
         { key: 'stare_declaratie', label: 'Rezultat ANAF' },
@@ -1626,6 +2023,167 @@ export default {
           this.ocupat = null
         })
     },
+
+    /**
+     * Rezultatul verificării de consistență, pentru declarația aleasă.
+     *
+     * Liniile găsite nu vin odată cu tabelul — la un SAF-T încâlcit sunt cu
+     * miile —, așa că se cer abia acum, când e cine să le vadă.
+     */
+    deschideConsistenta(declaratie) {
+      this.consistentaDeclaratie = declaratie
+      this.consistentaDate = null
+      this.consistentaEroare = ''
+      this.consistentaVizibila = true
+      this.consistentaInCurs = true
+
+      this.$http.get(`/declaratii/${declaratie.id}/consistenta`)
+        .then(raspuns => {
+          this.consistentaDate = raspuns.data.data
+        })
+        .catch(err => {
+          this.consistentaEroare = this.mesajEroare(err, 'Rezultatul verificării nu a putut fi citit')
+        })
+        .finally(() => {
+          this.consistentaInCurs = false
+        })
+    },
+
+    /**
+     * Decontul de TVA socotit din jurnalele declarației.
+     *
+     * Se socotește de fiecare dată, nu se ține minte: e o privire asupra
+     * fișierului, nu o declarație care să aibă nevoie de istoric.
+     */
+    deschideDecontul(declaratie) {
+      this.decontDeclaratie = declaratie
+      this.decontDate = null
+      this.decontEroare = ''
+      this.decontVizibil = true
+      this.decontInCurs = true
+      this.ocupat = declaratie.id
+
+      this.$http.post(`/declaratii/${declaratie.id}/decont`)
+        .then(raspuns => {
+          this.decontDate = raspuns.data.data
+        })
+        .catch(err => {
+          this.decontEroare = this.mesajEroare(err, 'Decontul nu a putut fi scos')
+        })
+        .finally(() => {
+          this.decontInCurs = false
+          this.ocupat = null
+        })
+    },
+
+    /**
+     * Declarația D300 scrisă din decont, adusă ca fișier.
+     *
+     * Se cere prin XHR, ca restul: așa vin și mesajele de eroare pe înțeles —
+     * de pildă când mai lipsește ceva din antetul luat din fișa firmei.
+     */
+    descarcaDecontXml() {
+      this.aduFisierulDecontului('xml', 'D300.xml', 'Declarația D300 nu a putut fi scrisă')
+    },
+
+    /**
+     * Aceleași cifre, scrise pentru PDF-ul inteligent al ANAF.
+     *
+     * ANAF n-a pus buton de încărcare în formular; fișierul se ia din Acrobat
+     * Reader, din „Import Data".
+     */
+    descarcaDecontFormular() {
+      this.aduFisierulDecontului(
+        'formular',
+        'D300_formular.xml',
+        'Fișierul pentru formularul ANAF nu a putut fi scris',
+      )
+    },
+
+    /** Cere serverului fișierul cerut și îl dă omului. */
+    aduFisierulDecontului(fel, numeImplicit, mesajDeEroare) {
+      this.decontEroare = ''
+      this.decontInCurs = true
+
+      this.$http.post(`/declaratii/${this.decontDeclaratie.id}/decont/${fel}`, {}, { responseType: 'blob' })
+        .then(raspuns => {
+          const nume = raspuns.headers['x-nume-fisier'] || numeImplicit
+          const url = window.URL.createObjectURL(new Blob([raspuns.data], { type: 'application/xml' }))
+          const legatura = document.createElement('a')
+
+          legatura.href = url
+          legatura.download = nume
+          legatura.click()
+
+          setTimeout(() => window.URL.revokeObjectURL(url), 60000)
+          this.notifica(`Fișierul ${nume} a fost scris`, 'success')
+        })
+        .catch(err => {
+          this.decontEroare = this.mesajEroareDinBlob(err, mesajDeEroare)
+        })
+        .finally(() => {
+          this.decontInCurs = false
+        })
+    },
+
+    /**
+     * Mesajul de eroare al unui răspuns cerut ca fișier.
+     *
+     * Cu „responseType: blob", și răspunsul de eroare vine tot blob, iar
+     * mesajul serverului ar rămâne necitit dacă nu e desfăcut aici.
+     */
+    mesajEroareDinBlob(err, implicit) {
+      const date = err.response && err.response.data
+
+      if (date instanceof Blob) {
+        date.text().then(text => {
+          try {
+            const raspuns = JSON.parse(text)
+
+            if (raspuns.message) {
+              this.decontEroare = raspuns.message
+            }
+          } catch (e) {
+            // Nu era json: rămâne mesajul obișnuit.
+          }
+        })
+      }
+
+      return this.mesajEroare(err, implicit)
+    },
+
+    /** Suma, scrisă cum se scriu banii la noi. */
+    leiDeAfisat(valoare) {
+      return new Intl.NumberFormat('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        .format(valoare)
+    },
+
+    /** Trece încă o dată prin declarație cu unealta ANAF. */
+    verificaConsistenta(declaratie) {
+      if (!declaratie) {
+        return
+      }
+
+      this.eroare = ''
+      this.consistentaEroare = ''
+      this.ocupat = declaratie.id
+      this.consistentaInCurs = true
+
+      this.$http.post(`/declaratii/${declaratie.id}/verifica-consistenta`)
+        .then(raspuns => {
+          this.consistentaDeclaratie = raspuns.data.data
+          this.consistentaDate = raspuns.data.consistenta
+          this.consistentaVizibila = true
+          this.incarcaLista()
+        })
+        .catch(err => {
+          this.consistentaEroare = this.mesajEroare(err, 'Verificarea de consistență a eșuat')
+        })
+        .finally(() => {
+          this.ocupat = null
+          this.consistentaInCurs = false
+        })
+    },
     /**
      * @param {boolean} tacut pornit de cronometru: anunță doar când chiar a
      *                        descărcat ceva, ca să nu bombardeze utilizatorul
@@ -1851,6 +2409,11 @@ export default {
   /* Se stinge spre capat, ca taietura sa nu para o litera lipsa */
   mask-image: linear-gradient(to right, black 85%, transparent 100%);
   -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+}
+
+/* Insigna care duce undeva se poarta ca un buton */
+.badge-apasabil {
+  cursor: pointer;
 }
 
 .coloana-eroare-desfasurata {

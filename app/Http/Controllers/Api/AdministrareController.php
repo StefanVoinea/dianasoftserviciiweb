@@ -17,6 +17,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 /**
@@ -46,12 +47,16 @@ class AdministrareController extends Controller
     }
 
     /**
-     * Statistici despre toti clientii: cat au depus cu aplicatia si cand au
+     * Statistici despre toti clientii: cat au lucrat cu aplicatia si cand au
      * folosit-o ultima oara.
      *
-     * Se numara doar depunerile facute cu aplicatia (cu data depunerii si
-     * certificatul cu care s-a semnat), nu si istoricul importat din programul
-     * vechi — acela ar umfla cifrele fara sa spuna nimic despre folosire.
+     * Se numara doar ce a plecat la ANAF prin aplicatie — declaratiile cu data
+     * depunerii si cu certificatul cu care s-au semnat, transporturile cu UIT
+     * primit —, nu si istoricul importat din programul vechi: acela ar umfla
+     * cifrele fara sa spuna nimic despre folosire.
+     *
+     * Modulele se numara deosebit, fiindca se si vand deosebit: un client poate
+     * depune declaratii cu miile si sa n-aiba niciun transport, sau pe dos.
      */
     public function statistici()
     {
@@ -81,6 +86,9 @@ class AdministrareController extends Controller
             ->get()
             ->keyBy('company_id');
 
+        $transporturi = $this->transporturileClientilor($inceputCurenta, $inceputAnterioara);
+        $urmarite = $this->transporturileUrmarite($inceputCurenta, $inceputAnterioara);
+
         // Ultima logare: cel mai nou token de acces al vreunui cont al clientului.
         $logari = DB::table('oauth_access_tokens')
             ->join('company_user', 'company_user.user_id', '=', 'oauth_access_tokens.user_id')
@@ -97,31 +105,139 @@ class AdministrareController extends Controller
             ->get()
             ->keyBy('company_id');
 
-        $clienti = Company::orderBy('denumire')->get()->map(function (Company $client) use ($depuneri, $logari, $jurnal) {
-            $d = $depuneri->get($client->id);
+        $clienti = Company::orderBy('denumire')->get()->map(
+            function (Company $client) use ($depuneri, $transporturi, $urmarite, $logari, $jurnal) {
+                $d = $depuneri->get($client->id);
+                $t = $transporturi->get($client->id);
+                $u = $urmarite->get($client->id);
 
-            // Accesarea e ori o logare, ori o treaba facuta: cea mai noua dintre ele.
-            $accesari = array_filter([
-                optional($logari->get($client->id))->ultima,
-                optional($jurnal->get($client->id))->ultima,
-            ]);
+                // Accesarea e ori o logare, ori o treaba facuta: cea mai noua dintre ele.
+                $accesari = array_filter([
+                    optional($logari->get($client->id))->ultima,
+                    optional($jurnal->get($client->id))->ultima,
+                ]);
 
-            return [
-                'id' => $client->id,
-                'denumire' => $client->denumire,
-                'cui' => $client->cui,
-                'declaratii' => $d ? (int) $d->total : 0,
-                'cuiuri' => $d ? (int) $d->cuiuri : 0,
-                'declaratii_luna_curenta' => $d ? (int) $d->luna_curenta : 0,
-                'cuiuri_luna_curenta' => $d ? (int) $d->cuiuri_luna_curenta : 0,
-                'declaratii_luna_anterioara' => $d ? (int) $d->luna_anterioara : 0,
-                'cuiuri_luna_anterioara' => $d ? (int) $d->cuiuri_luna_anterioara : 0,
-                'ultima_depunere' => $d ? Format::dataOra($d->ultima_depunere) : null,
-                'ultima_accesare' => $accesari !== [] ? Format::dataOra(max($accesari)) : null,
-            ];
-        });
+                /*
+                 * Un transport se poate ori trimite de aici, ori doar urmari;
+                 * „ultimul" e cel mai nou dintre ele, oricare ar fi felul lui.
+                 */
+                $transporturileLui = array_filter([
+                    optional($t)->ultima_depunere,
+                    optional($u)->ultimul,
+                ]);
+
+                return [
+                    'id' => $client->id,
+                    'denumire' => $client->denumire,
+                    'cui' => $client->cui,
+
+                    // SPV Curier
+                    'declaratii' => $d ? (int) $d->total : 0,
+                    'cuiuri' => $d ? (int) $d->cuiuri : 0,
+                    'declaratii_luna_curenta' => $d ? (int) $d->luna_curenta : 0,
+                    'cuiuri_luna_curenta' => $d ? (int) $d->cuiuri_luna_curenta : 0,
+                    'declaratii_luna_anterioara' => $d ? (int) $d->luna_anterioara : 0,
+                    'cuiuri_luna_anterioara' => $d ? (int) $d->cuiuri_luna_anterioara : 0,
+                    'ultima_depunere' => $d ? Format::dataOra($d->ultima_depunere) : null,
+
+                    // Dispecer e-Transport
+                    'transporturi' => $t ? (int) $t->total : 0,
+                    'declaranti' => $t ? (int) $t->declaranti : 0,
+                    'transporturi_luna_curenta' => $t ? (int) $t->luna_curenta : 0,
+                    'declaranti_luna_curenta' => $t ? (int) $t->declaranti_luna_curenta : 0,
+                    'transporturi_luna_anterioara' => $t ? (int) $t->luna_anterioara : 0,
+                    'declaranti_luna_anterioara' => $t ? (int) $t->declaranti_luna_anterioara : 0,
+                    'urmarite' => $u ? (int) $u->total : 0,
+                    'urmarite_luna_curenta' => $u ? (int) $u->luna_curenta : 0,
+                    'urmarite_luna_anterioara' => $u ? (int) $u->luna_anterioara : 0,
+                    'ultimul_transport' => $transporturileLui !== []
+                        ? Format::dataOra(max($transporturileLui))
+                        : null,
+
+                    'ultima_accesare' => $accesari !== [] ? Format::dataOra(max($accesari)) : null,
+                ];
+            }
+        );
 
         return response()->json(['success' => true, 'data' => $clienti]);
+    }
+
+    /**
+     * Transporturile duse la ANAF cu Dispecerul, pe client.
+     *
+     * Se numara cele care au primit UIT — adica au ajuns cu adevarat la ANAF.
+     * Ciornele si incercarile respinse n-au ce cauta intr-o masura a folosirii.
+     *
+     * Tabelul poate sa nu fi ajuns inca pe server: intre punerea codului nou si
+     * rularea migrarilor trece o clipa, iar in clipa aceea fila de statistici ar
+     * cadea cu totul in loc sa arate ce are.
+     *
+     * @return \Illuminate\Support\Collection
+     */
+    protected function transporturileClientilor($inceputCurenta, $inceputAnterioara)
+    {
+        if (!Schema::hasTable('etransport_declaratii')) {
+            return collect();
+        }
+
+        return DB::table('etransport_declaratii')
+            ->selectRaw(
+                'company_id,'
+                . ' COUNT(*) as total,'
+                . ' COUNT(DISTINCT cif_declarant) as declaranti,'
+                . ' SUM(CASE WHEN depusa_la >= ? THEN 1 ELSE 0 END) as luna_curenta,'
+                . ' COUNT(DISTINCT CASE WHEN depusa_la >= ? THEN cif_declarant END) as declaranti_luna_curenta,'
+                . ' SUM(CASE WHEN depusa_la >= ? AND depusa_la < ? THEN 1 ELSE 0 END) as luna_anterioara,'
+                . ' COUNT(DISTINCT CASE WHEN depusa_la >= ? AND depusa_la < ? THEN cif_declarant END)'
+                . ' as declaranti_luna_anterioara,'
+                . ' MAX(depusa_la) as ultima_depunere',
+                [
+                    $inceputCurenta, $inceputCurenta,
+                    $inceputAnterioara, $inceputCurenta,
+                    $inceputAnterioara, $inceputCurenta,
+                ]
+            )
+            ->whereNotNull('depusa_la')
+            ->whereNotNull('uit')
+            ->whereNotNull('company_id')
+            ->groupBy('company_id')
+            ->get()
+            ->keyBy('company_id');
+    }
+
+    /**
+     * Transporturile urmarite: notificarile aduse de la ANAF, pe client.
+     *
+     * Dispecerul se foloseste in doua feluri, si al doilea nu lasa urma in
+     * declaratiile noastre: multi clienti declara transportul in alta parte si
+     * vin aici sa-l urmareasca — sa vada UIT-urile, starile lor si termenele.
+     * Numarate numai declaratiile trimise, tocmai clientii aceia ar parea ca nu
+     * folosesc modulul deloc.
+     *
+     * Perioada se ia dupa data transportului, nu dupa cand a fost adus la noi:
+     * o preluare facuta azi poate aduce transporturi de acum doua luni.
+     *
+     * @return \Illuminate\Support\Collection
+     */
+    protected function transporturileUrmarite($inceputCurenta, $inceputAnterioara)
+    {
+        if (!Schema::hasTable('etransport_notificari')) {
+            return collect();
+        }
+
+        return DB::table('etransport_notificari')
+            ->selectRaw(
+                'company_id,'
+                . ' COUNT(*) as total,'
+                . ' SUM(CASE WHEN data_creare >= ? THEN 1 ELSE 0 END) as luna_curenta,'
+                . ' SUM(CASE WHEN data_creare >= ? AND data_creare < ? THEN 1 ELSE 0 END) as luna_anterioara,'
+                . ' MAX(data_creare) as ultimul',
+                [$inceputCurenta, $inceputAnterioara, $inceputCurenta]
+            )
+            ->whereNotNull('company_id')
+            ->groupBy('company_id')
+            ->get()
+            ->keyBy('company_id');
     }
 
     /** Client nou, cu primul lui cont de administrator. */

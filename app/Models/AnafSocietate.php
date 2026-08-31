@@ -19,6 +19,15 @@ class AnafSocietate extends Model
         'date_identificare_la' => 'datetime',
         'vector_la' => 'datetime',
         'sincronizat_la' => 'datetime',
+
+        // Datele din antetul declaratiilor (vezi AntetD300)
+        'prin_reprezentant' => 'boolean',
+        'd300_bifa_interne' => 'boolean',
+        'd300_bifa_cereale' => 'boolean',
+        'd300_bifa_mob' => 'boolean',
+        'd300_bifa_disp' => 'boolean',
+        'd300_bifa_cons' => 'boolean',
+        'd300_solicit_ramb' => 'boolean',
     ];
 
     /** Denumirea din vectorul fiscal are prioritate fata de cea din date identificare. */

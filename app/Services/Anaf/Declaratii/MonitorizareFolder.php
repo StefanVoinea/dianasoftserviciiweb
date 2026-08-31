@@ -47,6 +47,9 @@ class MonitorizareFolder
     protected $curatator;
     protected $depunere;
 
+    /** Verificarea de consistenta a SAF-T; lipseste acolo unde n-a fost data. */
+    protected $verificare;
+
     /**
      * Declaratia scrisa in tabel pentru fisierul care se lucreaza acum.
      *
@@ -64,7 +67,8 @@ class MonitorizareFolder
         ArhivaService $arhiva,
         PdfDeclaratie $pdf,
         CurataXml $curatator,
-        DepunereService $depunere
+        DepunereService $depunere,
+        ?VerificareSaft $verificare = null
     ) {
         $this->config = $config;
         $this->certificate = $certificate;
@@ -75,6 +79,7 @@ class MonitorizareFolder
         $this->pdf = $pdf;
         $this->curatator = $curatator;
         $this->depunere = $depunere;
+        $this->verificare = $verificare;
     }
 
     /**
@@ -470,6 +475,46 @@ class MonitorizareFolder
             $eroare->cui = $declaratie->cui;
 
             throw $eroare;
+        }
+
+        $this->verificaConsistenta($declaratie);
+    }
+
+    /**
+     * Consistenta unui SAF-T venit din dosarul urmarit.
+     *
+     * Aici declaratia merge singura mai departe — se semneaza si se depune —,
+     * asa ca verificarea nu opreste nimic: ea doar scrie pe declaratie ce a
+     * gasit, ca omul sa vada in tabel daca are de indreptat ceva. Nici un esec
+     * al ei nu are voie sa rupa lantul: dosarul urmarit trebuie sa mearga
+     * inainte si cand unealta ANAF lipseste de pe masina.
+     */
+    protected function verificaConsistenta(AnafDeclaratie $declaratie): void
+    {
+        if (!$this->verificare || $declaratie->tip !== 'D406') {
+            return;
+        }
+
+        if (!Schema::hasColumn('anaf_declaratii', 'verificare_stare')) {
+            return;
+        }
+
+        try {
+            $rezultat = $this->verificare->verifica(Storage::path($declaratie->cale_xml));
+
+            $declaratie->update([
+                'verificare_stare' => $rezultat['stare'],
+                'verificare_numar' => $rezultat['numar'],
+                'verificare_erori' => json_encode($rezultat, JSON_UNESCAPED_UNICODE),
+                'verificare_la' => now(),
+            ]);
+        } catch (DeclaratieException $e) {
+            $declaratie->update([
+                'verificare_stare' => 'imposibil',
+                'verificare_numar' => null,
+                'verificare_erori' => json_encode(['mesaj' => $e->getMessage()], JSON_UNESCAPED_UNICODE),
+                'verificare_la' => now(),
+            ]);
         }
     }
 

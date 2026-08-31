@@ -155,6 +155,15 @@ Route::middleware(['auth:api', 'companie.anaf', 'modul:spv'])->group(function ()
     // Un singur PDF cu declaratiile semnate, pentru tiparire
     Route::post('/declaratii/concateneaza', 'Api\DeclaratiiController@concateneaza');
     Route::post('/declaratii/{declaratie}/valideaza', 'Api\DeclaratiiController@valideazaDeclaratie');
+    // Consistenta SAF-T: ce spune unealta ANAF despre liniile din jurnale
+    Route::post('/declaratii/{declaratie}/verifica-consistenta', 'Api\DeclaratiiController@verificaConsistenta');
+    Route::get('/declaratii/{declaratie}/consistenta', 'Api\DeclaratiiController@consistenta');
+    // Decontul de TVA, socotit din jurnalele SAF-T
+    Route::post('/declaratii/{declaratie}/decont', 'Api\DeclaratiiController@decont');
+    // Acelasi decont, scris ca declaratie D300 de depus
+    Route::post('/declaratii/{declaratie}/decont/xml', 'Api\DeclaratiiController@decontXml');
+    // …si scris pentru formularul inteligent al ANAF („soft A")
+    Route::post('/declaratii/{declaratie}/decont/formular', 'Api\DeclaratiiController@decontFormular');
     Route::post('/declaratii/{declaratie}/semneaza', 'Api\DeclaratiiController@semneaza');
     Route::post('/declaratii/{declaratie}/depune', 'Api\DeclaratiiController@depune');
     Route::get('/declaratii/{declaratie}/fisier/{tip}', 'Api\DeclaratiiController@fisier');
@@ -196,6 +205,9 @@ Route::middleware(['auth:api', 'companie.anaf', 'modul:spv'])->group(function ()
     Route::post('/anaf-societati/sincronizeaza', 'Api\AnafSocietatiController@sincronizeaza');
     Route::post('/anaf-societati/solicita', 'Api\AnafSocietatiController@solicita');
     Route::put('/anaf-societati/{societate}', 'Api\AnafSocietatiController@update');
+    // Datele firmei care intra in antetul declaratiilor (adresa, banca, declarant)
+    Route::get('/anaf-societati/{societate}/date-declaratii', 'Api\AnafSocietatiController@citesteDateDeclaratii');
+    Route::put('/anaf-societati/{societate}/date-declaratii', 'Api\AnafSocietatiController@dateDeclaratii');
 
     // Vector fiscal: asteptat (editabil) vs. citit din SPV, plus situatia pe perioada
     Route::get('/vector-fiscal', 'Api\VectorFiscalController@index');

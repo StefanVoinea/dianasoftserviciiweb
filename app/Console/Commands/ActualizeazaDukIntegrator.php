@@ -2,9 +2,12 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Anaf\Declaratii\DeclaratieException;
+use App\Services\Anaf\Declaratii\DukIntegrator;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\Process\Process;
 
 /**
  * Actualizeaza DUKIntegrator (utilitarul ANAF de validare) si nomenclatoarele de
@@ -27,9 +30,21 @@ class ActualizeazaDukIntegrator extends Command
     protected $signature = 'anaf:duk-update
                             {--url= : URL-ul versiuni.xml (implicit cel din dist/config/configURL.properties)}
                             {--force : Descarca tot, chiar daca versiunile locale sunt la zi}
-                            {--pe-uscat : Arată ce s-ar aduce, fără să descarce nimic}';
+                            {--pe-uscat : Arată ce s-ar aduce, fără să descarce nimic}
+                            {--fara-proba : Nu mai încearcă o validare după actualizare}';
 
     protected $description = 'Actualizează DUKIntegrator și declarațiile de la ANAF';
+
+    /**
+     * Fisierele inlocuite in rularea aceasta, cu copia lor dinainte.
+     *
+     * Cheia e fisierul adus; valoarea spune daca acolo era ceva inainte si unde
+     * s-a pus copia. Fara ele, o actualizare picata ar lasa validatorul stricat
+     * pana cand ar baga cineva de seama.
+     *
+     * @var array<string, array{exista: bool, rezerva: string|null}>
+     */
+    protected $rezerve = [];
 
     public function handle(): int
     {
@@ -86,16 +101,213 @@ class ActualizeazaDukIntegrator extends Command
             return 0;
         }
 
-        $this->scrieCatalogul($catalog, trim((string) $xml->integrator->versiune), $schimbate);
-
         $this->newLine();
-        $this->info('Actualizare finalizată: ' . $descarcate . ' fișiere descărcate, ' . $esuate . ' eșuate.');
+        $this->info('S-au descărcat ' . $descarcate . ' fișiere, ' . $esuate . ' eșuate.');
+
+        /*
+         * Proba de dupa. Actualizarea se face noaptea, nesupravegheat: daca
+         * validatorul iese din ea stricat, dimineata nu se mai valideaza nicio
+         * declaratie si nimeni nu stie de ce. De aceea se incearca o validare
+         * inainte de a se scrie catalogul, iar daca ea nu tine, se pun la loc
+         * fisierele dinainte si catalogul ramane nescris — asa incat rularea
+         * urmatoare sa incerce din nou.
+         */
+        if (!$this->option('fara-proba') && !$this->probaDeDupa($integratorul)) {
+            $puse = $this->puneLaLoc();
+
+            $this->error('Proba de după actualizare nu a trecut. Am pus la loc ' . $puse . ' fișiere.');
+
+            Log::error('anaf:duk-update — actualizarea a fost anulată: validatorul nu a mai răspuns.', [
+                'declaratii' => array_keys($schimbate),
+                'fisiere_puse_la_loc' => $puse,
+            ]);
+
+            return 1;
+        }
+
+        $this->scrieCatalogul($catalog, trim((string) $xml->integrator->versiune), $schimbate);
+        $this->stergeRezervele();
+
+        $this->info('Actualizare încheiată.');
 
         if ($schimbate !== []) {
             Log::info('anaf:duk-update — s-au înnoit declarații: ' . implode(', ', array_keys($schimbate)));
         }
 
         return $esuate > 0 && $descarcate === 0 ? 1 : 0;
+    }
+
+    /**
+     * Mai raspunde validatorul dupa ce s-au schimbat fisierele?
+     *
+     * Nu se cantareste daca declaratia de proba e valida — regulile ANAF se
+     * schimba, si o proba respinsa pe drept ar opri actualizarea degeaba. Se
+     * cantareste doar ca DUKIntegrator a dat un raspuns de validare, oricare ar
+     * fi el. Un jar adus pe jumatate sau o clasa mutata nu dau raspuns, ci o
+     * urma de java sau nimic.
+     */
+    protected function probaDeDupa(bool $integratorSchimbat): bool
+    {
+        /*
+         * Cand s-a schimbat integratorul insusi, se cerceteaza si lansatorul
+         * nostru pentru D406: el se leaga direct de clase din jar-urile ANAF
+         * (validator.Validator, pdf.PdfSuperCreator), iar o mutare de clasa
+         * acolo il lasa fara ele. Restul actualizarilor — nomenclatoare de
+         * declaratii — n-au cum sa-l atinga, asa ca nu se cheama degeaba.
+         */
+        if ($integratorSchimbat && !$this->probaLansatoruluiD406()) {
+            return false;
+        }
+
+        /*
+         * Fara integrator n-are ce sa fie probat, si nici n-ar folosi la ceva:
+         * lipsa lui nu vine din actualizare, iar punerea la loc n-ar aduce-o
+         * inapoi. Asa se intampla pe un server unde stau doar nomenclatoarele.
+         */
+        if (!is_file((string) config('anaf.declaratii.duk.jar'))) {
+            $this->warn('DUKIntegrator.jar nu e aici; sar peste probă.');
+
+            return true;
+        }
+
+        $fixtura = base_path('tests' . DIRECTORY_SEPARATOR . 'fixturi' . DIRECTORY_SEPARATOR . 'd100-de-proba.xml');
+
+        if (!is_file($fixtura)) {
+            $this->warn('Nu am declarație de probă (' . $fixtura . '); sar peste probă.');
+
+            return true;
+        }
+
+        $pdf = tempnam(sys_get_temp_dir(), 'duk') . '.pdf';
+
+        try {
+            $rezultat = app(DukIntegrator::class)->valideazaSiGenereazaPdf($fixtura, 'D100', $pdf);
+        } catch (DeclaratieException $e) {
+            $this->warn('Proba de după actualizare: ' . $e->getMessage());
+
+            return false;
+        } finally {
+            @unlink($pdf);
+        }
+
+        if ($rezultat['valid']) {
+            $this->info('Proba de după actualizare: validatorul răspunde.');
+
+            return true;
+        }
+
+        $spuse = trim((string) $rezultat['erori']);
+
+        // Asa arata o cadere de java, nu un raspuns de validare.
+        foreach (['Exception', 'NoClassDefFound', 'ClassNotFound', 'Error:'] as $semn) {
+            if (stripos($spuse, $semn) !== false) {
+                $this->warn('Proba de după actualizare a scos: ' . mb_substr($spuse, 0, 300));
+
+                return false;
+            }
+        }
+
+        if ($spuse === '') {
+            $this->warn('Proba de după actualizare: validatorul n-a spus nimic.');
+
+            return false;
+        }
+
+        $this->info('Proba de după actualizare: validatorul răspunde (cu erori de validare, ceea ce e în regulă).');
+
+        return true;
+    }
+
+    /**
+     * Mai gaseste lansatorul D406 clasele ANAF de care se leaga?
+     *
+     * Se cheama cu un fisier care nu exista: pana sa dea peste el, lansatorul
+     * apuca sa ceara clasele din jar-urile ANAF. Daca ele si-au schimbat locul,
+     * java raspunde cu „NoClassDefFoundError” — si atunci validarea SAF-T ar fi
+     * ramas moarta, desi restul declaratiilor merg mai departe.
+     */
+    protected function probaLansatoruluiD406(): bool
+    {
+        $lansator = config('anaf.declaratii.duk.jar_d406')
+            ?: dirname((string) config('anaf.declaratii.duk.jar')) . DIRECTORY_SEPARATOR . 'DukD406.jar';
+
+        if (!is_file($lansator)) {
+            $this->warn('Lansatorul D406 nu e aici; sar peste proba lui.');
+
+            return true;
+        }
+
+        $proces = new Process([
+            (string) config('anaf.declaratii.duk.java', 'java'),
+            '-jar', $lansator,
+            // Un fisier care nu exista: lansatorul cade oricum, dar dupa ce a
+            // cerut clasele ANAF — si asta e tot ce se cerceteaza aici.
+            sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'nu-exista-saft.xml',
+            sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'nu-exista-erori.txt',
+            sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'nu-exista.pdf',
+            '2026', '6', 'L',
+        ]);
+
+        $proces->setTimeout(60);
+        $proces->run();
+
+        $spuse = $proces->getErrorOutput() . ' ' . $proces->getOutput();
+
+        foreach (['NoClassDefFound', 'ClassNotFound', 'NoSuchMethod'] as $semn) {
+            if (stripos($spuse, $semn) !== false) {
+                $this->warn('Lansatorul D406 nu mai găsește clasele ANAF: ' . mb_substr(trim($spuse), 0, 300));
+
+                return false;
+            }
+        }
+
+        $this->info('Proba lansatorului D406: clasele ANAF sunt la locul lor.');
+
+        return true;
+    }
+
+    /** Fisierele dinainte, puse la loc peste cele tocmai aduse. */
+    protected function puneLaLoc(): int
+    {
+        $puse = 0;
+
+        foreach ($this->rezerve as $cale => $copia) {
+            // Fisier care n-a fost acolo inainte: n-are ce cauta acolo nici acum.
+            if (!$copia['exista']) {
+                @unlink($cale);
+                $puse++;
+
+                continue;
+            }
+
+            if ($copia['rezerva'] === null) {
+                // Copia n-a putut fi facuta; se lasa cum e, si se spune.
+                $this->warn('  Nu am copie de rezervă pentru ' . basename($cale) . '; rămâne cel nou.');
+
+                continue;
+            }
+
+            if (@copy($copia['rezerva'], $cale)) {
+                @unlink($copia['rezerva']);
+                $puse++;
+            }
+        }
+
+        $this->rezerve = [];
+
+        return $puse;
+    }
+
+    /** Dupa o actualizare care a tinut, copiile nu mai folosesc nimanui. */
+    protected function stergeRezervele(): void
+    {
+        foreach ($this->rezerve as $copia) {
+            if ($copia['rezerva'] !== null) {
+                @unlink($copia['rezerva']);
+            }
+        }
+
+        $this->rezerve = [];
     }
 
     /** Lista de versiuni de la ANAF, sau null cand nu s-a putut lua. */
@@ -271,6 +483,8 @@ class ActualizeazaDukIntegrator extends Command
                 return;
             }
 
+            $this->pastreazaCopia($cale);
+
             file_put_contents($cale, $raspuns->body());
             $descarcate++;
 
@@ -284,6 +498,33 @@ class ActualizeazaDukIntegrator extends Command
                 $this->warn('  ✗ ' . $nume . ' (' . $e->getMessage() . ')');
             }
         }
+    }
+
+    /**
+     * Copia fisierului dinaintea inlocuirii lui.
+     *
+     * O singura generatie, langa fisier: destul cat sa se poata da inapoi
+     * actualizarea care tocmai s-a facut, si nimic mai mult. Copiile se sterg
+     * cand actualizarea a trecut proba.
+     */
+    protected function pastreazaCopia(string $cale): void
+    {
+        if (isset($this->rezerve[$cale])) {
+            return;
+        }
+
+        if (!is_file($cale)) {
+            $this->rezerve[$cale] = ['exista' => false, 'rezerva' => null];
+
+            return;
+        }
+
+        $rezerva = $cale . '.rezerva';
+
+        $this->rezerve[$cale] = [
+            'exista' => true,
+            'rezerva' => @copy($cale, $rezerva) ? $rezerva : null,
+        ];
     }
 
     protected function urlVersiuni(string $config): ?string

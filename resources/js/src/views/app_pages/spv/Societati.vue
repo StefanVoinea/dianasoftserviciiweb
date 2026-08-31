@@ -273,11 +273,25 @@
           <b-button
             size="sm"
             variant="outline-primary"
+            class="mr-50"
             title="Actualizare frecvență declarații — declarațiile așteptate de la entitate: cele deduse din vectorul fiscal și din istoricul depunerilor, plus cele adăugate de dvs. Se pot adăuga, modifica și șterge — ele intră în raportul de depunere."
             @click="deschideActualizare(rand.item)"
           >
             <feather-icon
               icon="CalendarIcon"
+              size="14"
+            />
+          </b-button>
+          <!-- Ce nu se află în fișierele ANAF și trebuie scris o dată: adresa,
+               banca, contul, cine semnează. De aici se ia antetul declarațiilor. -->
+          <b-button
+            size="sm"
+            variant="outline-primary"
+            title="Date pentru declarații — adresa, banca, contul, codul CAEN și cine semnează. Nu se află în fișierele de la ANAF, se scriu o dată aici și se iau de aici la fiecare declarație întocmită."
+            @click="deschideDateleDeclaratiilor(rand.item)"
+          >
+            <feather-icon
+              icon="ClipboardIcon"
               size="14"
             />
           </b-button>
@@ -620,6 +634,194 @@
       </p>
       <b-form-input v-model="formular.denumire" />
     </b-modal>
+
+    <!--
+      Datele care nu se află în fișierele de la ANAF și fără de care declarația
+      nu se poate întocmi: adresa, banca, contul, codul CAEN, cine semnează.
+      Se scriu o dată și rămân — nu se cer la fiecare lună.
+    -->
+    <b-modal
+      v-model="dateleVizibile"
+      size="lg"
+      title="Date pentru declarații"
+      :ok-title="dateleInCurs ? 'Se salvează...' : 'Salvează'"
+      cancel-title="Renunță"
+      :ok-disabled="dateleInCurs"
+      modal-class="modul-spv"
+      scrollable
+      @ok.prevent="salveazaDatele"
+    >
+      <p
+        v-if="dateleFirmei"
+        class="text-muted small mb-1"
+      >
+        {{ dateleFirmei.denumire || 'Entitate fără denumire' }} ({{ dateleFirmei.cif }}).
+        Din ele se scrie antetul declarațiilor întocmite de aplicație — decontul de TVA
+        scos din SAF-T, de pildă. Cifrele declarației vin din fișierul ANAF; astea nu se
+        află nicăieri în el.
+      </p>
+
+      <b-alert
+        v-if="dateleFirmei && dateleFirmei.lipsesc.length"
+        show
+        variant="warning"
+        class="py-1 px-2"
+      >
+        <strong>Mai lipsesc:</strong> {{ dateleFirmei.lipsesc.join(', ') }}.
+      </b-alert>
+      <b-alert
+        v-else-if="dateleFirmei"
+        show
+        variant="success"
+        class="py-1 px-2"
+      >
+        Datele sunt complete — declarațiile se pot întocmi.
+      </b-alert>
+
+      <div v-if="dateleFirmei">
+        <h6 class="mt-2">
+          Firma
+        </h6>
+        <b-row>
+          <b-col cols="12">
+            <b-form-group label="Adresa">
+              <b-form-input v-model="dateleScrise.adresa" />
+            </b-form-group>
+          </b-col>
+          <b-col md="4">
+            <b-form-group label="Telefon">
+              <b-form-input v-model="dateleScrise.telefon" />
+            </b-form-group>
+          </b-col>
+          <b-col md="4">
+            <b-form-group label="Fax">
+              <b-form-input v-model="dateleScrise.fax" />
+            </b-form-group>
+          </b-col>
+          <b-col md="4">
+            <b-form-group label="E-mail">
+              <b-form-input
+                v-model="dateleScrise.email"
+                type="email"
+              />
+            </b-form-group>
+          </b-col>
+          <b-col md="5">
+            <b-form-group label="Banca">
+              <b-form-input v-model="dateleScrise.banca" />
+            </b-form-group>
+          </b-col>
+          <b-col md="5">
+            <b-form-group label="Contul (IBAN)">
+              <b-form-input v-model="dateleScrise.cont" />
+            </b-form-group>
+          </b-col>
+          <b-col md="2">
+            <b-form-group label="Cod CAEN">
+              <b-form-input v-model="dateleScrise.caen" />
+            </b-form-group>
+          </b-col>
+        </b-row>
+
+        <h6 class="mt-1">
+          Cine semnează
+        </h6>
+        <b-row>
+          <b-col md="4">
+            <b-form-group label="Nume">
+              <b-form-input v-model="dateleScrise.nume_declarant" />
+            </b-form-group>
+          </b-col>
+          <b-col md="4">
+            <b-form-group label="Prenume">
+              <b-form-input v-model="dateleScrise.prenume_declarant" />
+            </b-form-group>
+          </b-col>
+          <b-col md="4">
+            <b-form-group label="Funcția">
+              <b-form-input v-model="dateleScrise.functie_declarant" />
+            </b-form-group>
+          </b-col>
+          <b-col cols="12">
+            <!-- Bifa aceasta schimbă și temeiul declarației: „prin împuternicit". -->
+            <b-form-checkbox v-model="dateleScrise.prin_reprezentant">
+              Declarația se depune prin împuternicit
+            </b-form-checkbox>
+          </b-col>
+        </b-row>
+
+        <h6 class="mt-2">
+          Decontul de TVA (D300)
+        </h6>
+        <b-row>
+          <b-col md="4">
+            <b-form-group label="Felul decontului">
+              <b-form-select
+                v-model="dateleScrise.d300_tip_decont"
+                :options="felurileDecontului"
+              />
+            </b-form-group>
+          </b-col>
+          <b-col md="4">
+            <b-form-group label="Pro-rata (%)">
+              <b-form-input
+                v-model="dateleScrise.d300_pro_rata"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                placeholder="100"
+              />
+            </b-form-group>
+          </b-col>
+        </b-row>
+        <b-row>
+          <b-col md="6">
+            <b-form-checkbox
+              v-model="dateleScrise.d300_bifa_interne"
+              class="mb-50"
+            >
+              Operațiuni interne
+            </b-form-checkbox>
+            <b-form-checkbox
+              v-model="dateleScrise.d300_bifa_cereale"
+              class="mb-50"
+            >
+              Cereale și plante tehnice
+            </b-form-checkbox>
+            <b-form-checkbox v-model="dateleScrise.d300_bifa_mob">
+              Telefoane mobile
+            </b-form-checkbox>
+          </b-col>
+          <b-col md="6">
+            <b-form-checkbox
+              v-model="dateleScrise.d300_bifa_disp"
+              class="mb-50"
+            >
+              Dispozitive cu circuite integrate
+            </b-form-checkbox>
+            <b-form-checkbox
+              v-model="dateleScrise.d300_bifa_cons"
+              class="mb-50"
+            >
+              Console de jocuri, tablete, laptopuri
+            </b-form-checkbox>
+            <b-form-checkbox v-model="dateleScrise.d300_solicit_ramb">
+              Se solicită rambursarea soldului sumei negative
+            </b-form-checkbox>
+          </b-col>
+        </b-row>
+      </div>
+
+      <b-alert
+        v-if="dateleEroare"
+        show
+        variant="danger"
+        class="py-1 px-2 mb-0 mt-1"
+      >
+        {{ dateleEroare }}
+      </b-alert>
+    </b-modal>
   </div>
 </template>
 
@@ -660,6 +862,13 @@ export default {
       RUNDE_MAXIME: 40,
       formularVizibil: false,
       formular: {},
+      // Datele firmei care intra in antetul declaratiilor
+      dateleVizibile: false,
+      dateleInCurs: false,
+      dateleEroare: '',
+      dateleFirmei: null,
+      dateleScrise: {},
+      felurileDecontului: [],
       vectorVizibil: false,
       vectorInCurs: false,
       vectorEroare: '',
@@ -1219,6 +1428,63 @@ export default {
     editeaza(societate) {
       this.formular = { ...societate }
       this.formularVizibil = true
+    },
+
+    /**
+     * Datele de declarație ale entității, aduse de la server.
+     *
+     * Se cer de fiecare dată: ele se schimbă rar, dar când se schimbă contează
+     * să nu lucrăm cu ce s-a încărcat la deschiderea filei.
+     */
+    deschideDateleDeclaratiilor(societate) {
+      this.dateleFirmei = null
+      this.dateleScrise = {}
+      this.dateleEroare = ''
+      this.dateleVizibile = true
+      this.dateleInCurs = true
+
+      this.$http.get(`/anaf-societati/${societate.id}/date-declaratii`)
+        .then(raspuns => {
+          this.arataDatele(raspuns.data.data, societate.id)
+        })
+        .catch(err => {
+          this.dateleEroare = this.mesajEroare(err, 'Datele nu au putut fi citite')
+        })
+        .finally(() => {
+          this.dateleInCurs = false
+        })
+    },
+
+    salveazaDatele() {
+      this.dateleEroare = ''
+      this.dateleInCurs = true
+
+      this.$http.put(`/anaf-societati/${this.dateleFirmei.id}/date-declaratii`, this.dateleScrise)
+        .then(raspuns => {
+          this.arataDatele(raspuns.data.data, this.dateleFirmei.id)
+
+          // Fereastra rămâne deschisă cât timp mai lipsește ceva: omul vede pe
+          // loc ce anume, fără s-o deschidă din nou.
+          if (this.dateleFirmei.gata) {
+            this.dateleVizibile = false
+          }
+        })
+        .catch(err => {
+          this.dateleEroare = this.mesajEroare(err, 'Salvarea a eșuat')
+        })
+        .finally(() => {
+          this.dateleInCurs = false
+        })
+    },
+
+    /** Răspunsul serverului, pus în formular. */
+    arataDatele(date, id) {
+      this.dateleFirmei = { ...date, id }
+      this.dateleScrise = { ...date.date }
+      this.felurileDecontului = Object.keys(date.feluri_decont).map(cheie => ({
+        value: cheie,
+        text: `${cheie} — ${date.feluri_decont[cheie]}`,
+      }))
     },
     salveaza() {
       this.$http.put(`/anaf-societati/${this.formular.id}`, { denumire: this.formular.denumire })

@@ -246,6 +246,28 @@ return [
         ],
 
         /*
+         * Verificarea de consistenta a D406, cu aplicatia ANAF TestSaftT.jar.
+         *
+         * Ea trece prin toate liniile din jurnale si le compara intre ele
+         * (cont, cod TVA, cota, baza, taxa), acolo unde DUKIntegrator se uita
+         * doar la forma declaratiei. Gol = se cauta TestSaftT.jar langa
+         * DUKIntegrator.jar.
+         */
+        'saft' => [
+            'java' => env('ANAF_JAVA_BIN', 'java'),
+            'jar' => env('ANAF_SAFT_JAR'),
+
+            // SAF-T-urile mari se citesc in flux, dar tot dureaza.
+            'timeout' => (int) env('ANAF_SAFT_TIMEOUT', 600),
+
+            // Cate linii gresite ajung in tabel; numarul intreg se scrie oricum.
+            'linii_pastrate' => (int) env('ANAF_SAFT_LINII', 1000),
+
+            // Gol = storage/app/declaratii/verificare
+            'dosar_lucru' => env('ANAF_SAFT_DOSAR'),
+        ],
+
+        /*
          * Caseta vizibila a semnaturii pe PDF-ul declaratiei.
          *
          * Coordonatele sunt in puncte, cu originea in coltul din stanga-jos al

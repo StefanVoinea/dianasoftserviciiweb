@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Services\Anaf\Declaratii\DukIntegrator;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -261,6 +262,108 @@ class ActualizareaDukTest extends TestCase
             $sursa,
             'actualizarea trebuie să ruleze singură, în fiecare noapte'
         );
+    }
+
+    /**
+     * Cand proba de dupa trece, actualizarea ramane si copiile se sterg.
+     */
+    public function test_actualizarea_care_trece_proba_ramane(): void
+    {
+        $this->pregatesteAnaf();
+        $this->integratorDeProba(true);
+
+        $vechi = $this->dist . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR . 'D112Validator.jar';
+        file_put_contents($vechi, 'jarul dinainte');
+
+        $this->artisan('anaf:duk-update', ['--url' => 'http://static.anaf.ro/versiuni.xml'])
+            ->assertExitCode(0);
+
+        $this->assertSame('continutul unui jar', file_get_contents($vechi));
+        $this->assertStringContainsString('D112;J27.0.2;P3.0.1', $this->catalogul());
+        $this->assertFileDoesNotExist($vechi . '.rezerva', 'copia nu mai folosește nimănui');
+    }
+
+    /**
+     * Cand validatorul nu mai raspunde, actualizarea se da inapoi.
+     *
+     * Ea ruleaza noaptea, nesupravegheat: un jar adus pe jumatate ar lasa
+     * dimineata toate declaratiile nevalidabile, fara ca cineva sa stie de ce.
+     * Catalogul ramane nescris, ca rularea urmatoare sa incerce din nou.
+     */
+    public function test_actualizarea_care_strica_validatorul_se_da_inapoi(): void
+    {
+        $this->pregatesteAnaf();
+        $this->integratorDeProba(false);
+
+        $vechi = $this->dist . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR . 'D112Validator.jar';
+        file_put_contents($vechi, 'jarul dinainte');
+
+        $inainte = $this->catalogul();
+
+        $this->artisan('anaf:duk-update', ['--url' => 'http://static.anaf.ro/versiuni.xml'])
+            ->assertExitCode(1);
+
+        $this->assertSame('jarul dinainte', file_get_contents($vechi), 'jarul de dinainte trebuie pus la loc');
+        $this->assertSame($inainte, $this->catalogul(), 'catalogul rămâne nescris');
+        $this->assertFileDoesNotExist($vechi . '.rezerva');
+    }
+
+    /** Fisierul care n-a fost acolo inainte se sterge la darea inapoi. */
+    public function test_fisierul_nou_se_sterge_la_darea_inapoi(): void
+    {
+        $this->pregatesteAnaf();
+        $this->integratorDeProba(false);
+
+        $nou = $this->dist . DIRECTORY_SEPARATOR . 'lib' . DIRECTORY_SEPARATOR . 'D112Validator.jar';
+
+        $this->artisan('anaf:duk-update', ['--url' => 'http://static.anaf.ro/versiuni.xml'])
+            ->assertExitCode(1);
+
+        $this->assertFileDoesNotExist($nou);
+    }
+
+    /**
+     * Un DUKIntegrator de proba, care spune ce i se cere.
+     *
+     * Cu „raspunde” fals se poarta ca un jar stricat: scoate o urma de java in
+     * loc de raspuns de validare.
+     */
+    protected function integratorDeProba(bool $raspunde): void
+    {
+        // Proba se face numai daca integratorul e la locul lui.
+        file_put_contents($this->dist . DIRECTORY_SEPARATOR . 'DUKIntegrator.jar', 'jar de probă');
+
+        $this->app->instance(DukIntegrator::class, new class([], $raspunde) extends DukIntegrator {
+            /** @var bool */
+            protected $raspunde;
+
+            public function __construct(array $config, bool $raspunde)
+            {
+                parent::__construct($config);
+
+                $this->raspunde = $raspunde;
+            }
+
+            public function valideazaSiGenereazaPdf(
+                string $caleXml,
+                string $tip,
+                string $calePdf,
+                ?string $caleZip = null,
+                ?int $an = null,
+                ?int $luna = null,
+                ?string $tipPerioada = null
+            ): array {
+                if ($this->raspunde) {
+                    return ['valid' => true, 'erori' => null, 'cale_pdf' => $calePdf];
+                }
+
+                return [
+                    'valid' => false,
+                    'erori' => 'Exception in thread "main" java.lang.NoClassDefFoundError: dec/Info',
+                    'cale_pdf' => null,
+                ];
+            }
+        });
     }
 
     protected function stergeDosarul(string $cale): void

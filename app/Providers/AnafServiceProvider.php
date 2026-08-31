@@ -15,6 +15,7 @@ use App\Services\Anaf\Declaratii\MonitorizareFolder;
 use App\Services\Anaf\Declaratii\PdfDeclaratie;
 use App\Services\Anaf\Declaratii\RecipisaService;
 use App\Services\Anaf\Declaratii\SemnareService;
+use App\Services\Anaf\Declaratii\VerificareSaft;
 use App\Services\Anaf\Etransport\EtransportClient;
 use App\Services\Anaf\Oauth\OauthAnaf;
 use App\Services\Anaf\Spv\AlerteMesaje;
@@ -81,6 +82,11 @@ class AnafServiceProvider extends ServiceProvider
             return new DukIntegrator(config('anaf.declaratii.duk'));
         });
 
+        // Verificarea de consistenta a SAF-T, cu cealalta unealta ANAF.
+        $this->app->singleton(VerificareSaft::class, function () {
+            return new VerificareSaft(config('anaf.declaratii.saft'));
+        });
+
         // Semnarea si depunerea merg pe bridge-ul certificatului ales.
         $this->app->singleton(SemnareService::class, function ($app) {
             return new SemnareService(
@@ -140,7 +146,9 @@ class AnafServiceProvider extends ServiceProvider
                 $app->make(ArhivaService::class),
                 $app->make(PdfDeclaratie::class),
                 $app->make(CurataXml::class),
-                $app->make(DepunereService::class)
+                $app->make(DepunereService::class),
+                // La SAF-T, dupa validare se scrie pe declaratie si consistenta ei.
+                $app->make(VerificareSaft::class)
             );
         });
 

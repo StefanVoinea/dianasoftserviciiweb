@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AnafSocietate;
+use App\Services\Anaf\Declaratii\D300\AntetD300;
 use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\SocietatiService;
@@ -171,5 +172,86 @@ class AnafSocietatiController extends Controller
         }
 
         return response()->json(['success' => true, 'data' => $societate->fresh()]);
+    }
+
+    /**
+     * Datele firmei care intra in antetul declaratiilor.
+     *
+     * Ele nu se schimba de la o luna la alta — adresa, banca, contul, cine
+     * semneaza —, asa ca se scriu o data aici si se iau de aici la fiecare
+     * declaratie. Vezi AntetD300.
+     */
+    public function dateDeclaratii(Request $request, AnafSocietate $societate)
+    {
+        $date = $request->validate([
+            'adresa' => 'nullable|string|max:1000',
+            'telefon' => 'nullable|string|max:15',
+            'fax' => 'nullable|string|max:15',
+            'email' => 'nullable|email|max:200',
+            'banca' => 'nullable|string|max:50',
+            'cont' => 'nullable|string|max:50',
+            'caen' => 'nullable|string|max:10',
+
+            'nume_declarant' => 'nullable|string|max:75',
+            'prenume_declarant' => 'nullable|string|max:75',
+            'functie_declarant' => 'nullable|string|max:50',
+            'prin_reprezentant' => 'nullable|boolean',
+
+            // Felurile de decont sunt cele din schema ANAF: L, T, S, A.
+            'd300_tip_decont' => 'nullable|in:' . implode(',', array_keys(AntetD300::FELURI_DECONT)),
+            'd300_pro_rata' => 'nullable|numeric|min:0|max:100',
+            'd300_bifa_interne' => 'nullable|boolean',
+            'd300_bifa_cereale' => 'nullable|boolean',
+            'd300_bifa_mob' => 'nullable|boolean',
+            'd300_bifa_disp' => 'nullable|boolean',
+            'd300_bifa_cons' => 'nullable|boolean',
+            'd300_solicit_ramb' => 'nullable|boolean',
+        ]);
+
+        $societate->update($date);
+        $societate = $societate->fresh();
+
+        Jurnal::scrie(
+            'entitate_date_declaratii',
+            'A completat datele de declarație ale entității ' . $societate->cif
+                . ($societate->denumire ? ' (' . $societate->denumire . ')' : ''),
+            ['campuri' => array_keys($date)],
+            $societate->cif
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->dateleDeclaratiilor($societate),
+        ]);
+    }
+
+    /** Datele de declaratie ale unei entitati, cu ce mai lipseste din ele. */
+    public function citesteDateDeclaratii(AnafSocietate $societate)
+    {
+        return response()->json([
+            'success' => true,
+            'data' => $this->dateleDeclaratiilor($societate),
+        ]);
+    }
+
+    /** @return array<string, mixed> */
+    protected function dateleDeclaratiilor(AnafSocietate $societate): array
+    {
+        $antet = AntetD300::pentru($societate);
+
+        return [
+            'cif' => $societate->cif,
+            'denumire' => $societate->denumire,
+            'date' => $societate->only([
+                'adresa', 'telefon', 'fax', 'email', 'banca', 'cont', 'caen',
+                'nume_declarant', 'prenume_declarant', 'functie_declarant', 'prin_reprezentant',
+                'd300_tip_decont', 'd300_pro_rata', 'd300_bifa_interne', 'd300_bifa_cereale',
+                'd300_bifa_mob', 'd300_bifa_disp', 'd300_bifa_cons', 'd300_solicit_ramb',
+            ]),
+            // Ce mai trebuie completat ca decontul sa poata fi scris
+            'lipsesc' => $antet['lipsesc'],
+            'gata' => $antet['gata'],
+            'feluri_decont' => AntetD300::FELURI_DECONT,
+        ];
     }
 }

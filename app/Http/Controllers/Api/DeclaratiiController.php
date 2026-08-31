@@ -10,6 +10,11 @@ use App\Services\Anaf\Arhiva\ArhivaException;
 use App\Services\Anaf\Arhiva\ArhivaService;
 use App\Services\Anaf\Declaratii\ConcatenareService;
 use App\Services\Anaf\Declaratii\CurataXml;
+use App\Services\Anaf\Declaratii\D300\AntetD300;
+use App\Services\Anaf\Declaratii\D300\DecontDinSaft;
+use App\Services\Anaf\Declaratii\D300\DecontFormular;
+use App\Services\Anaf\Declaratii\D300\DecontXml;
+use App\Services\Anaf\Declaratii\D300\RanduriD300;
 use App\Services\Anaf\Declaratii\DeclaratieException;
 use App\Services\Anaf\Declaratii\DeclaratieXml;
 use App\Services\Anaf\Declaratii\DepunereService;
@@ -18,6 +23,8 @@ use App\Services\Anaf\Declaratii\InterpretareErori;
 use App\Services\Anaf\Declaratii\PdfDeclaratie;
 use App\Services\Anaf\Declaratii\RecipisaService;
 use App\Services\Anaf\Declaratii\SemnareService;
+use App\Services\Anaf\Declaratii\TesteSaft;
+use App\Services\Anaf\Declaratii\VerificareSaft;
 use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\CertificatService;
@@ -556,6 +563,284 @@ class DeclaratiiController extends Controller
         return response()->json(['success' => true, 'data' => $this->prezinta($declaratie)]);
     }
 
+    /**
+     * Verifica din nou consistenta unui SAF-T, la cererea omului.
+     *
+     * Se cheama dupa ce declaratia a fost refacuta in programul de contabilitate
+     * si incarcata din nou, sau cand verificarea de la incarcare n-a mers.
+     */
+    public function verificaConsistenta(AnafDeclaratie $declaratie, VerificareSaft $verificare)
+    {
+        if ($declaratie->tip !== 'D406') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Verificarea de consistență se face numai la D406 (SAF-T).',
+            ], 422);
+        }
+
+        $declaratie = $this->verificaSaft($declaratie, $verificare);
+
+        Jurnal::scrie(
+            'declaratie_consistenta',
+            'A verificat consistența declarației D406 pentru ' . $declaratie->cui . ': '
+                . $this->cateNeconcordante($declaratie),
+            [],
+            $declaratie->cui,
+            $declaratie->verificare_stare !== 'imposibil'
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->prezinta($declaratie),
+            'consistenta' => $this->consistentaDin($declaratie),
+        ]);
+    }
+
+    /**
+     * Liniile gasite la verificare, cu explicatia fiecarui test.
+     *
+     * Ele nu calatoresc odata cu tabelul: la un SAF-T incalcit sunt cu miile,
+     * iar in tabel n-au ce cauta. Se cer cand se deschide fereastra.
+     */
+    public function consistenta(AnafDeclaratie $declaratie)
+    {
+        return response()->json([
+            'success' => true,
+            'data' => $this->consistentaDin($declaratie),
+        ]);
+    }
+
+    /**
+     * Decontul de TVA socotit din jurnalele unui SAF-T.
+     *
+     * Nu e inca o declaratie: sunt cifrele decontului, cu randurile asa cum le
+     * numeste formularul ANAF, si cu o vorba despre cum au iesit. Din ele se va
+     * scrie mai departe XML-ul D300.
+     */
+    public function decont(AnafDeclaratie $declaratie, DecontDinSaft $decont)
+    {
+        if ($declaratie->tip !== 'D406') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Decontul se scoate numai din D406 (SAF-T).',
+            ], 422);
+        }
+
+        if (!$declaratie->cale_xml || !Storage::exists($declaratie->cale_xml)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Declarația nu mai are fișierul XML pe server.',
+            ], 422);
+        }
+
+        try {
+            $rezultat = $decont->genereaza(Storage::path($declaratie->cale_xml));
+        } catch (DeclaratieException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        Jurnal::scrie(
+            'declaratie_decont',
+            'A scos decontul de TVA din SAF-T pentru ' . $declaratie->cui . ': '
+                . $rezultat['lamurire']['titlu'],
+            ['linii' => $rezultat['linii']],
+            $declaratie->cui
+        );
+
+        /*
+         * Antetul declaratiei nu se afla in SAF-T: adresa, banca, contul, cine
+         * semneaza. Ele stau pe fisa firmei, iar aici se spune doar daca sunt
+         * complete — ca omul sa stie dinainte ce mai are de completat, nu dupa
+         * ce declaratia a fost respinsa.
+         */
+        $antet = AntetD300::pentru($this->societateInrolata($declaratie->cui));
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'cif' => $rezultat['cif'],
+                'denumire' => $rezultat['denumire'],
+                'luna' => $rezultat['luna'],
+                'an' => $rezultat['an'],
+                'linii' => $rezultat['linii'],
+                'lamurire' => $rezultat['lamurire'],
+                'randuri' => $this->randurileDecontului($rezultat['randuri']),
+                'antet' => ['gata' => $antet['gata'], 'lipsesc' => $antet['lipsesc']],
+            ],
+        ]);
+    }
+
+    /**
+     * Decontul, scris ca declaratie D300, gata de incarcat in formularul ANAF.
+     *
+     * Nu se depune de aici si nu se tine minte: fisierul pleaca la om, care il
+     * deschide in formularul inteligent („soft A"), se uita peste cifre si il
+     * depune de acolo. Cine vrea sa-l depuna prin aplicatie il incarca inapoi ca
+     * pe orice declaratie — si atunci trece si prin DUKIntegrator.
+     */
+    public function decontXml(AnafDeclaratie $declaratie, DecontDinSaft $decont, DecontXml $scriitor)
+    {
+        if ($declaratie->tip !== 'D406') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Decontul se scoate numai din D406 (SAF-T).',
+            ], 422);
+        }
+
+        if (!$declaratie->cale_xml || !Storage::exists($declaratie->cale_xml)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Declarația nu mai are fișierul XML pe server.',
+            ], 422);
+        }
+
+        try {
+            $rezultat = $decont->genereaza(Storage::path($declaratie->cale_xml));
+            $xml = $scriitor->scrie($rezultat, $this->societateInrolata($declaratie->cui));
+        } catch (DeclaratieException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        Jurnal::scrie(
+            'declaratie_decont_xml',
+            'A scos declarația D300 din SAF-T pentru ' . $declaratie->cui
+                . ' (' . $rezultat['luna'] . '/' . $rezultat['an'] . ')',
+            ['linii' => $rezultat['linii']],
+            $declaratie->cui
+        );
+
+        $nume = $scriitor->numeFisier($rezultat);
+
+        return response($xml, 200, [
+            'Content-Type' => 'application/xml; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="' . $nume . '"',
+            // Numele trebuie sa treaca si prin XHR, unde antetul nu se vede singur.
+            'X-Nume-Fisier' => $nume,
+            'Access-Control-Expose-Headers' => 'X-Nume-Fisier',
+        ]);
+    }
+
+    /**
+     * Acelasi decont, scris pentru formularul inteligent al ANAF.
+     *
+     * Deosebirea fata de declaratia de depus: formularul asteapta datele asezate
+     * ca in el, nu ca in schema de depunere, si primeste si ce e neintreg — omul
+     * il deschide, vede cifrele venite din SAF-T si completeaza restul.
+     */
+    public function decontFormular(AnafDeclaratie $declaratie, DecontDinSaft $decont, DecontFormular $scriitor)
+    {
+        if ($declaratie->tip !== 'D406') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Decontul se scoate numai din D406 (SAF-T).',
+            ], 422);
+        }
+
+        if (!$declaratie->cale_xml || !Storage::exists($declaratie->cale_xml)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Declarația nu mai are fișierul XML pe server.',
+            ], 422);
+        }
+
+        try {
+            $rezultat = $decont->genereaza(Storage::path($declaratie->cale_xml));
+        } catch (DeclaratieException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        $xml = $scriitor->scrie($rezultat, $this->societateInrolata($declaratie->cui));
+
+        Jurnal::scrie(
+            'declaratie_decont_formular',
+            'A scos decontul pentru formularul ANAF, din SAF-T, pentru ' . $declaratie->cui
+                . ' (' . $rezultat['luna'] . '/' . $rezultat['an'] . ')',
+            ['linii' => $rezultat['linii']],
+            $declaratie->cui
+        );
+
+        $nume = $scriitor->numeFisier($rezultat);
+
+        return response($xml, 200, [
+            'Content-Type' => 'application/xml; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename="' . $nume . '"',
+            'X-Nume-Fisier' => $nume,
+            'Access-Control-Expose-Headers' => 'X-Nume-Fisier',
+        ]);
+    }
+
+    /**
+     * Randurile cu cifre, in ordinea formularului.
+     *
+     * Cele ramase la zero nu se arata: decontul are peste o suta de randuri, iar
+     * intr-o luna obisnuita se umplu cateva. Randurile „_P” nici nu sunt randuri
+     * — sunt sume stranse deoparte in cuprinsul unei tranzactii.
+     */
+    protected function randurileDecontului(array $randuri): array
+    {
+        $lista = [];
+
+        foreach ($randuri as $camp => $valoare) {
+            if (substr($camp, -2) === '_P' || abs((float) $valoare) < 0.5) {
+                continue;
+            }
+
+            $rand = RanduriD300::RANDURI[$camp] ?? null;
+
+            $lista[] = [
+                'camp' => $camp,
+                'rand' => $rand ? $rand['rand'] : null,
+                'denumire' => $rand ? $rand['denumire'] : null,
+                // Sub ce nume intra valoarea in XML-ul D300
+                'atribut' => $rand ? $rand['atribut'] : null,
+                'fel' => substr($camp, -5) === '_BAZA' ? 'bază' : 'TVA',
+                'valoare' => round((float) $valoare, 2),
+            ];
+        }
+
+        return $lista;
+    }
+
+    /** Rezultatul scris pe declaratie, gata de aratat. */
+    protected function consistentaDin(AnafDeclaratie $declaratie): array
+    {
+        $rezultat = json_decode((string) $declaratie->verificare_erori, true) ?: [];
+
+        $erori = array_map(function ($linie) {
+            return $linie + ['test' => TesteSaft::descrie($linie['stare'] ?? null)];
+        }, $rezultat['erori'] ?? []);
+
+        return [
+            'stare' => $declaratie->verificare_stare,
+            'numar' => $declaratie->verificare_numar,
+            'verificat_la' => Format::dataOra($declaratie->verificare_la),
+            'mesaj' => $rezultat['mesaj'] ?? null,
+            'antet' => $rezultat['antet'] ?? [],
+            'trunchiat' => (bool) ($rezultat['trunchiat'] ?? false),
+            'erori' => $erori,
+            // Cate linii a prins fiecare test, ca sa se vada de unde se apuca
+            'pe_teste' => array_map(function ($numar, $cod) {
+                return ['numar' => $numar] + TesteSaft::descrie($cod);
+            }, $rezultat['pe_teste'] ?? [], array_keys($rezultat['pe_teste'] ?? [])),
+        ];
+    }
+
+    /** Cat s-a gasit la verificare, spus in doua cuvinte pentru jurnal. */
+    protected function cateNeconcordante(AnafDeclaratie $declaratie): string
+    {
+        if ($declaratie->verificare_stare === 'imposibil') {
+            return 'nu s-a putut face';
+        }
+
+        $numar = (int) $declaratie->verificare_numar;
+
+        if ($numar === 0) {
+            return 'fără neconcordanțe';
+        }
+
+        return $numar . ($numar === 1 ? ' linie de îndreptat' : ' linii de îndreptat');
+    }
+
     /** Raspunsul pentru omul caruia nu i s-a dat dreptul cerut. */
     protected function faraDreptul(string $fapta)
     {
@@ -1089,6 +1374,57 @@ class DeclaratiiController extends Controller
             ? ['pas' => 'validat', 'erori_validare' => null, 'cale_pdf' => $calePdf]
             : ['pas' => 'eroare_validare', 'erori_validare' => $rezultat['erori'], 'cale_pdf' => null]);
 
+        $declaratie = $declaratie->fresh();
+
+        /*
+         * La SAF-T, validarea nu e tot. Ea spune ca declaratia e bine intocmita;
+         * consistenta spune daca cifrele din ea se potrivesc intre ele. Se face
+         * aici, unde trec si incarcarea, si revalidarea, ca sa nu ramana pe
+         * seama cuiva sa-si aduca aminte de ea inainte de depunere.
+         */
+        return $this->verificaSaft($declaratie);
+    }
+
+    /**
+     * Consistenta unui SAF-T, cu unealta ANAF.
+     *
+     * Nu opreste nimic: o declaratie cu neconcordante ramane valida si se poate
+     * depune. Verificarea e o parere, si se scrie ca atare pe declaratie. De
+     * aceea nici un esec al ei nu strica fluxul — se retine ca „imposibil", cu
+     * motivul, si atat.
+     */
+    protected function verificaSaft(AnafDeclaratie $declaratie, ?VerificareSaft $verificare = null): AnafDeclaratie
+    {
+        if ($declaratie->tip !== 'D406' || !$declaratie->cale_xml || !Storage::exists($declaratie->cale_xml)) {
+            return $declaratie;
+        }
+
+        if (!Schema::hasColumn('anaf_declaratii', 'verificare_stare')) {
+            return $declaratie;
+        }
+
+        $verificare = $verificare ?: app(VerificareSaft::class);
+
+        try {
+            $rezultat = $verificare->verifica(Storage::path($declaratie->cale_xml));
+        } catch (DeclaratieException $e) {
+            $declaratie->update([
+                'verificare_stare' => 'imposibil',
+                'verificare_numar' => null,
+                'verificare_erori' => json_encode(['mesaj' => $e->getMessage()], JSON_UNESCAPED_UNICODE),
+                'verificare_la' => now(),
+            ]);
+
+            return $declaratie->fresh();
+        }
+
+        $declaratie->update([
+            'verificare_stare' => $rezultat['stare'],
+            'verificare_numar' => $rezultat['numar'],
+            'verificare_erori' => json_encode($rezultat, JSON_UNESCAPED_UNICODE),
+            'verificare_la' => now(),
+        ]);
+
         return $declaratie->fresh();
     }
 
@@ -1148,6 +1484,9 @@ class DeclaratiiController extends Controller
             'eroare' => $this->eroareScurtata($declaratie->erori_validare ?: $declaratie->eroare_semnare),
             'eroare_de_validare' => (bool) $declaratie->erori_validare,
             'clasificare' => RecipisaService::clasifica($declaratie->stare_declaratie),
+            // Consistenta se verifica numai la SAF-T; la restul, butonul n-are ce cauta.
+            'are_consistenta' => $declaratie->tip === 'D406',
+            'verificare_la' => Format::dataOra($declaratie->verificare_la),
             'certificat_nume' => optional($declaratie->certificat)->cn,
             'data_depunere' => Format::dataOra($declaratie->data_depunere),
             'data_recipisa' => Format::dataOra($declaratie->data_recipisa),

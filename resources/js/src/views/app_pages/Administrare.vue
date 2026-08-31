@@ -289,6 +289,26 @@
               </div>
             </template>
 
+            <!-- Modulele se vând deosebit, așa că se și citesc deosebit -->
+            <template #thead-top>
+              <b-tr>
+                <b-th />
+                <b-th
+                  colspan="4"
+                  class="text-center statistici-modul"
+                >
+                  SPV Curier
+                </b-th>
+                <b-th
+                  colspan="4"
+                  class="text-center statistici-modul"
+                >
+                  Dispecer e-Transport
+                </b-th>
+                <b-th />
+              </b-tr>
+            </template>
+
             <template #cell(client)="rand">
               <div>{{ rand.item.denumire }}</div>
               <div class="small text-muted">
@@ -319,6 +339,43 @@
 
             <template #cell(ultima_depunere)="rand">
               {{ rand.item.ultima_depunere || '—' }}
+            </template>
+
+            <!--
+              Dispecerul se folosește în două feluri: unii declară transportul
+              de aici (UIT trimis), alții îl declară în altă parte și vin să-l
+              urmărească. Se arată amândouă, altfel ultimii ar părea că nu
+              folosesc modulul deloc.
+            -->
+            <template #cell(transporturi)="rand">
+              <div :title="`${rand.item.declaranti} declaranți`">
+                {{ rand.item.transporturi }} trimise
+              </div>
+              <div class="small text-muted">
+                {{ rand.item.urmarite }} urmărite
+              </div>
+            </template>
+
+            <template #cell(transporturi_luna_curenta)="rand">
+              <div :title="`${rand.item.declaranti_luna_curenta} declaranți`">
+                {{ rand.item.transporturi_luna_curenta }} trimise
+              </div>
+              <div class="small text-muted">
+                {{ rand.item.urmarite_luna_curenta }} urmărite
+              </div>
+            </template>
+
+            <template #cell(transporturi_luna_anterioara)="rand">
+              <div :title="`${rand.item.declaranti_luna_anterioara} declaranți`">
+                {{ rand.item.transporturi_luna_anterioara }} trimise
+              </div>
+              <div class="small text-muted">
+                {{ rand.item.urmarite_luna_anterioara }} urmărite
+              </div>
+            </template>
+
+            <template #cell(ultimul_transport)="rand">
+              {{ rand.item.ultimul_transport || '—' }}
             </template>
 
             <template #cell(ultima_accesare)="rand">
@@ -1022,12 +1079,24 @@ export default {
       statistici: [],
       statisticiInCurs: false,
       statisticiIncarcate: false,
+      /*
+       * Coloanele stau în două grupuri, unul pentru fiecare modul vândut;
+       * capul de deasupra (thead-top) le pune numele. Ordinea de aici trebuie
+       * să se potrivească cu numărul de coloane din acel cap.
+       */
       campuriStatistici: [
         { key: 'client', label: 'Client' },
+
         { key: 'total', label: 'Depuse cu aplicația' },
         { key: 'luna_curenta', label: 'Luna curentă' },
         { key: 'luna_anterioara', label: 'Luna anterioară' },
         { key: 'ultima_depunere', label: 'Ultima depunere' },
+
+        { key: 'transporturi', label: 'UIT-uri' },
+        { key: 'transporturi_luna_curenta', label: 'Luna curentă' },
+        { key: 'transporturi_luna_anterioara', label: 'Luna anterioară' },
+        { key: 'ultimul_transport', label: 'Ultimul transport' },
+
         { key: 'ultima_accesare', label: 'Ultima accesare' },
       ],
 
@@ -1512,6 +1581,17 @@ export default {
 </script>
 
 <style scoped>
+/*
+ * Numele modulului, deasupra coloanelor lui: se vede ca un cap de grup, nu ca
+ * inca un rand de coloane.
+ */
+.statistici-modul {
+  border-bottom: 2px solid #d8d6de;
+  font-size: 0.8rem;
+  letter-spacing: 0.03rem;
+  text-transform: uppercase;
+}
+
 /* Lista anilor de importat: multi ani nu au de ce sa lungeasca fereastra. */
 .ani-import {
   max-height: 14rem;

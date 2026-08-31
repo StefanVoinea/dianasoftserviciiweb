@@ -20,7 +20,17 @@ class AnafDeclaratie extends Model
         'semnat' => 'boolean',
         'data_depunere' => 'datetime',
         'data_recipisa' => 'datetime',
+        'verificare_la' => 'datetime',
     ];
+
+    /**
+     * Liniile gasite la verificarea de consistenta nu pleaca odata cu tabelul.
+     *
+     * La un SAF-T incalcit sunt cu miile; trimise pentru fiecare rand din
+     * lista, ar face raspunsul de zeci de MB. Se cer separat, cand se deschide
+     * fereastra cu ele (vezi DeclaratiiController@consistenta).
+     */
+    protected $hidden = ['verificare_erori'];
 
     public function certificat()
     {
