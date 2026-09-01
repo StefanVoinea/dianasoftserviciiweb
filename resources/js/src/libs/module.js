@@ -54,6 +54,7 @@ export const contextul = () => {
       try {
         window.localStorage.setItem(CHEIE, JSON.stringify({
           module: Array.isArray(context.module) ? context.module : null,
+          meniu_oprit: Array.isArray(context.meniu_oprit) ? context.meniu_oprit : null,
           super_admin: Boolean(context.super_admin),
         }))
       } catch (e) {
@@ -82,6 +83,57 @@ export const contextul = () => {
 /** @return {Promise<string[]|null>} null = încă nu se știe */
 export const moduleleMele = () => contextul()
   .then(context => (Array.isArray(context.module) ? context.module : null))
+
+/**
+ * Intrarile de meniu ale modulelor pe care contul nu le are.
+ *
+ * Meniul omului se tine langa contul lui si poate fi mai vechi decat modulele:
+ * cui i s-a luat un modul ii raman intrarile de meniu, si le-ar vedea in antet
+ * ca drumuri care nu duc nicaieri. Serverul spune care sunt ele.
+ *
+ * Gol inseamna „nu se opreste nimic" - si cand chiar nu e nimic de oprit, si
+ * cand inca nu se stie. Ca peste tot aici, ascunderea e inlesnire, nu paza.
+ *
+ * @return {string[]}
+ */
+export const meniulOprit = () => {
+  const stiut = contextStiut()
+
+  return Array.isArray(stiut.meniu_oprit) ? stiut.meniu_oprit : []
+}
+
+/** Aceeasi lista, dar dupa ce raspunde serverul. */
+export const meniulOpritProaspat = () => contextul()
+  .then(context => (Array.isArray(context.meniu_oprit) ? context.meniu_oprit : []))
+
+/** Capetele de meniu ramase fara nimic dedesubt: se deschid goale, deci pleaca. */
+const faraCapeteGoale = lista => lista.filter(optiune => (
+  Number(optiune.dropdown) !== 1 || lista.some(alta => alta.parent === optiune.name)
+))
+
+/**
+ * Meniul, fara intrarile modulelor nedate.
+ *
+ * @param {object[]} optiuni intrarile asa cum vin de la server
+ * @param {string[]} oprite slug-urile de ascuns
+ * @return {object[]}
+ */
+export const faraModuleleNedate = (optiuni, oprite) => {
+  if (!Array.isArray(optiuni) || !oprite || !oprite.length) return optiuni
+
+  let ramase = optiuni.filter(optiune => oprite.indexOf(optiune.slug) === -1)
+
+  // Un capat golit poate goli la randul lui capatul de deasupra, deci se trece
+  // din nou pana cand nu mai pleaca nimic.
+  let cate = ramase.length + 1
+
+  while (ramase.length < cate) {
+    cate = ramase.length
+    ramase = faraCapeteGoale(ramase)
+  }
+
+  return ramase
+}
 
 /** La deconectare, ca următorul om să nu moștenească drepturile celui dinainte. */
 export const uitaModulele = () => {

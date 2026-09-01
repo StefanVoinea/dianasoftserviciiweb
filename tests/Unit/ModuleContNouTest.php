@@ -128,6 +128,35 @@ class ModuleContNouTest extends TestCase
         $this->assertFalse($this->meniuActiv($cont['id'], 'etransport-anaf'));
     }
 
+    /**
+     * Intrarile modulelor nedate se spun interfetei, ca sa nu le mai arate.
+     *
+     * Meniul omului se tine langa contul lui si poate fi mai vechi decat
+     * modulele — asa ca nu e de ajuns ca serverul sa opreasca cererile: omul ar
+     * ramane cu drumuri in antet care nu duc nicaieri.
+     */
+    public function test_intrarile_modulelor_nedate_sunt_oprite()
+    {
+        $oprite = Modul::slugurileOprite(['spv']);
+
+        $this->assertContains('etransport-anaf', $oprite);
+        $this->assertContains('portal-just', $oprite);
+        $this->assertNotContains('spv', $oprite);
+        $this->assertNotContains('vector-fiscal', $oprite);
+    }
+
+    /** Cu toate modulele nu se opreste nimic. */
+    public function test_contul_cu_toate_modulele_nu_are_nimic_oprit()
+    {
+        $this->assertSame([], Modul::slugurileOprite(Modul::chei()));
+    }
+
+    /** Fara niciun modul se opresc toate intrarile lor. */
+    public function test_contul_fara_module_are_toate_intrarile_oprite()
+    {
+        $this->assertSame(Modul::slugurileMeniului(Modul::chei()), Modul::slugurileOprite([]));
+    }
+
     /** Fara nicio bifa, contul nu vede niciun modul. */
     public function test_contul_fara_module_nu_vede_niciunul()
     {

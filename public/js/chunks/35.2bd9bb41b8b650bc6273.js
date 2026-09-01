@@ -104,6 +104,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _core_layouts_layout_vertical_useVerticalLayout__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! @core/layouts/layout-vertical/useVerticalLayout */ "./resources/js/src/@core/layouts/layout-vertical/useVerticalLayout.js");
 /* harmony import */ var _mixinLayoutHorizontal__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(/*! ./mixinLayoutHorizontal */ "./resources/js/src/@core/layouts/layout-horizontal/mixinLayoutHorizontal.js");
 /* harmony import */ var _store__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(/*! @/store */ "./resources/js/src/store/index.js");
+/* harmony import */ var _libs_module__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(/*! @/libs/module */ "./resources/js/src/libs/module.js");
 
 
 
@@ -231,6 +232,7 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
+
 /* eslint-enable import/order */
 
 /* harmony default export */ __webpack_exports__["default"] = ({
@@ -271,15 +273,26 @@ __webpack_require__.r(__webpack_exports__);
   },
   methods: {
     creezmenu: function creezmenu() {
+      var _this = this;
+
       var company_id = JSON.parse(_store__WEBPACK_IMPORTED_MODULE_20__["default"].state.app.societateaCurenta).id;
       var menuoptions = JSON.parse(_store__WEBPACK_IMPORTED_MODULE_20__["default"].state.app.user).dianasoftmenuoptions.filter(function (e) {
         return e.pivot.company_id == company_id;
       });
-      var menu = this.createMenuOptions(menuoptions, "\\");
-      this.navMenuItems = menu;
+      /*
+       * Intrarile modulelor nedate nu se arata: ar fi drumuri care duc la un
+       * „nu aveti acces". Meniul se face pe loc, cu ce se stia de data
+       * trecuta, si inca o data cand raspunde serverul — altfel ar clipi la
+       * fiecare incarcare de pagina.
+       */
+
+      this.navMenuItems = this.createMenuOptions(Object(_libs_module__WEBPACK_IMPORTED_MODULE_21__["faraModuleleNedate"])(menuoptions, Object(_libs_module__WEBPACK_IMPORTED_MODULE_21__["meniulOprit"])()), '\\');
+      Object(_libs_module__WEBPACK_IMPORTED_MODULE_21__["meniulOpritProaspat"])().then(function (oprite) {
+        _this.navMenuItems = _this.createMenuOptions(Object(_libs_module__WEBPACK_IMPORTED_MODULE_21__["faraModuleleNedate"])(menuoptions, oprite), '\\');
+      });
     },
     createMenuOptions: function createMenuOptions(menuoptions, parinte) {
-      var _this = this;
+      var _this2 = this;
 
       var menuoptionsGroup = menuoptions.filter(function (menuoption) {
         return menuoption.parent === parinte;
@@ -300,7 +313,7 @@ __webpack_require__.r(__webpack_exports__);
           menuoption.i18n = value.i18n;
 
           if (value.dropdown == 1) {
-            var menuSubGroup = _this.createMenuOptions(menuoptions, value.name);
+            var menuSubGroup = _this2.createMenuOptions(menuoptions, value.name);
 
             menuoption.children = menuSubGroup;
           }

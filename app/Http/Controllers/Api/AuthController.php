@@ -108,6 +108,8 @@ class AuthController extends Controller
      */
     public function context(Request $request)
     {
+        $module = $this->moduleleOmului();
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -121,7 +123,15 @@ class AuthController extends Controller
                  * date lui. Antetul se face dupa lista asta, nu dupa abonament —
                  * doi oameni ai aceleiasi firme pot lucra la module deosebite.
                  */
-                'module' => $this->moduleleOmului(),
+                'module' => $module,
+                /*
+                 * Intrarile de meniu ale modulelor pe care nu le are. Meniul se
+                 * tine in company_user si poate fi mai vechi decat modulele: un
+                 * cont caruia i s-a luat modulul isi pastra intrarile, si le
+                 * vedea mai departe in antet. Serverul oprea cererile, dar omul
+                 * ramanea cu drumuri care nu duceau nicaieri.
+                 */
+                'meniu_oprit' => Modul::slugurileOprite($module),
                 /*
                  * Adresa pe care o vede serverul acum. E si unealta de verificare:
                  * daca aici apare adresa unui proxy in loc de a omului, filtrarea

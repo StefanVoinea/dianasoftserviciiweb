@@ -1420,6 +1420,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _useVerticalNavMenu__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./useVerticalNavMenu */ "./resources/js/src/@core/layouts/layout-vertical/components/vertical-nav-menu/useVerticalNavMenu.js");
 /* harmony import */ var _store__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! @/store */ "./resources/js/src/store/index.js");
 /* harmony import */ var _router__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! @/router */ "./resources/js/src/router/index.js");
+/* harmony import */ var _libs_module__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! @/libs/module */ "./resources/js/src/libs/module.js");
 
 
 
@@ -1506,6 +1507,7 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
+
 
 
 
@@ -1553,15 +1555,26 @@ __webpack_require__.r(__webpack_exports__);
   },
   methods: {
     creezmenu: function creezmenu() {
+      var _this = this;
+
       var company_id = JSON.parse(_store__WEBPACK_IMPORTED_MODULE_11__["default"].state.app.societateaCurenta).id;
       var menuoptions = JSON.parse(_store__WEBPACK_IMPORTED_MODULE_11__["default"].state.app.user).dianasoftmenuoptions.filter(function (e) {
         return e.pivot.company_id == company_id;
       });
-      var menu = this.createMenuOptions(menuoptions, "\\");
-      this.navMenuItems = menu;
+      /*
+       * Intrarile modulelor nedate nu se arata: ar fi drumuri care duc la un
+       * „nu aveti acces". Meniul se face pe loc, cu ce se stia de data
+       * trecuta, si inca o data cand raspunde serverul — altfel ar clipi la
+       * fiecare incarcare de pagina.
+       */
+
+      this.navMenuItems = this.createMenuOptions(Object(_libs_module__WEBPACK_IMPORTED_MODULE_13__["faraModuleleNedate"])(menuoptions, Object(_libs_module__WEBPACK_IMPORTED_MODULE_13__["meniulOprit"])()), '\\');
+      Object(_libs_module__WEBPACK_IMPORTED_MODULE_13__["meniulOpritProaspat"])().then(function (oprite) {
+        _this.navMenuItems = _this.createMenuOptions(Object(_libs_module__WEBPACK_IMPORTED_MODULE_13__["faraModuleleNedate"])(menuoptions, oprite), '\\');
+      });
     },
     createMenuOptions: function createMenuOptions(menuoptions, parinte) {
-      var _this = this;
+      var _this2 = this;
 
       var menuoptionsGroup = menuoptions.filter(function (menuoption) {
         return menuoption.parent === parinte;
@@ -1576,7 +1589,7 @@ __webpack_require__.r(__webpack_exports__);
             menuoption.title = value.name;
             menuoption.icon = value.icon;
 
-            var menuSubGroup = _this.createMenuOptions(menuoptions, value.name);
+            var menuSubGroup = _this2.createMenuOptions(menuoptions, value.name);
 
             menuoption.children = menuSubGroup;
           } else {

@@ -13,6 +13,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var core_js_modules_es_array_filter_js__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_array_filter_js__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var core_js_modules_es_object_to_string_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! core-js/modules/es.object.to-string.js */ "./node_modules/core-js/modules/es.object.to-string.js");
 /* harmony import */ var core_js_modules_es_object_to_string_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_object_to_string_js__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _libs_module__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @/libs/module */ "./resources/js/src/libs/module.js");
 
 
 //
@@ -140,11 +141,7 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
-//
-//
-//
-//
-//
+
 /* harmony default export */ __webpack_exports__["default"] = ({
   name: 'Home',
   data: function data() {
@@ -155,17 +152,56 @@ __webpack_require__.r(__webpack_exports__);
       superAdmin: false,
       // Înștiințările necitite, arătate până sunt confirmate
       notificari: [],
-      // eslint-disable-next-line global-require, import/no-unresolved
-      siglaSpv: __webpack_require__(/*! @/assets/images/sigle/spv-curier-orizontal.svg */ "./resources/js/src/assets/images/sigle/spv-curier-orizontal.svg")
+
+      /*
+       * Modulele vândute, cu cheia din abonament — aceeași după care se face și
+       * antetul, ca omul să vadă în amândouă locurile același lucru.
+       */
+      module: [{
+        cheie: 'spv',
+        nume: 'SPV Curier',
+        descriere: 'Deschide mesajele ANAF și verificările SPV direct din dashboard.',
+        ruta: 'spv',
+        culoare: '#22406f',
+        // eslint-disable-next-line global-require, import/no-unresolved
+        sigla: __webpack_require__(/*! @/assets/images/sigle/spv-curier-orizontal.svg */ "./resources/js/src/assets/images/sigle/spv-curier-orizontal.svg")
+      }, {
+        cheie: 'etransport',
+        nume: 'Dispecer e-Transport',
+        descriere: 'Declară transporturile de bunuri, urmărește UIT-urile și starea notificărilor la ANAF.',
+        ruta: 'etransport'
+      }, {
+        cheie: 'portal_just',
+        nume: 'Grefier alert',
+        descriere: 'Caută dosare, părți și termene în ECRIS și vezi ședințele instanțelor.',
+        ruta: 'portal-just'
+      }],
+
+      /*
+       * Modulele date contului acesta. „null" înseamnă că încă nu se știe —
+       * atunci se arată toate, ca la antet: ascunderea de aici e înlesnire, nu
+       * pază, iar cererile către un modul nedat sunt oprite oricum de server.
+       */
+      alese: Object(_libs_module__WEBPACK_IMPORTED_MODULE_2__["moduleStiute"])()
     };
   },
   computed: {
     asset_path: function asset_path() {
       return window.asset_path;
+    },
+
+    /** Modulele pe care le are contul; cât timp nu se știe, se arată toate. */
+    vizibile: function vizibile() {
+      var _this = this;
+
+      if (this.alese === null) return this.module;
+      return this.module.filter(function (modul) {
+        return _this.alese.indexOf(modul.cheie) !== -1;
+      });
     }
   },
   created: function created() {
-    var _this = this;
+    var _this2 = this;
 
     document.title = "".concat(window.app_name, "->Home");
 
@@ -174,37 +210,44 @@ __webpack_require__.r(__webpack_exports__);
       this.$router.push({
         name: 'auth-login'
       });
-    } // Serverul spune cine e: dreptul de administrare nu se ține în browser.
+    }
+    /*
+     * Serverul spune cine e și ce module are: drepturile nu se țin în browser.
+     * Se folosește același răspuns pe care îl cer și antetul, și paznicul
+     * rutelor — o singură cerere pe încărcare de pagină, nu una de fiecare.
+     */
 
 
-    this.$http.get('/context').then(function (_ref) {
-      var data = _ref.data;
-      _this.superAdmin = data.data.super_admin;
+    Object(_libs_module__WEBPACK_IMPORTED_MODULE_2__["contextul"])().then(function (context) {
+      _this2.superAdmin = Boolean(context.super_admin); // Un server mai vechi nu trimite deloc câmpul: lipsa lui nu e o
+      // interdicție, e o necunoscută.
+
+      _this2.alese = Array.isArray(context.module) ? context.module : null;
     })["catch"](function () {
-      _this.superAdmin = false;
+      _this2.superAdmin = false;
     });
     this.incarcaNotificari();
   },
   methods: {
     incarcaNotificari: function incarcaNotificari() {
-      var _this2 = this;
+      var _this3 = this;
 
-      this.$http.get('/notificari').then(function (_ref2) {
-        var data = _ref2.data;
-        _this2.notificari = data.data.filter(function (notificare) {
+      this.$http.get('/notificari').then(function (_ref) {
+        var data = _ref.data;
+        _this3.notificari = data.data.filter(function (notificare) {
           return !notificare.citita;
         });
       })["catch"](function () {
-        _this2.notificari = [];
+        _this3.notificari = [];
       });
     },
 
     /** Confirmată, dispare de aici; rămâne scrisă pentru evidență. */
     amCitit: function amCitit(notificare) {
-      var _this3 = this;
+      var _this4 = this;
 
       this.$http.post("/notificari/".concat(notificare.id, "/citita")).then(function () {
-        _this3.notificari = _this3.notificari.filter(function (alta) {
+        _this4.notificari = _this4.notificari.filter(function (alta) {
           return alta.id !== notificare.id;
         });
       });
@@ -222,28 +265,18 @@ __webpack_require__.r(__webpack_exports__);
         name: 'administrare'
       });
     },
-    goToSpv: function goToSpv() {
+    mergiLa: function mergiLa(modul) {
       this.$router.push({
-        name: 'spv'
-      });
-    },
-    goToEtransport: function goToEtransport() {
-      this.$router.push({
-        name: 'etransport'
-      });
-    },
-    goToPortalJust: function goToPortalJust() {
-      this.$router.push({
-        name: 'portal-just'
+        name: modul.ruta
       });
     },
     handleErrors: function handleErrors(error) {
-      var _this4 = this;
+      var _this5 = this;
 
       if (error.status === 401) {
         // Sesiunea a expirat: se șterge tokenul și se cere reautentificarea.
         this.$store.dispatch('app/destroyToken')["finally"](function () {
-          _this4.$router.push({
+          _this5.$router.push({
             name: 'auth-login'
           });
         });
@@ -273,7 +306,7 @@ __webpack_require__.r(__webpack_exports__);
 var ___CSS_LOADER_API_IMPORT___ = __webpack_require__(/*! ../../../../../node_modules/css-loader/dist/runtime/api.js */ "./node_modules/css-loader/dist/runtime/api.js");
 exports = ___CSS_LOADER_API_IMPORT___(false);
 // Module
-exports.push([module.i, "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\r\n/* Mesajul e scris de om, cu randuri cu tot: se pastreaza asa cum l-a scris. */\n.mesaj-notificare[data-v-1094fed2] {\r\n  white-space: pre-wrap;\n}\r\n", ""]);
+exports.push([module.i, "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\r\n/* Sigla ține loc de titlu, deci stă la înălțimea unui titlu. */\n.sigla-card[data-v-1094fed2] {\r\n  height: 32px;\r\n  width: auto;\r\n  max-width: 100%;\n}\r\n\r\n/* Mesajul e scris de om, cu randuri cu tot: se pastreaza asa cum l-a scris. */\n.mesaj-notificare[data-v-1094fed2] {\r\n  white-space: pre-wrap;\n}\r\n", ""]);
 // Exports
 module.exports = exports;
 
@@ -392,122 +425,119 @@ var render = function () {
         ])
       : _vm._e(),
     _vm._v(" "),
-    _c("div", { staticClass: "row" }, [
-      _c("div", { staticClass: "col-12 col-md-6 col-lg-4" }, [
-        _c("div", { staticClass: "card h-100" }, [
-          _c("div", { staticClass: "card-body" }, [
-            _c("img", {
-              staticClass: "mb-2 d-block",
-              staticStyle: {
-                height: "32px",
-                width: "auto",
-                "max-width": "100%",
-              },
-              attrs: { src: _vm.siglaSpv, alt: "DianaSoft → SPV Curier" },
-            }),
-            _vm._v(" "),
-            _c("p", { staticClass: "text-muted mb-3" }, [
-              _vm._v(
-                "\n            Deschide mesajele ANAF și verificările SPV direct din dashboard.\n          "
-              ),
-            ]),
-            _vm._v(" "),
-            _c(
-              "button",
-              {
-                staticClass: "btn text-white",
-                staticStyle: {
-                  "background-color": "#22406f",
-                  "border-color": "#22406f",
-                },
-                on: { click: _vm.goToSpv },
-              },
-              [_vm._v("\n            Acceseaza\n          ")]
-            ),
-          ]),
-        ]),
-      ]),
-      _vm._v(" "),
-      _c("div", { staticClass: "col-12 col-md-6 col-lg-4" }, [
-        _c("div", { staticClass: "card h-100" }, [
-          _c("div", { staticClass: "card-body" }, [
-            _c("h4", { staticClass: "mb-2" }, [
-              _vm._v("\n            Dispecer e-Transport\n          "),
-            ]),
-            _vm._v(" "),
-            _c("p", { staticClass: "text-muted mb-3" }, [
-              _vm._v(
-                "\n            Declară transporturile de bunuri, urmărește UIT-urile și starea notificărilor la ANAF.\n          "
-              ),
-            ]),
-            _vm._v(" "),
-            _c(
-              "button",
-              {
-                staticClass: "btn btn-primary",
-                on: { click: _vm.goToEtransport },
-              },
-              [_vm._v("\n            Acceseaza\n          ")]
-            ),
-          ]),
-        ]),
-      ]),
-      _vm._v(" "),
-      _vm.superAdmin
-        ? _c("div", { staticClass: "col-12 col-md-6 col-lg-4" }, [
-            _c("div", { staticClass: "card h-100 border-primary" }, [
-              _c("div", { staticClass: "card-body" }, [
-                _c("h4", { staticClass: "mb-2" }, [
-                  _vm._v("\n            Administrare clienți\n          "),
-                ]),
-                _vm._v(" "),
-                _c("p", { staticClass: "text-muted mb-3" }, [
-                  _vm._v(
-                    "\n            Firme, conturi, module, tarife și perioade de probă.\n          "
+    _c(
+      "div",
+      { staticClass: "row" },
+      [
+        _vm._l(_vm.vizibile, function (modul) {
+          return _c(
+            "div",
+            { key: modul.cheie, staticClass: "col-12 col-md-6 col-lg-4" },
+            [
+              _c("div", { staticClass: "card h-100" }, [
+                _c("div", { staticClass: "card-body" }, [
+                  modul.sigla
+                    ? _c("img", {
+                        staticClass: "mb-2 d-block sigla-card",
+                        attrs: {
+                          src: modul.sigla,
+                          alt: "DianaSoft → " + modul.nume,
+                        },
+                      })
+                    : _c("h4", { staticClass: "mb-2" }, [
+                        _vm._v(
+                          "\n            " + _vm._s(modul.nume) + "\n          "
+                        ),
+                      ]),
+                  _vm._v(" "),
+                  _c("p", { staticClass: "text-muted mb-3" }, [
+                    _vm._v(
+                      "\n            " +
+                        _vm._s(modul.descriere) +
+                        "\n          "
+                    ),
+                  ]),
+                  _vm._v(" "),
+                  _c(
+                    "button",
+                    {
+                      staticClass: "btn",
+                      class: modul.culoare ? "text-white" : "btn-primary",
+                      style: modul.culoare
+                        ? {
+                            backgroundColor: modul.culoare,
+                            borderColor: modul.culoare,
+                          }
+                        : null,
+                      on: {
+                        click: function ($event) {
+                          return _vm.mergiLa(modul)
+                        },
+                      },
+                    },
+                    [_vm._v("\n            Accesează\n          ")]
                   ),
                 ]),
-                _vm._v(" "),
-                _c(
-                  "button",
-                  {
-                    staticClass: "btn btn-primary",
-                    on: { click: _vm.goToAdministrare },
-                  },
-                  [_vm._v("\n            Acceseaza\n          ")]
-                ),
               ]),
-            ]),
-          ])
-        : _vm._e(),
-      _vm._v(" "),
-      _c("div", { staticClass: "col-12 col-md-6 col-lg-4" }, [
-        _c("div", { staticClass: "card h-100" }, [
-          _c("div", { staticClass: "card-body" }, [
-            _c("h4", { staticClass: "mb-2" }, [
-              _vm._v("\n            Grefier alert\n          "),
-            ]),
-            _vm._v(" "),
-            _c("p", { staticClass: "text-muted mb-3" }, [
-              _vm._v(
-                "\n            Caută dosare, părți și termene în ECRIS și vezi ședințele instanțelor.\n          "
-              ),
-            ]),
-            _vm._v(" "),
-            _c(
-              "button",
-              {
-                staticClass: "btn btn-primary",
-                on: { click: _vm.goToPortalJust },
-              },
-              [_vm._v("\n            Acceseaza\n          ")]
-            ),
-          ]),
-        ]),
-      ]),
-    ]),
+            ]
+          )
+        }),
+        _vm._v(" "),
+        _vm.superAdmin
+          ? _c("div", { staticClass: "col-12 col-md-6 col-lg-4" }, [
+              _c("div", { staticClass: "card h-100 border-primary" }, [
+                _c("div", { staticClass: "card-body" }, [
+                  _c("h4", { staticClass: "mb-2" }, [
+                    _vm._v("\n            Administrare clienți\n          "),
+                  ]),
+                  _vm._v(" "),
+                  _c("p", { staticClass: "text-muted mb-3" }, [
+                    _vm._v(
+                      "\n            Firme, conturi, module, tarife și perioade de probă.\n          "
+                    ),
+                  ]),
+                  _vm._v(" "),
+                  _c(
+                    "button",
+                    {
+                      staticClass: "btn btn-primary",
+                      on: { click: _vm.goToAdministrare },
+                    },
+                    [_vm._v("\n            Accesează\n          ")]
+                  ),
+                ]),
+              ]),
+            ])
+          : _vm._e(),
+        _vm._v(" "),
+        !_vm.vizibile.length && !_vm.superAdmin
+          ? _c("div", { staticClass: "col-12" }, [_vm._m(0)])
+          : _vm._e(),
+      ],
+      2
+    ),
   ])
 }
-var staticRenderFns = []
+var staticRenderFns = [
+  function () {
+    var _vm = this
+    var _h = _vm.$createElement
+    var _c = _vm._self._c || _h
+    return _c("div", { staticClass: "card" }, [
+      _c("div", { staticClass: "card-body text-center py-3" }, [
+        _c("h4", { staticClass: "mb-1" }, [
+          _vm._v("\n            Nu aveți încă niciun modul\n          "),
+        ]),
+        _vm._v(" "),
+        _c("p", { staticClass: "text-muted mb-0" }, [
+          _vm._v(
+            "\n            Modulele se dau de administratorul firmei dumneavoastră, dintre\n            cele cuprinse în abonament.\n          "
+          ),
+        ]),
+      ]),
+    ])
+  },
+]
 render._withStripped = true
 
 

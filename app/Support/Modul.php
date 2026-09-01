@@ -188,4 +188,26 @@ class Modul
 
         return array_values(array_unique($sluguri));
     }
+
+    /**
+     * Intrarile de meniu care nu se cuvin unui cont cu modulele acestea.
+     *
+     * Meniul omului se tine in company_user, si poate fi mai vechi decat
+     * modulele: un cont caruia i s-a luat modulul isi pastreaza intrarile de
+     * meniu, si le-ar vedea mai departe in antet. Aici se spune care sunt ele,
+     * ca interfata sa nu le mai arate.
+     *
+     * Se scade, nu se numara pe dinafara: o intrare care tine si de un modul
+     * dat, si de unul nedat, ramane la vedere.
+     *
+     * @param array<int, string> $cheiDate
+     * @return array<int, string> slug-uri de optiuni de meniu
+     */
+    public static function slugurileOprite(array $cheiDate): array
+    {
+        return array_values(array_diff(
+            self::slugurileMeniului(self::chei()),
+            self::slugurileMeniului($cheiDate)
+        ));
+    }
 }

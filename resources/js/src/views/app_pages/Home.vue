@@ -41,49 +41,44 @@
     </div>
 
     <div class="row">
-      <div class="col-12 col-md-6 col-lg-4">
+      <div
+        v-for="modul in vizibile"
+        :key="modul.cheie"
+        class="col-12 col-md-6 col-lg-4"
+      >
         <div class="card h-100">
           <div class="card-body">
-            <!-- Sigla tine loc de titlu: poarta numele si culoarea modulului. -->
+            <!-- Unde modulul are siglă, ea ține loc de titlu: poartă și numele,
+                 și culoarea lui. -->
             <img
-              :src="siglaSpv"
-              alt="DianaSoft → SPV Curier"
-              class="mb-2 d-block"
-              style="height: 32px; width: auto; max-width: 100%;"
+              v-if="modul.sigla"
+              :src="modul.sigla"
+              :alt="'DianaSoft → ' + modul.nume"
+              class="mb-2 d-block sigla-card"
             >
-            <p class="text-muted mb-3">
-              Deschide mesajele ANAF și verificările SPV direct din dashboard.
-            </p>
-            <button
-              class="btn text-white"
-              style="background-color: #22406f; border-color: #22406f;"
-              @click="goToSpv"
+            <h4
+              v-else
+              class="mb-2"
             >
-              Acceseaza
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="col-12 col-md-6 col-lg-4">
-        <div class="card h-100">
-          <div class="card-body">
-            <h4 class="mb-2">
-              Dispecer e-Transport
+              {{ modul.nume }}
             </h4>
             <p class="text-muted mb-3">
-              Declară transporturile de bunuri, urmărește UIT-urile și starea notificărilor la ANAF.
+              {{ modul.descriere }}
             </p>
             <button
-              class="btn btn-primary"
-              @click="goToEtransport"
+              class="btn"
+              :class="modul.culoare ? 'text-white' : 'btn-primary'"
+              :style="modul.culoare ? { backgroundColor: modul.culoare, borderColor: modul.culoare } : null"
+              @click="mergiLa(modul)"
             >
-              Acceseaza
+              Accesează
             </button>
           </div>
         </div>
       </div>
 
+      <!-- Administrarea nu e un modul vândut: e unealta noastră, și se arată
+           numai celui care are voie acolo. -->
       <div
         v-if="superAdmin"
         class="col-12 col-md-6 col-lg-4"
@@ -100,27 +95,27 @@
               class="btn btn-primary"
               @click="goToAdministrare"
             >
-              Acceseaza
+              Accesează
             </button>
           </div>
         </div>
       </div>
 
-      <div class="col-12 col-md-6 col-lg-4">
-        <div class="card h-100">
-          <div class="card-body">
-            <h4 class="mb-2">
-              Grefier alert
+      <!-- Un cont fără niciun modul nu rămâne în fața unei pagini goale, fără
+           să înțeleagă de ce. -->
+      <div
+        v-if="!vizibile.length && !superAdmin"
+        class="col-12"
+      >
+        <div class="card">
+          <div class="card-body text-center py-3">
+            <h4 class="mb-1">
+              Nu aveți încă niciun modul
             </h4>
-            <p class="text-muted mb-3">
-              Caută dosare, părți și termene în ECRIS și vezi ședințele instanțelor.
+            <p class="text-muted mb-0">
+              Modulele se dau de administratorul firmei dumneavoastră, dintre
+              cele cuprinse în abonament.
             </p>
-            <button
-              class="btn btn-primary"
-              @click="goToPortalJust"
-            >
-              Acceseaza
-            </button>
           </div>
         </div>
       </div>
@@ -129,6 +124,8 @@
 </template>
 
 <script>
+
+import { contextul, moduleStiute } from '@/libs/module'
 
 export default {
 
@@ -142,13 +139,50 @@ export default {
       superAdmin: false,
       // Înștiințările necitite, arătate până sunt confirmate
       notificari: [],
-      // eslint-disable-next-line global-require, import/no-unresolved
-      siglaSpv: require('@/assets/images/sigle/spv-curier-orizontal.svg'),
+      /*
+       * Modulele vândute, cu cheia din abonament — aceeași după care se face și
+       * antetul, ca omul să vadă în amândouă locurile același lucru.
+       */
+      module: [
+        {
+          cheie: 'spv',
+          nume: 'SPV Curier',
+          descriere: 'Deschide mesajele ANAF și verificările SPV direct din dashboard.',
+          ruta: 'spv',
+          culoare: '#22406f',
+          // eslint-disable-next-line global-require, import/no-unresolved
+          sigla: require('@/assets/images/sigle/spv-curier-orizontal.svg'),
+        },
+        {
+          cheie: 'etransport',
+          nume: 'Dispecer e-Transport',
+          descriere: 'Declară transporturile de bunuri, urmărește UIT-urile și starea notificărilor la ANAF.',
+          ruta: 'etransport',
+        },
+        {
+          cheie: 'portal_just',
+          nume: 'Grefier alert',
+          descriere: 'Caută dosare, părți și termene în ECRIS și vezi ședințele instanțelor.',
+          ruta: 'portal-just',
+        },
+      ],
+      /*
+       * Modulele date contului acesta. „null" înseamnă că încă nu se știe —
+       * atunci se arată toate, ca la antet: ascunderea de aici e înlesnire, nu
+       * pază, iar cererile către un modul nedat sunt oprite oricum de server.
+       */
+      alese: moduleStiute(),
     }
   },
   computed: {
     asset_path() {
       return window.asset_path
+    },
+    /** Modulele pe care le are contul; cât timp nu se știe, se arată toate. */
+    vizibile() {
+      if (this.alese === null) return this.module
+
+      return this.module.filter(modul => this.alese.indexOf(modul.cheie) !== -1)
     },
   },
 
@@ -160,10 +194,18 @@ export default {
       this.$router.push({ name: 'auth-login' })
     }
 
-    // Serverul spune cine e: dreptul de administrare nu se ține în browser.
-    this.$http.get('/context')
-      .then(({ data }) => {
-        this.superAdmin = data.data.super_admin
+    /*
+     * Serverul spune cine e și ce module are: drepturile nu se țin în browser.
+     * Se folosește același răspuns pe care îl cer și antetul, și paznicul
+     * rutelor — o singură cerere pe încărcare de pagină, nu una de fiecare.
+     */
+    contextul()
+      .then(context => {
+        this.superAdmin = Boolean(context.super_admin)
+
+        // Un server mai vechi nu trimite deloc câmpul: lipsa lui nu e o
+        // interdicție, e o necunoscută.
+        this.alese = Array.isArray(context.module) ? context.module : null
       })
       .catch(() => {
         this.superAdmin = false
@@ -201,14 +243,8 @@ export default {
     goToAdministrare() {
       this.$router.push({ name: 'administrare' })
     },
-    goToSpv() {
-      this.$router.push({ name: 'spv' })
-    },
-    goToEtransport() {
-      this.$router.push({ name: 'etransport' })
-    },
-    goToPortalJust() {
-      this.$router.push({ name: 'portal-just' })
+    mergiLa(modul) {
+      this.$router.push({ name: modul.ruta })
     },
     handleErrors(error) {
       if (error.status === 401) {
@@ -237,6 +273,13 @@ export default {
 </script>
 
 <style scoped>
+/* Sigla ține loc de titlu, deci stă la înălțimea unui titlu. */
+.sigla-card {
+  height: 32px;
+  width: auto;
+  max-width: 100%;
+}
+
 /* Mesajul e scris de om, cu randuri cu tot: se pastreaza asa cum l-a scris. */
 .mesaj-notificare {
   white-space: pre-wrap;

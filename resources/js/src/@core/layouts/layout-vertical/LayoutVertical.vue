@@ -97,6 +97,7 @@ import LayoutContentRendererLeftDetached from '@core/layouts/components/layout-c
 import VerticalNavMenu from './components/vertical-nav-menu/VerticalNavMenu.vue'
 import useVerticalLayout from './useVerticalLayout'
 import mixinVerticalLayout from './mixinVerticalLayout'
+import { faraModuleleNedate, meniulOprit, meniulOpritProaspat } from '@/libs/module'
 
 export default {
   components: {
@@ -144,10 +145,18 @@ export default {
       creezmenu () {
         let company_id=JSON.parse(store.state.app.societateaCurenta).id
         let menuoptions=JSON.parse(store.state.app.user).dianasoftmenuoptions.filter((e)=>e.pivot.company_id == company_id )
-        
-        let menu=this.createMenuOptions(menuoptions,"\\")
-        console.log(menu)
-        this.navMenuItems=menu
+
+        /*
+         * Intrarile modulelor nedate nu se arata: ar fi drumuri care duc la un
+         * „nu aveti acces". Meniul se face pe loc, cu ce se stia de data
+         * trecuta, si inca o data cand raspunde serverul — altfel ar clipi la
+         * fiecare incarcare de pagina.
+         */
+        this.navMenuItems = this.createMenuOptions(faraModuleleNedate(menuoptions, meniulOprit()), '\\')
+
+        meniulOpritProaspat().then(oprite => {
+          this.navMenuItems = this.createMenuOptions(faraModuleleNedate(menuoptions, oprite), '\\')
+        })
     },
     createMenuOptions(menuoptions,parinte){
                let menuoptionsGroup=menuoptions.filter((menuoption)=>{
