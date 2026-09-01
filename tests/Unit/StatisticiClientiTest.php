@@ -59,8 +59,11 @@ class StatisticiClientiTest extends TestCase
     public function test_transporturile_urmarite_se_numara_si_fara_trimiteri(): void
     {
         DB::table('etransport_notificari')->insert([
-            ['company_id' => $this->client, 'uit' => 'U1', 'data_creare' => now()->subDays(2)],
-            ['company_id' => $this->client, 'uit' => 'U2', 'data_creare' => now()->subDays(3)],
+            // Datele se leaga de inceputul lunii, nu de „acum minus cateva zile":
+            // in primele zile ale lunii, acelea cad in luna trecuta si numaratoarea
+            // pe luna curenta iese zero — testul pica fara sa fie nimic stricat.
+            ['company_id' => $this->client, 'uit' => 'U1', 'data_creare' => now()->startOfMonth()],
+            ['company_id' => $this->client, 'uit' => 'U2', 'data_creare' => now()->startOfMonth()->addHour()],
             ['company_id' => $this->client, 'uit' => 'U3', 'data_creare' => now()->subMonthNoOverflow()->startOfMonth()],
         ]);
 
@@ -79,7 +82,7 @@ class StatisticiClientiTest extends TestCase
         DB::table('etransport_declaratii')->insert([
             [
                 'company_id' => $this->client, 'stare' => 'validata', 'cif_declarant' => '123',
-                'uit' => 'UIT1', 'depusa_la' => now()->subDay(),
+                'uit' => 'UIT1', 'depusa_la' => now()->startOfMonth(),
             ],
             // Ciorna: n-a plecat nicaieri, deci nu spune nimic despre folosire.
             [
