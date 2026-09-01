@@ -32,11 +32,12 @@ class SpvFileController extends Controller
             return response()->json(['success' => false, 'message' => 'Fișierul nu a fost găsit.'], 404);
         }
 
-        // Documentul poate sta doar in arhiva de pe calculatorul clientului.
+        // Documentul poate sta doar in arhiva de pe calculatorul clientului,
+        // pe statia certificatului cu care a fost adus de la ANAF.
         try {
             $continut = $peServer
                 ? Storage::get($mesaj->cale_fisier)
-                : $arhiva->ia($mesaj->arhiva_cale);
+                : $arhiva->iaDeLa($mesaj->certificat_id, $mesaj->arhiva_cale);
         } catch (ArhivaException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
         }

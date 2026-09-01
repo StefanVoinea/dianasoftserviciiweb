@@ -220,6 +220,21 @@ class ArhivaService
     }
 
     /** Continutul unui document din arhiva clientului. */
+    /**
+     * Documentul, cerut de la calculatorul pe care a fost scris.
+     *
+     * Fiecare document poarta numarul certificatului cu care a fost adus de la
+     * ANAF, iar arhiva lui e pe calculatorul acelui certificat. Cerut de la
+     * bridge-ul implicit al firmei, un document scris pe alta statie — sau in
+     * alta radacina de arhiva — nu se gaseste, oricat ar fi de acolo calea.
+     */
+    public function iaDeLa(?int $certificatId, string $caleRelativa): string
+    {
+        $this->certificate->folosesteDupaId($certificatId);
+
+        return $this->ia($caleRelativa);
+    }
+
     public function ia(string $caleRelativa): string
     {
         $raspuns = $this->cerere()->get($this->url('/arhiva'), ['cale' => $caleRelativa]);

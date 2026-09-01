@@ -46,6 +46,28 @@ class CertificatService
     }
 
     /**
+     * Fixeaza certificatul dupa numarul lui, daca mai e in uz.
+     *
+     * Asa se cere un document de pe calculatorul unde chiar se afla: fiecare
+     * document stie cu ce certificat a fost adus, iar bridge-ul acelui
+     * certificat e singurul care il are. Un numar gol sau un certificat scos
+     * din uz nu schimba nimic — se lucreaza mai departe cu cel hotarat de
+     * aplicatie, ca sa nu ramana lucrarea fara niciun bridge.
+     */
+    public function folosesteDupaId(?int $id): void
+    {
+        if (!$id) {
+            return;
+        }
+
+        $certificat = AnafCertificat::where('activ', true)->find($id);
+
+        if ($certificat) {
+            $this->foloseste($certificat);
+        }
+    }
+
+    /**
      * Certificatul care trebuie folosit acum. Poate fi null doar daca nu exista
      * niciun certificat inregistrat si nici configuratie in .env.
      */

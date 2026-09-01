@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AnafCertificat;
 use App\Models\AnafSocietate;
+use App\Models\SpvMesaj;
 use App\Models\SpvSolicitare;
 use App\Services\Anaf\Arhiva\ArhivaException;
 use App\Services\Anaf\Arhiva\ArhivaService;
@@ -227,7 +228,10 @@ class SpvSolicitariController extends Controller
                 }
 
                 $temporar = tempnam(sys_get_temp_dir(), 'spvt') . '.pdf';
-                file_put_contents($temporar, app(ArhivaService::class)->ia($solicitare->arhiva_cale));
+                file_put_contents($temporar, app(ArhivaService::class)->iaDeLa(
+                    $this->certificatulDocumentului($solicitare),
+                    $solicitare->arhiva_cale
+                ));
                 $trecatoare[] = $temporar;
 
                 return $temporar;
@@ -293,6 +297,26 @@ class SpvSolicitariController extends Controller
         ]);
     }
 
+    /**
+     * Numarul certificatului pe al carui calculator se afla documentul.
+     *
+     * Documentul e scris de mesajul care a adus raspunsul, deci pe statia
+     * certificatului acelui mesaj. Cand mesajul nu se mai gaseste, se incearca
+     * certificatul cu care a plecat solicitarea: de obicei e acelasi.
+     */
+    protected function certificatulDocumentului(SpvSolicitare $solicitare): ?int
+    {
+        if ($solicitare->mesaj_id) {
+            $alMesajului = SpvMesaj::where('mesaj_id', $solicitare->mesaj_id)->value('certificat_id');
+
+            if ($alMesajului) {
+                return (int) $alMesajului;
+            }
+        }
+
+        return $solicitare->certificat_id ? (int) $solicitare->certificat_id : null;
+    }
+
     /** Fisierele aduse din arhiva clientului doar pentru tiparire. */
     protected function stergeTrecatoarele(array $cai): void
     {
@@ -318,7 +342,7 @@ class SpvSolicitariController extends Controller
         try {
             $continut = $peServer
                 ? Storage::get($solicitare->cale_fisier)
-                : $arhiva->ia($solicitare->arhiva_cale);
+                : $arhiva->iaDeLa($this->certificatulDocumentului($solicitare), $solicitare->arhiva_cale);
         } catch (ArhivaException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 502);
         }

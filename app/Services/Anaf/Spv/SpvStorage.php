@@ -2,7 +2,6 @@
 
 namespace App\Services\Anaf\Spv;
 
-use App\Models\AnafCertificat;
 use App\Models\AnafDeclaratie;
 use App\Models\AnafSocietate;
 use App\Models\SpvMesaj;
@@ -53,15 +52,11 @@ class SpvStorage
      */
     protected function folosesteCertificatulMesajului(SpvMesaj $mesaj): void
     {
-        if (!$this->certificate || !$mesaj->certificat_id) {
+        if (!$this->certificate) {
             return;
         }
 
-        $alLui = AnafCertificat::where('activ', true)->find($mesaj->certificat_id);
-
-        if ($alLui) {
-            $this->certificate->foloseste($alLui);
-        }
+        $this->certificate->folosesteDupaId($mesaj->certificat_id);
     }
 
     /**
