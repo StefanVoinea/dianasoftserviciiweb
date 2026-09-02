@@ -213,6 +213,90 @@ class TokenulIsiAsteaptaPinulTest extends TestCase
         });
     }
 
+    /**
+     * După ce omul scrie codul, apelul picat se reia singur.
+     *
+     * Așa se întâmplă la cea dintâi lucrare de după pornirea calculatorului:
+     * cererea pleacă, driverul cere codul chiar în mijlocul strângerii de mână
+     * cu ANAF, iar cât omul îl scrie, sesiunea securizată se stinge — apelul
+     * pică cu SEC_E_CONTEXT_EXPIRED, deși tokenul e acum dezlegat.
+     *
+     * Fără reluare, omul primea eroarea tocmai după ce făcuse tot ce i se
+     * ceruse: scrisese codul, văzuse fereastra închizându-se, și totuși lucrarea
+     * nu se făcea.
+     */
+    public function test_apelul_se_reia_dupa_ce_codul_a_fost_scris(): void
+    {
+        $apeluri = 0;
+
+        Http::fake(function () use (&$apeluri) {
+            $apeluri++;
+
+            if ($apeluri > 1) {
+                return Http::response(['mesaje' => []], 200);
+            }
+
+            // Cât ținea apelul, altcineva a scris codul în fereastră.
+            $this->certificat->update([
+                'pin_stare' => 'gata',
+                'pin_verificat_la' => now(),
+            ]);
+
+            return Http::response([
+                'eroare' => 'Apelul către ANAF a eșuat: legătura s-a rupt în timp ce se primea răspunsul'
+                    . ' (SEC_E_CONTEXT_EXPIRED)',
+            ], 502);
+        });
+
+        $this->client()->listaMesaje(1);
+
+        $this->assertSame(2, $apeluri, 'Apelul trebuia încercat din nou, o dată.');
+    }
+
+    /** Se reia o singură dată: la a doua pană, eroarea se spune. */
+    public function test_reluarea_nu_se_face_la_nesfarsit(): void
+    {
+        $apeluri = 0;
+
+        Http::fake(function () use (&$apeluri) {
+            $apeluri++;
+
+            $this->certificat->update(['pin_stare' => 'gata', 'pin_verificat_la' => now()]);
+
+            return Http::response(['eroare' => 'Apelul către ANAF a eșuat'], 502);
+        });
+
+        try {
+            $this->client()->listaMesaje(1);
+            $this->fail('trebuia să se plângă');
+        } catch (SpvException $e) {
+            // Se aștepta.
+        }
+
+        $this->assertSame(2, $apeluri, 'O singură reluare, nu mai multe.');
+    }
+
+    /** Fără o scriere de cod în rastimpul apelului, nu se reia nimic. */
+    public function test_o_pana_obisnuita_nu_se_reia(): void
+    {
+        $apeluri = 0;
+
+        Http::fake(function () use (&$apeluri) {
+            $apeluri++;
+
+            return Http::response(['eroare' => 'Nu se poate ajunge la ANAF'], 502);
+        });
+
+        try {
+            $this->client()->listaMesaje(1);
+            $this->fail('trebuia să se plângă');
+        } catch (SpvException $e) {
+            // Se aștepta.
+        }
+
+        $this->assertSame(1, $apeluri, 'O pană de rețea nu are de ce să fie încercată de două ori.');
+    }
+
     /** Amprenta tokenului nu se pierde pe drum, acum că antetele se fac laolaltă. */
     public function test_amprenta_tokenului_pleaca_mai_departe(): void
     {

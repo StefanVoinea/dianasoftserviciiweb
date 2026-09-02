@@ -230,9 +230,37 @@ class SpvClient
         return $payload;
     }
 
-    private function call(string $path, array $query): Response
+    /**
+     * A scris cineva codul tokenului cat a tinut apelul acesta?
+     *
+     * Se cunoaste dupa clipa insemnata la scriere: daca ea cade in rastimpul
+     * apelului, atunci fereastra s-a deschis in mijlocul lui si abia apoi a fost
+     * dezlegata. Alta pricina n-are cum sa nimereasca tocmai acolo.
+     */
+    private function codulTocmaiSAScris($deCand): bool
+    {
+        $tokenul = $this->certificate ? $this->certificate->activ() : null;
+
+        // Proaspat din baza de date: scrierea s-a facut in alta cerere decat asta.
+        $tokenul = $tokenul ? $tokenul->fresh() : null;
+
+        return $tokenul
+            && $tokenul->pin_stare === 'gata'
+            && $tokenul->pin_verificat_la
+            && $tokenul->pin_verificat_la->gte($deCand);
+    }
+
+    private function call(string $path, array $query, bool $reluat = false): Response
     {
         $this->asteaptaRandul();
+
+        /*
+         * Taiata la secunda: baza de date tine clipa scrierii fara fractiuni,
+         * iar clipa asta le are. Fara taiere, un cod scris in chiar secunda in
+         * care a pornit apelul parea scris inaintea lui, si reluarea nu se mai
+         * facea — tocmai in cazul cel mai des, cand apelul pica repede.
+         */
+        $inceputul = now()->startOfSecond();
 
         $response = $this->transport->get($path, $query);
 
@@ -283,6 +311,23 @@ class SpvClient
                     (string) ($payload['pin_proces'] ?? ''),
                     $this->certificate ? $this->certificate->activ() : null
                 );
+            }
+
+            /*
+             * Apelul a picat, dar intre timp cineva a scris codul tokenului.
+             *
+             * Asa se intampla la cea dintai lucrare de dupa pornirea
+             * calculatorului: cererea pleaca, driverul cere codul in mijlocul
+             * stangerii de mana cu ANAF, iar cat omul il scrie sesiunea
+             * securizata se stinge (SEC_E_CONTEXT_EXPIRED). Apelul pica, desi
+             * tokenul e acum dezlegat si a doua incercare merge.
+             *
+             * Se reia o singura data, si numai cand codul a fost scris chiar in
+             * rastimpul apelului: altfel n-am face decat sa batem de doua ori la
+             * o usa inchisa.
+             */
+            if (!$reluat && $this->codulTocmaiSAScris($inceputul)) {
+                return $this->call($path, $query, true);
             }
 
             if (!empty($payload['eroare'])) {
