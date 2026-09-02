@@ -10,59 +10,6 @@
           body-class="p-2"
         >
           <h6 class="mb-2">
-            Citește token-urile conectate
-          </h6>
-
-          <b-row no-gutters>
-            <b-col
-              cols="7"
-              class="pr-1"
-            >
-              <b-form-input
-                v-model="bridgeNou.bridge_url"
-                size="sm"
-                placeholder="Adresa calculatorului cu token-ul"
-              />
-            </b-col>
-            <b-col cols="5">
-              <b-form-input
-                v-model="bridgeNou.bridge_token"
-                size="sm"
-                placeholder="Cod de acces"
-              />
-            </b-col>
-          </b-row>
-
-          <div class="d-flex align-items-center mt-2">
-            <b-button
-              variant="primary"
-              size="sm"
-              :disabled="sincronizareInCurs"
-              @click="descopera"
-            >
-              <b-spinner
-                v-if="sincronizareInCurs"
-                small
-                class="mr-1"
-              />
-              Citește
-            </b-button>
-            <small class="text-muted ml-2">
-              Gol = calculatorul din configurație. Reapăsați după schimbarea token-ului.
-            </small>
-          </div>
-        </b-card>
-      </b-col>
-
-      <b-col
-        md="6"
-        class="mb-0"
-      >
-        <b-card
-          class="h-100 border mb-0"
-          body-class="p-2"
-        >
-          <h6 class="mb-2">
             Calculator nou cu token?
           </h6>
 
@@ -104,6 +51,103 @@
           </b-button>
         </b-card>
       </b-col>
+
+      <b-col
+        md="6"
+        class="mb-0"
+      >
+        <b-card
+          class="h-100 border mb-0"
+          body-class="p-2"
+        >
+          <div class="d-flex align-items-center mb-1">
+            <feather-icon
+              icon="SmartphoneIcon"
+              size="16"
+              class="mr-50 text-primary"
+            />
+            <h6 class="mb-0">
+              Aplicația de telefon SPV Curier
+            </h6>
+            <b-badge
+              v-if="mobil.exista"
+              variant="light-primary"
+              class="ml-1"
+            >
+              v{{ mobil.versiune }}
+            </b-badge>
+          </div>
+
+          <!-- Aplicatia nu trece prin magazinul Google: se instaleaza din
+               arhiva, iar Android cere o data incuviintarea. Pasii se spun aici,
+               unde omul apasa butonul, nu intr-un manual pe care nu-l deschide
+               nimeni. -->
+          <small class="text-muted d-block mb-1">
+            Numai pentru <strong>Android</strong>; pe iPhone nu se poate instala așa.
+            Trimiteți fișierul pe telefon sau deschideți această pagină de pe el, apoi
+            atingeți arhiva descărcată și încuviințați o singură dată instalarea din
+            afara magazinului. Contul e același ca aici.
+          </small>
+
+          <small class="text-muted d-block mb-2">
+            Telefonul se uită singur, la fiecare pornire, dacă a apărut o versiune mai
+            nouă pe acest server și o oferă spre instalare — nu trebuie să reveniți
+            aici după fiecare îndreptare.
+          </small>
+
+          <b-button
+            variant="outline-primary"
+            size="sm"
+            :disabled="mobilInCurs || !mobil.exista"
+            @click="descarcaAplicatiaDeTelefon"
+          >
+            <b-spinner
+              v-if="mobilInCurs"
+              small
+              class="mr-1"
+            />
+            Descarcă aplicația de telefon
+          </b-button>
+
+          <small
+            v-if="mobil.exista"
+            class="text-muted d-block mt-1"
+          >
+            {{ mobil.marimeCitita }} · pusă pe server la {{ mobil.pusa_la }}
+          </small>
+
+          <small
+            v-else
+            class="text-muted d-block mt-1"
+          >
+            {{ mobil.mesaj || 'Se caută versiunea de pe server…' }}
+          </small>
+
+          <!-- Punerea unei versiuni noi pe server. Arhiva nu poate merge prin
+               git — e mare și se schimbă la fiecare compilare —, iar la
+               desfășurare nimeni nu se atinge de dosarul ei. Fără butonul
+               acesta, o îndreptare ajungea la clienți numai dacă se urca cineva
+               pe server și o copia de mână. -->
+          <div
+            v-if="mobil.poate_incarca"
+            class="mt-1 pt-1 border-top"
+          >
+            <b-form-file
+              v-model="mobilFisier"
+              size="sm"
+              accept=".apk"
+              placeholder="Încarcă o versiune nouă (.apk)"
+              drop-placeholder="Lăsați arhiva aici"
+              :disabled="mobilUrcaInCurs"
+              @input="urcaAplicatiaDeTelefon"
+            />
+            <small class="text-muted d-block mt-25">
+              Numele arhivei poartă versiunea: <code>spv_curier-1.2.3+4.apk</code>.
+              Îl scrie singur <code>publica.ps1</code> din depozitul aplicațiilor de telefon.
+            </small>
+          </div>
+        </b-card>
+      </b-col>
     </b-row>
 
     <b-alert
@@ -138,7 +182,7 @@
         small
         class="mb-0"
         show-empty
-        empty-text="Niciun certificat înregistrat. Apăsați „Citește token-urile conectate”."
+        empty-text="Niciun certificat înregistrat. Instalați kitul pe calculatorul cu tokenul: programul de acolo își spune singur certificatele, la fiecare pornire."
       >
         <template #table-busy>
           <div class="text-center my-2">
@@ -906,7 +950,7 @@ Test-NetConnection app.dianasoft.ro -Port 443</pre>
         <li>a doua comandă trebuie să răspundă <code>401</code> — programul cere codul de acces, deci trăiește;</li>
         <li>rândurile „<em>Serverul nu răspunde: …</em>” poartă cu ele și pricina — port închis, TLS desfăcut de antivirus, sau un răspuns venit de la altcineva de pe drum;</li>
         <li>la kiturile mai vechi, „<em>Serverul nu răspunde; reîncerc peste 5s</em>” apare și când totul merge: dacă printre acele rânduri sunt și rânduri „<em>Comanda …</em>”, legătura e bună;</li>
-        <li>„<em>Serverul nu-mi recunoaște codul de acces</em>” nu e firewall: apăsați „Citește token-urile conectate”.</li>
+        <li>„<em>Serverul nu-mi recunoaște codul de acces</em>” nu e firewall: kitul acela nu e încă legat de niciun certificat. Conectați tokenul pe acel calculator — programul reîncearcă înrolarea din minut în minut, singur.</li>
       </ul>
 
       <p class="small text-muted mb-0">
@@ -934,7 +978,6 @@ export default {
       certificatAles: null,
       eroare: '',
       listaInCurs: false,
-      sincronizareInCurs: false,
       campuri: [
         { key: 'titular', label: 'Titular' },
         { key: 'emitent', label: 'Emitent' },
@@ -951,13 +994,24 @@ export default {
       ],
       info: '',
       kitInCurs: false,
+      /*
+       * Aplicația de telefon pusă pe acest server: ce versiune e și cât ține.
+       * Se cere o dată, la deschiderea filei; fără ea, butonul rămâne stins,
+       * fiindcă n-ar avea ce descărca.
+       */
+      mobil: {
+        exista: false, versiune: '', marimeCitita: '', pusa_la: '', mesaj: '', poate_incarca: false,
+      },
+      mobilInCurs: false,
+      // Arhiva aleasă spre a fi pusă pe server, și urcarea ei
+      mobilFisier: null,
+      mobilUrcaInCurs: false,
       // Certificatul pentru care se trimite acum licența
       licentaInCurs: null,
       // Certificatul care se scoate din uz sau se repune chiar acum
       activareInCurs: null,
       // Ajutorul pentru firewall și antivirus, de pe calculatorul clientului
       ajutorVizibil: false,
-      bridgeNou: { bridge_url: '', bridge_token: '' },
       bridgeVizibil: false,
       bridgeFormular: {},
       foldereVizibil: false,
@@ -1003,8 +1057,101 @@ export default {
       this.certificatActiv = Number(salvat)
     }
     this.incarcaLista()
+    this.aflaVersiuneaDeTelefon()
   },
   methods: {
+    /** Ce versiune a aplicației de telefon stă pe acest server. */
+    aflaVersiuneaDeTelefon() {
+      return this.$http.get('/mobil/spv_curier/versiune')
+        .then(raspuns => {
+          const date = raspuns.data || {}
+
+          this.mobil = {
+            exista: Boolean(date.exista),
+            versiune: date.versiune || '',
+            pusa_la: date.pusa_la || '',
+            mesaj: date.mesaj || '',
+            poate_incarca: Boolean(date.poate_incarca),
+            marimeCitita: this.marimeaCitita(date.marime),
+          }
+        })
+        .catch(() => {
+          this.mobil = {
+            exista: false, versiune: '', marimeCitita: '', pusa_la: '', poate_incarca: false, mesaj: 'Versiunea nu a putut fi aflată.',
+          }
+        })
+    },
+
+    /** Octeții, pe înțelesul omului. */
+    marimeaCitita(octeti) {
+      if (!octeti) return ''
+
+      const mega = octeti / (1024 * 1024)
+
+      return mega >= 1 ? `${mega.toFixed(1)} MB` : `${Math.round(octeti / 1024)} KB`
+    },
+
+    /**
+     * Pune pe server arhiva aleasă.
+     *
+     * Numele ei nu se atinge: el vine de la compilare și poartă versiunea, iar
+     * serverul îl cântărește față de ce are deja. O arhivă cu cod mai mic nu ar
+     * ajunge niciodată pe telefoane, deci e mai bine oprită aici, cu vorbă.
+     */
+    urcaAplicatiaDeTelefon(fisier) {
+      if (!fisier) return
+
+      this.eroare = ''
+      this.info = ''
+      this.mobilUrcaInCurs = true
+
+      const date = new FormData()
+      date.append('arhiva', fisier, fisier.name)
+
+      this.$http.post('/mobil/spv_curier/kit', date, { headers: { 'Content-Type': 'multipart/form-data' } })
+        .then(raspuns => {
+          this.info = raspuns.data.message
+          this.mobilFisier = null
+
+          return this.aflaVersiuneaDeTelefon()
+        })
+        .catch(err => {
+          this.eroare = this.mesajEroare(err, 'Versiunea nu a putut fi pusă pe server')
+          this.mobilFisier = null
+        })
+        .finally(() => {
+          this.mobilUrcaInCurs = false
+        })
+    },
+
+    descarcaAplicatiaDeTelefon() {
+      this.eroare = ''
+      this.info = ''
+      this.mobilInCurs = true
+
+      this.$http.get('/mobil/spv_curier/kit', { responseType: 'blob' })
+        .then(raspuns => {
+          const url = window.URL.createObjectURL(
+            new Blob([raspuns.data], { type: 'application/vnd.android.package-archive' }),
+          )
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `spv_curier-${this.mobil.versiune || 'android'}.apk`
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          setTimeout(() => window.URL.revokeObjectURL(url), 60000)
+
+          this.info = 'Aplicația a fost descărcată. Copiați fișierul pe telefonul cu Android și atingeți-l ca să se instaleze.'
+        })
+        .catch(() => {
+          this.eroare = 'Aplicația de telefon nu a putut fi descărcată.'
+        })
+        .finally(() => {
+          this.mobilInCurs = false
+        })
+    },
+
     /**
      * Ce scrie lângă certificat despre PIN-ul de pe token.
      *
@@ -1109,33 +1256,6 @@ export default {
         })
         .finally(() => {
           this.kitInCurs = false
-        })
-    },
-    descopera() {
-      this.eroare = ''
-      this.info = ''
-      this.sincronizareInCurs = true
-
-      this.$http.post('/anaf-certificate/descopera', this.bridgeNou)
-        .then(raspuns => {
-          const gasite = raspuns.data.data || []
-          const entitati = raspuns.data.entitati || {}
-
-          const parti = [`${gasite.length} certificat(e) înregistrate`]
-          if (entitati.total) parti.push(`${entitati.total} entități înrolate preluate`)
-          this.info = `${parti.join(', ')}.`
-
-          if (entitati.erori && entitati.erori.length) {
-            this.eroare = entitati.erori.join(' | ')
-          }
-
-          this.incarcaLista()
-        })
-        .catch(err => {
-          this.eroare = this.mesajEroare(err, 'Certificatele nu au putut fi citite')
-        })
-        .finally(() => {
-          this.sincronizareInCurs = false
         })
     },
     deschideBridge(certificat) {

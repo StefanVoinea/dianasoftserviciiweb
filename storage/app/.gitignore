@@ -1,3 +1,10 @@
 *
 !public/
 !.gitignore
+
+# Dosarul aplicatiilor de telefon ramane in depozit cu indrumarea lui, dar
+# arhivele insesi nu: ele se pun pe server, nu in cod — sunt mari si se schimba
+# la fiecare compilare.
+!mobil/
+mobil/*
+!mobil/CITESTE.md

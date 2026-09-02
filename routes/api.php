@@ -34,6 +34,17 @@ Route::post('/login','Api\AuthController@login')->name('login')->middleware(['th
 Route::post('/registerAPI','Api\AuthController@register');
 // Reinnoirea tokenului pentru aplicatiile care nu pot pastra datele clientului OAuth (cea mobila)
 Route::post('/refresh','Api\AuthController@refresh')->middleware('throttle:60,1');
+/*
+ * Arhiva unei aplicatii de telefon, pe legatura semnata.
+ *
+ * Nu e pazita de jetonul obisnuit fiindca se deschide in browserul telefonului,
+ * care nu stie nimic despre jetonul aplicatiei. Semnatura tine loc de
+ * legitimatie si tine o jumatate de ceas — cat sa apuce sa se descarce.
+ */
+Route::get('/mobil/{aplicatia}/arhiva', 'Api\ProgrameMobilController@descarca')
+    ->name('mobil.descarca')
+    ->middleware('signed');
+
 Route::get("/efacturaparams", "Api\EfacturaparamsController@index"); 
 Route::post("/gettoken", "Api\EfacturatokensController@gettoken");
 Route::get("/callback", "Api\EfacturatokensController@callback");
@@ -192,6 +203,11 @@ Route::middleware(['auth:api', 'companie.anaf', 'modul:spv'])->group(function ()
     Route::post('/anaf-certificate/sincronizeaza', 'Api\CertificateController@sincronizeaza');
     Route::post('/anaf-certificate/descopera', 'Api\CertificateController@descopera');
     Route::get('/anaf-certificate/kit', 'Api\CertificateController@kit');
+
+    // Aplicatiile de telefon: ce versiune e pe server si arhiva insasi
+    Route::get('/mobil/{aplicatia}/versiune', 'Api\ProgrameMobilController@versiunea');
+    Route::get('/mobil/{aplicatia}/kit', 'Api\ProgrameMobilController@descarcaDinAplicatie');
+    Route::post('/mobil/{aplicatia}/kit', 'Api\ProgrameMobilController@incarca');
     Route::get('/anaf-certificate/{certificat}/foldere', 'Api\CertificateController@foldere');
     Route::get('/anaf-certificate/{certificat}/imprimante', 'Api\CertificateController@imprimante');
     // Reînnoirea licenței programului local, cerută de om, nu așteptând noaptea
