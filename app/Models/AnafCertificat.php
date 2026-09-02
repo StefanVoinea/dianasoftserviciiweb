@@ -25,6 +25,9 @@ class AnafCertificat extends Model
         'pin_verificat_la' => 'datetime',
         // Ultima dată când agentul de la client a întrebat dacă are ceva de lucru
         'agent_vazut_la' => 'datetime',
+        // De când are programul local versiunea pe care o are — nu de când a fost văzut
+        'versiune_la' => 'datetime',
+        'pin_de_la_distanta' => 'boolean',
     ];
 
     public function abonati()

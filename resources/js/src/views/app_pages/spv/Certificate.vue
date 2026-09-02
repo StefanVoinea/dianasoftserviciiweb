@@ -236,6 +236,12 @@
                 />{{ rand.item.versiune_bridge === versiuneProgram
                   ? 'program la zi'
                   : 'program vechi — se înnoiește singur' }}
+                <!-- De când are versiunea aceasta. E prima întrebare când ceva
+                     nu merge: a apucat să ia îndreptarea, sau a rămas în urmă? -->
+                <span
+                  v-if="rand.item.versiune_la"
+                  class="text-muted"
+                > · din {{ rand.item.versiune_la }}</span>
               </div>
 
               <!-- Licența programului local: se reînnoiește singură, dar se

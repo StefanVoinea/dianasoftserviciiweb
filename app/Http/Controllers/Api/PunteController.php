@@ -146,9 +146,22 @@ class PunteController extends Controller
         $acum = app(ActualizareBridge::class)->versiunea();
 
         if ($alLui !== '') {
+            $spusa = mb_substr($alLui, 0, 32);
+
+            /*
+             * Ziua innoirii se scrie numai cand versiunea chiar s-a schimbat.
+             * Pusa la fiecare panda, ea ar fi aratat mereu „acum un minut" si
+             * n-ar fi raspuns la intrebarea pentru care e pusa acolo: a apucat
+             * calculatorul acesta sa ia indreptarea de ieri, sau a ramas in urma?
+             */
             AnafCertificat::query()->toateCompaniile()
                 ->whereIn('id', $certificate->pluck('id'))
-                ->update(['versiune_bridge' => mb_substr($alLui, 0, 32)]);
+                ->where(function ($intrebare) use ($spusa) {
+                    $intrebare->where('versiune_bridge', '!=', $spusa)
+                        ->orWhereNull('versiune_bridge')
+                        ->orWhereNull('versiune_la');
+                })
+                ->update(['versiune_bridge' => $spusa, 'versiune_la' => now()]);
         }
 
         $comanda = $this->punte->urmatoarea($certificate);

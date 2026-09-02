@@ -63,6 +63,8 @@ class CertificateController extends Controller
                     'agent_vazut_la' => Format::dataOra($certificat->agent_vazut_la),
                     'agent_treaz' => app(Punte::class)->agentulEsteTreaz($certificat),
                     'versiune_bridge' => $certificat->versiune_bridge,
+                    // De cand are versiunea pe care o are — nu de cand a fost vazut
+                    'versiune_la' => Format::dataOra($certificat->versiune_la),
                     'implicit' => $certificat->implicit,
                     'valabil_de_la' => Format::dataOra($certificat->valabil_de_la),
                     'valabil_pana_la' => Format::dataOra($certificat->valabil_pana_la),
