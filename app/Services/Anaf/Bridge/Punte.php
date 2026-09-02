@@ -5,7 +5,6 @@ namespace App\Services\Anaf\Bridge;
 use App\Models\AnafCertificat;
 use App\Models\BridgeComanda;
 use App\Support\Aplicatia;
-use App\Support\ContextUtilizator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -231,9 +230,14 @@ class Punte
              * tokenul își cere codul: fereastra o deschide chiar cererea care e
              * atunci în lucru, deci cel care a apăsat butonul e întrebat acolo
              * unde l-a apăsat, nu în toate părțile deodată.
+             *
+             * Se citește din antete, nu din cererea de aici: aici suntem la
+             * capătul celui de-al doilea drum — serverul s-a chemat pe sine —,
+             * iar omul care a apăsat butonul a rămas în celălalt proces. Cine îl
+             * cunoștea l-a scris pe cerere înainte de plecare.
              */
-            'cerut_de' => optional(ContextUtilizator::curent())->id,
-            'cerut_din' => Aplicatia::curenta(),
+            'cerut_de' => ((int) $request->header('X-Omul')) ?: null,
+            'cerut_din' => $request->header(Aplicatia::ANTETUL) ?: Aplicatia::curenta(),
             'antete' => $antete,
             'corp_fisier' => $fisier,
             'stare' => 'asteapta',
@@ -305,7 +309,13 @@ class Punte
      */
     protected function anteteleDeDus(Request $request): array
     {
-        $lasate = ['host', 'content-length', 'connection', 'cookie', 'accept-encoding'];
+        /*
+         * „x-omul" si „x-aplicatia" se opresc aici: ele ne spun noua de unde a
+         * plecat lucrarea, iar programul de pe calculatorul clientului n-are ce
+         * face cu ele. Un numar de utilizator al aplicatiei noastre nu are de ce
+         * sa ajunga pe calculatorul altcuiva.
+         */
+        $lasate = ['host', 'content-length', 'connection', 'cookie', 'accept-encoding', 'x-omul', 'x-aplicatia'];
         $antete = [];
 
         foreach ($request->headers->all() as $nume => $valori) {

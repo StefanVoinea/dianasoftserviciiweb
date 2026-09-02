@@ -8,6 +8,7 @@ use App\Services\Anaf\Spv\PinAsteaptaException;
 use App\Services\Anaf\Spv\SpvException;
 use App\Services\Anaf\Spv\Transport\BridgeTransport;
 use App\Services\Anaf\Spv\SpvClient;
+use App\Support\Aplicatia;
 use App\Support\ContextCompanie;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -190,5 +191,37 @@ class TokenulIsiAsteaptaPinulTest extends TestCase
         }
 
         $this->assertLessThan(3, microtime(true) - $inceput, 'n-avea de ce să aștepte');
+    }
+
+    /**
+     * Orice cerere către programul local spune de unde a plecat lucrarea.
+     *
+     * Prin tunel, cererea mai face un drum — serverul se cheamă pe sine, ca să
+     * pună comanda în coadă —, iar la capătul acela nu mai e nici omul, nici
+     * antetul lui: e alt proces, cu cererea lui. Ce nu pleacă scris de aici se
+     * pierde acolo, iar comanda ajunge în coadă fără stăpân: atunci, când
+     * tokenul își cere codul, el se cere în toate părțile deodată.
+     */
+    public function test_cererea_spune_de_unde_a_plecat(): void
+    {
+        Http::fake(['*' => Http::response(['mesaje' => []], 200)]);
+
+        $this->client()->listaMesaje(1);
+
+        Http::assertSent(function ($cerere) {
+            return $cerere->hasHeader(Aplicatia::ANTETUL, Aplicatia::curenta());
+        });
+    }
+
+    /** Amprenta tokenului nu se pierde pe drum, acum că antetele se fac laolaltă. */
+    public function test_amprenta_tokenului_pleaca_mai_departe(): void
+    {
+        Http::fake(['*' => Http::response(['mesaje' => []], 200)]);
+
+        $this->client()->listaMesaje(1);
+
+        Http::assertSent(function ($cerere) {
+            return $cerere->hasHeader('X-Thumbprint', $this->certificat->thumbprint);
+        });
     }
 }

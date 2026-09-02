@@ -8,6 +8,8 @@ use App\Services\Anaf\Spv\CertificatService;
 use App\Services\Anaf\Spv\Contracts\SpvTransport;
 use App\Services\Anaf\Spv\ProgramLocalVechiException;
 use App\Services\Anaf\Spv\SpvException;
+use App\Support\Aplicatia;
+use App\Support\ContextUtilizator;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
@@ -120,14 +122,43 @@ class BridgeTransport implements SpvTransport
      * scris se afla fara sa se astepte si ultimul. Aici se strang toate si se
      * dau inapoi pe numarul mesajului.
      */
-    public function descarcaLotInArhiva(array $documente, int $pauzaMs): array
+    /**
+     * Antetele purtate de orice cerere catre programul local.
+     *
+     * Aici se scrie si de unde a plecat lucrarea. Prin tunel, cererea mai face
+     * un drum — serverul se cheama pe sine, ca sa puna comanda in coada —, iar
+     * la capatul acela nu mai e nici omul, nici antetul lui: e alt proces, cu
+     * cererea lui. Fara randurile astea, comanda ajungea in coada fara stapan,
+     * iar cand tokenul isi cerea codul el se cerea in toate partile deodata: si
+     * in fila din browser, si pe telefon, desi lucrarea plecase de pe unul
+     * singur dintre ele.
+     *
+     * Pe legatura directa antetele nu strica nimic: programul local trece peste
+     * ce nu cunoaste.
+     */
+    protected function anteteleNoastre(array $bridge, array $peste = array()): array
     {
-        $bridge = $this->certificate->bridge();
-        $antete = ['Content-Type' => 'application/json'];
+        $antete = $peste;
 
         if ($bridge['thumbprint']) {
             $antete['X-Thumbprint'] = $bridge['thumbprint'];
         }
+
+        $antete[Aplicatia::ANTETUL] = Aplicatia::curenta();
+
+        $omul = optional(ContextUtilizator::curent())->id;
+
+        if ($omul) {
+            $antete['X-Omul'] = (string) $omul;
+        }
+
+        return $antete;
+    }
+
+    public function descarcaLotInArhiva(array $documente, int $pauzaMs): array
+    {
+        $bridge = $this->certificate->bridge();
+        $antete = $this->anteteleNoastre($bridge, ['Content-Type' => 'application/json']);
 
         if ($bridge['arhiva']) {
             $antete['X-Arhiva-Cale'] = $bridge['arhiva'];
@@ -190,11 +221,7 @@ class BridgeTransport implements SpvTransport
     {
         $bridge = $this->certificate->bridge();
 
-        $antete = [];
-
-        if ($bridge['thumbprint']) {
-            $antete['X-Thumbprint'] = $bridge['thumbprint'];
-        }
+        $antete = $this->anteteleNoastre($bridge);
 
         // Unde tine clientul arhiva; gol inseamna ce scrie in configurare.env.
         if ($bridge['arhiva']) {
@@ -292,7 +319,7 @@ class BridgeTransport implements SpvTransport
 
         try {
             $raspuns = Http::withToken($bridge['token'])
-                ->withHeaders($bridge['thumbprint'] ? ['X-Thumbprint' => $bridge['thumbprint']] : [])
+                ->withHeaders($this->anteteleNoastre($bridge))
                 ->timeout(60)
                 ->withOptions(['connect_timeout' => self::CONECTARE_SECUNDE])
                 ->post(rtrim($bridge['url'], '/') . '/pin/scrie', ['pin' => $pin]);
@@ -327,7 +354,7 @@ class BridgeTransport implements SpvTransport
 
         try {
             $raspuns = Http::withToken($bridge['token'])
-                ->withHeaders($bridge['thumbprint'] ? ['X-Thumbprint' => $bridge['thumbprint']] : [])
+                ->withHeaders($this->anteteleNoastre($bridge))
                 ->timeout(30)
                 ->withOptions(['connect_timeout' => self::CONECTARE_SECUNDE])
                 ->get(rtrim($bridge['url'], '/') . '/pin/fereastra');
@@ -358,7 +385,7 @@ class BridgeTransport implements SpvTransport
         }
 
         return Http::withToken($bridge['token'])
-            ->withHeaders($bridge['thumbprint'] ? ['X-Thumbprint' => $bridge['thumbprint']] : [])
+            ->withHeaders($this->anteteleNoastre($bridge))
             ->timeout($this->rabdarea())
             /*
              * O adresa la care nu raspunde nimeni nu are de ce sa tina un minut
