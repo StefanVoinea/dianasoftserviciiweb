@@ -13,6 +13,18 @@ class AnafCertificat extends Model
 
     protected $guarded = [];
 
+    /**
+     * Cat tine vestea ca tokenul isi asteapta codul.
+     *
+     * Programul local o repeta din doua in doua minute cat sta fereastra
+     * deschisa, deci cinci e destul cat sa nu se piarda o veste intarziata si
+     * putin cat sa nu se ceara codul pentru o fereastra inchisa de mult.
+     *
+     * Fereastra se poate inchide si fara stirea noastra — omul se duce pana la
+     * calculator si scrie codul acolo — si atunci nimeni nu ne mai spune nimic.
+     */
+    public const PIN_VESTE_MINUTE = 5;
+
     protected $casts = [
         'activ' => 'boolean',
         'valabil_de_la' => 'datetime',

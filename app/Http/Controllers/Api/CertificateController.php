@@ -23,15 +23,6 @@ use Illuminate\Support\Facades\Http;
 
 class CertificateController extends Controller
 {
-    /**
-     * Cat tine vestea ca un token isi asteapta codul.
-     *
-     * Programul local o spune din doua in doua minute cat sta fereastra
-     * deschisa, deci cinci e destul cat sa nu se piarda o veste intarziata si
-     * putin cat sa nu se ceara codul pentru o fereastra inchisa de mult.
-     */
-    protected const PIN_VESTE_MINUTE = 5;
-
     public function index()
     {
         $certificate = AnafCertificat::withCount('societati')
@@ -330,7 +321,7 @@ class CertificateController extends Controller
              * deci o veste mai veche de atat inseamna ca fereastra nu mai e. Fara
              * termenul acesta, o veste de dimineata cerea codul si dupa-amiaza.
              */
-            ->where('pin_verificat_la', '>=', now()->subMinutes(self::PIN_VESTE_MINUTE))
+            ->where('pin_verificat_la', '>=', now()->subMinutes(AnafCertificat::PIN_VESTE_MINUTE))
             ->where(function ($intrebare) use ($omul, $deUnde) {
                 /*
                  * Fiecare e intrebat unde a apasat: cel care a pornit lucrarea

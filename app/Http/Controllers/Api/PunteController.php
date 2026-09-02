@@ -155,26 +155,36 @@ class PunteController extends Controller
         $inLucru = BridgeComanda::query()
             ->whereIn('certificat_id', $certificate->pluck('id'))
             ->where('stare', 'luata')
-            ->pluck('certificat_id')
-            ->unique()
-            ->values();
+            ->get();
 
-        $alese = $inLucru->isNotEmpty() ? $inLucru : $certificate->pluck('id');
+        $alese = $inLucru->isNotEmpty()
+            ? $inLucru->pluck('certificat_id')->unique()->values()
+            : $certificate->pluck('id');
 
-        AnafCertificat::query()->toateCompaniile()
-            ->whereIn('id', $alese)
-            ->update([
-                'pin_stare' => 'asteapta',
-                'pin_motiv' => mb_substr($titlu, 0, 190),
-                'pin_verificat_la' => now(),
-                /*
-                 * Nu se stie cine a pornit lucrarea — agentul duce comenzi ale
-                 * mai multora —, deci se arata oriunde: oricine e prin preajma
-                 * o poate dezlega.
-                 */
-                'pin_cerut_de' => null,
-                'pin_cerut_din' => Aplicatia::FUNDAL,
-            ]);
+        /*
+         * Fiecare token e insemnat cu drumul comenzii lui: cel care a apasat
+         * butonul pe telefon e intrebat pe telefon, nu si intr-o fila din
+         * browser pe care poate n-o are nimeni in fata.
+         *
+         * Cand nu se stie care comanda a cerut cheia — agentul duce comenzi ale
+         * mai multora —, se insemneaza ca lucrare pornita de la sine: aceea se
+         * arata oriunde, fiindca oricine e prin preajma o poate dezlega.
+         */
+        $dupaComanda = $inLucru->keyBy('certificat_id');
+
+        foreach ($alese as $id) {
+            $comanda = $dupaComanda->get($id);
+
+            AnafCertificat::query()->toateCompaniile()
+                ->where('id', $id)
+                ->update([
+                    'pin_stare' => 'asteapta',
+                    'pin_motiv' => mb_substr($titlu, 0, 190),
+                    'pin_verificat_la' => now(),
+                    'pin_cerut_de' => $comanda ? $comanda->cerut_de : null,
+                    'pin_cerut_din' => ($comanda && $comanda->cerut_din) ? $comanda->cerut_din : Aplicatia::FUNDAL,
+                ]);
+        }
 
         Jurnal::scrie(
             'pin_asteptare',

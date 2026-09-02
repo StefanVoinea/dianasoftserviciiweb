@@ -8,6 +8,7 @@ use App\Models\BridgeComanda;
 use App\Services\Anaf\Bridge\Licente;
 use App\Services\Anaf\Bridge\Punte;
 use App\Services\Anaf\Spv\CertificatService;
+use App\Support\Aplicatia;
 use App\Support\ContextCompanie;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -268,6 +269,117 @@ class PunteTunelTest extends TestCase
             $this->certificat->fresh()->pin_stare,
             'Programul local a răspuns, deci nu-l mai ține nicio fereastră.'
         );
+    }
+
+    /**
+     * Cât omul e întrebat de codul tokenului, ceasul așteptării nu curge.
+     *
+     * Altfel lucrarea pica tocmai după ce el scria codul: fereastra se închidea,
+     * cheia se dădea, iar răspunsul sosea la o aplicație care nu mai aștepta. În
+     * lanțul acesta încap zeci de secunde numai până se bagă de seamă că s-a
+     * deschis fereastra, plus cât îi trebuie omului să o vadă și să scrie.
+     */
+    public function test_asteptarea_se_lungeste_cat_tokenul_isi_cere_codul(): void
+    {
+        $this->certificat->update([
+            'pin_stare' => 'asteapta',
+            'pin_verificat_la' => now(),
+        ]);
+
+        $comanda = $this->punte()->pune(
+            $this->certificat,
+            Request::create('/api/punte/1/certificate', 'GET'),
+            '/certificate'
+        );
+
+        $deCand = microtime(true);
+        $rezultat = $this->punte()->asteapta($comanda, 1);
+        $cat = microtime(true) - $deCand;
+
+        $this->assertNull($rezultat, 'Nimeni n-a răspuns; până la urmă tot se încheie.');
+
+        $this->assertGreaterThan(
+            1.8,
+            $cat,
+            'Cu tokenul care își cere codul, o secundă de răbdare trebuie să se dea din nou.'
+        );
+    }
+
+    /** Vestea veche nu mai lungește nimic: fereastra aceea nu mai e. */
+    public function test_vestea_veche_nu_lungeste_asteptarea(): void
+    {
+        $this->certificat->update([
+            'pin_stare' => 'asteapta',
+            'pin_verificat_la' => now()->subHour(),
+        ]);
+
+        $comanda = $this->punte()->pune(
+            $this->certificat,
+            Request::create('/api/punte/1/certificate', 'GET'),
+            '/certificate'
+        );
+
+        $deCand = microtime(true);
+        $this->punte()->asteapta($comanda, 1);
+
+        $this->assertLessThan(1.8, microtime(true) - $deCand);
+    }
+
+    /**
+     * Codul se cere acolo unde s-a apăsat butonul, nu în toate părțile.
+     *
+     * Vestea vine de la agent, care nu știe cine a pornit lucrarea. Drumul se
+     * urmează însă înapoi pe comanda aflată atunci în lucru: ea a cerut cheia,
+     * deci ea a deschis fereastra.
+     */
+    public function test_codul_se_cere_de_unde_a_plecat_comanda(): void
+    {
+        $cerere = Request::create('/api/punte/1/certificate', 'GET');
+        $cerere->headers->set(Aplicatia::ANTETUL, Aplicatia::MOBIL);
+        app()->instance('request', $cerere);
+
+        $comanda = $this->punte()->pune($this->certificat, $cerere, '/certificate');
+        $comanda->update(['stare' => 'luata']);
+
+        $vestea = Request::create('/api/punte/agent/pin-asteapta', 'POST');
+        $vestea->headers->set('Authorization', 'Bearer cod-de-instalare');
+        $vestea->headers->set('X-Pin-Titlu', base64_encode('Token Logon'));
+
+        (new PunteController($this->punte()))->pinAsteapta($vestea);
+
+        $tokenul = $this->certificat->fresh();
+
+        $this->assertSame('asteapta', $tokenul->pin_stare);
+        $this->assertSame(Aplicatia::MOBIL, $tokenul->pin_cerut_din);
+    }
+
+    /**
+     * Fără nicio comandă în lucru, codul se cere oriunde.
+     *
+     * Agentul duce comenzile mai multora, iar fereastra poate rămâne de la o
+     * lucrare pornită de la sine. Atunci e mai bine întrebat oricine e prin
+     * preajmă decât lăsat tokenul să aștepte.
+     */
+    public function test_fara_comanda_in_lucru_codul_se_cere_oriunde(): void
+    {
+        $vestea = Request::create('/api/punte/agent/pin-asteapta', 'POST');
+        $vestea->headers->set('Authorization', 'Bearer cod-de-instalare');
+
+        (new PunteController($this->punte()))->pinAsteapta($vestea);
+
+        $this->assertSame(Aplicatia::FUNDAL, $this->certificat->fresh()->pin_cerut_din);
+    }
+
+    /** Comanda ține minte de unde a plecat, ca acolo să se ceară și codul. */
+    public function test_comanda_tine_minte_de_unde_a_plecat(): void
+    {
+        $cerere = Request::create('/api/punte/1/certificate', 'GET');
+        $cerere->headers->set(Aplicatia::ANTETUL, Aplicatia::MOBIL);
+        app()->instance('request', $cerere);
+
+        $comanda = $this->punte()->pune($this->certificat, $cerere, '/certificate');
+
+        $this->assertSame(Aplicatia::MOBIL, $comanda->cerut_din);
     }
 
     /** Calculatorul închis: aplicația nu așteaptă la nesfârșit. */

@@ -105,12 +105,14 @@ while (true) {
      * de la cu totul altă cerere care se nimerea peste instanța înfundată.
      *
      * Așa că nu mai așteptăm un eșec, ci ne uităm la ceas: o lucrare care ține
-     * de mai bine de un sfert de minut e destul de rar întâlnită cât să merite
-     * o privire pe ecran. Proba nu atinge nimic și nu deschide nicio fereastră,
-     * deci o alarmă falsă nu costă nimic — pe când tăcerea costă ceasuri.
+     * de mai bine de cinci secunde e destul de rar întâlnită cât să merite o
+     * privire pe ecran. Proba nu atinge nimic și nu deschide nicio fereastră,
+     * deci o alarmă falsă nu costă nimic — pe când tăcerea costă ceasuri. Iar
+     * pragul se plătește în așteptarea omului: cât stă el cu fereastra pe ecran
+     * și fără unde să scrie codul, lucrarea lui atârnă.
      */
-    if (agent_lucrari_intarziate($config, 15)) {
-        agent_spune_de_pin($config, 25);
+    if (agent_lucrari_intarziate($config, 5)) {
+        agent_spune_de_pin($config, 10);
     }
 
     /*

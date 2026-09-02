@@ -4,6 +4,8 @@ namespace App\Services\Anaf\Bridge;
 
 use App\Models\AnafCertificat;
 use App\Models\BridgeComanda;
+use App\Support\Aplicatia;
+use App\Support\ContextUtilizator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -18,6 +20,20 @@ class Punte
 {
     /** Cât așteaptă aplicația răspunsul programului local. */
     public const ASTEPTARE_SECUNDE = 120;
+
+    /**
+     * De câte ori se dă răbdarea din nou, cât omul e întrebat de codul tokenului.
+     *
+     * În lanțul acesta încape tot: până se bagă de seamă că s-a deschis
+     * fereastra, până ajunge vestea la aplicație, până omul o vede și scrie
+     * codul, și abia apoi lucrarea de la ANAF, care abia atunci începe. Cu
+     * răbdarea obișnuită, patru runde fac opt minute — peste atât n-ar mai fi
+     * răbdare, ci o filă înțepenită.
+     *
+     * Se socotește în runde, nu într-o sumă de secunde: așa plafonul se ține
+     * după răbdarea cerută de fiecare, nu după cea obișnuită.
+     */
+    public const RUNDE_CU_OM = 4;
 
     /** Cât ține agentul linia deschisă întrebând dacă are ceva de făcut. */
     public const PANDA_SECUNDE = 25;
@@ -210,6 +226,14 @@ class Punte
             'certificat_id' => $certificat->id,
             'metoda' => $request->method(),
             'cale' => $cale . ($intrebare ? '?' . $intrebare : ''),
+            /*
+             * De unde a plecat lucrarea. Se ține minte pentru clipa în care
+             * tokenul își cere codul: fereastra o deschide chiar cererea care e
+             * atunci în lucru, deci cel care a apăsat butonul e întrebat acolo
+             * unde l-a apăsat, nu în toate părțile deodată.
+             */
+            'cerut_de' => optional(ContextUtilizator::curent())->id,
+            'cerut_din' => Aplicatia::curenta(),
             'antete' => $antete,
             'corp_fisier' => $fisier,
             'stare' => 'asteapta',
@@ -297,25 +321,64 @@ class Punte
     public function asteapta(BridgeComanda $comanda, ?int $secunde = null): ?BridgeComanda
     {
         $deCand = microtime(true);
-        $pana = $deCand + ($secunde ?: self::ASTEPTARE_SECUNDE);
+        $rabdarea = $secunde ?: self::ASTEPTARE_SECUNDE;
+        $pana = $deCand + $rabdarea;
 
-        while (microtime(true) < $pana) {
-            $proaspata = $comanda->fresh();
+        // Cu tot cu așteptările după om, nu se trece niciodată peste atât.
+        $capatul = $deCand + $rabdarea * self::RUNDE_CU_OM;
 
-            if ($proaspata === null) {
-                return null;
+        while (true) {
+            while (microtime(true) < $pana) {
+                $proaspata = $comanda->fresh();
+
+                if ($proaspata === null) {
+                    return null;
+                }
+
+                if (in_array($proaspata->stare, ['gata', 'eroare'], true)) {
+                    return $proaspata;
+                }
+
+                usleep(self::pasul($deCand));
             }
 
-            if (in_array($proaspata->stare, ['gata', 'eroare'], true)) {
-                return $proaspata;
+            /*
+             * Răbdarea s-a împlinit. Înainte de a spune că programul local n-a
+             * răspuns, ne uităm de ce tace: dacă tokenul lui își așteaptă codul,
+             * atunci nu el întârzie, ci noi îl ținem — omul e chiar atunci
+             * întrebat, în filă sau pe telefon.
+             *
+             * Ceasul n-are de ce să curgă cât e cineva întrebat. Fără rândul
+             * acesta, lucrarea pica tocmai după ce omul scria codul: fereastra
+             * se închidea, cheia se dădea, iar răspunsul sosea la o aplicație
+             * care nu mai aștepta.
+             */
+            if (microtime(true) >= $capatul || !$this->tokenulIsiAsteaptaCodul($comanda)) {
+                break;
             }
 
-            usleep(self::pasul($deCand));
+            $pana = min($capatul, microtime(true) + $rabdarea);
         }
 
         $comanda->curata();
 
         return null;
+    }
+
+    /**
+     * Tokenul comenzii își așteaptă chiar acum codul?
+     *
+     * Se cere veste proaspătă: cât fereastra stă deschisă, programul local o tot
+     * spune. O însemnare veche înseamnă că fereastra nu mai e — și atunci tăcerea
+     * programului are altă pricină, pe care n-o mai răbdăm.
+     */
+    protected function tokenulIsiAsteaptaCodul(BridgeComanda $comanda): bool
+    {
+        return AnafCertificat::query()->toateCompaniile()
+            ->where('id', $comanda->certificat_id)
+            ->where('pin_stare', 'asteapta')
+            ->where('pin_verificat_la', '>=', now()->subMinutes(AnafCertificat::PIN_VESTE_MINUTE))
+            ->exists();
     }
 
     /**
