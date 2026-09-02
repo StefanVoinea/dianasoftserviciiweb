@@ -43,7 +43,36 @@ $Programe = @(
     'dkck', 'CardOS', 'SecureStoreCSP'
 )
 
-$Vorbe = 'PIN|Token|Smart ?Card|Autentificare|Authentication|Log ?[Oo]n|Introduce|Enter'
+<#
+    Ce scrie pe fereastra unei cereri de PIN — cuvant cu cuvant ca in
+    pin-fereastra.ps1. Cele doua trebuie sa inteleaga acelasi lucru prin
+    „fereastra de PIN": cat aici era mai larg decat acolo, scrisul cantarea
+    ferestre pe care sonda nici nu le vedea.
+#>
+$Vorbe = 'PIN|Token Logon|Token Password|Parola token|Smart ?Card|Autentificare|Authentication|Log ?[Oo]n|Introduce[tț]i'
+
+<#
+    Ferestrele mari de aplicatie, care nu sunt niciodata cereri de PIN.
+
+    Aici lipsa lor era primejdioasa, nu doar suparatoare: un terminal SSH sau un
+    browser cu „Authentication" in titlu intra in socoteala, iar dintre ele se
+    alegea una in care sa se scrie codul.
+#>
+$Straine = @(
+    'Chrome_WidgetWin_*', 'MozillaWindowClass', 'CabinetWClass',
+    'ApplicationFrameWindow', 'Windows.UI.Core.*', 'Shell_TrayWnd',
+    'Progman', 'WorkerW', 'ConsoleWindowClass', 'CASCADIA_HOSTING_WINDOW_CLASS'
+)
+
+function EStraina($clasa) {
+    foreach ($tipar in $Straine) {
+        if ($clasa -like $tipar) {
+            return $true
+        }
+    }
+
+    return $false
+}
 
 function Uneltele {
     if (-not ('DianaSoft.Scrie' -as [type])) {
@@ -55,6 +84,9 @@ public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam)
 public static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
 public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+[DllImport("user32.dll")]
+public static extern bool IsWindow(IntPtr hWnd);
 
 [DllImport("user32.dll")]
 public static extern bool IsWindowVisible(IntPtr hWnd);
@@ -129,7 +161,7 @@ function Ferestrele {
 
         $alNostru = $Programe -contains $proces
 
-        if ($alNostru -or ((EDialog $clasa) -and $titlu -match $Vorbe)) {
+        if ($alNostru -or ((EDialog $clasa) -and ($titlu -match $Vorbe) -and -not (EStraina $clasa))) {
             [void]$gasite.Add([ordered]@{
                 fereastra = $fereastra
                 titlu     = $titlu
@@ -185,19 +217,28 @@ function Copiii($parinte) {
     return $gasiti
 }
 
-<# Mai sta deschisa vreuna dintre ferestrele de PIN? Se asteapta putin. #>
-function SeInchide($rabdareMs) {
+<#
+    S-a inchis fereastra in care am scris? Se asteapta putin.
+
+    Se intreaba de ea anume, nu de toate ferestrele de PIN. Programul local e
+    pornit in mai multe instante, iar cand doua dintre ele cer cheia deodata se
+    deschid doua ferestre — una pentru fiecare. Cat se astepta sa nu mai fie
+    niciuna, codul primit cum trebuie era dat drept nereusit: a doua fereastra,
+    a altei instante, tinea raspunsul in loc. Iar omul vedea „fereastra a ramas
+    deschisa" desi tokenul isi tinea deja minte codul.
+#>
+function SeInchide($fereastra, $rabdareMs) {
     $pana = (Get-Date).AddMilliseconds($rabdareMs)
 
     while ((Get-Date) -lt $pana) {
-        if ((Ferestrele).Count -eq 0) {
+        if (-not [DianaSoft.Scrie]::IsWindow($fereastra) -or -not [DianaSoft.Scrie]::IsWindowVisible($fereastra)) {
             return $true
         }
 
         Start-Sleep -Milliseconds 250
     }
 
-    return (Ferestrele).Count -eq 0
+    return $false
 }
 
 try {
@@ -246,6 +287,25 @@ try {
     if (-not $caseta) {
         # Fara stilul acela, orice caseta de scris care e pornita.
         $caseta = @($copiii | Where-Object { $_.clasa -imatch $eCaseta -and $_.pornit })[0]
+    }
+
+    <#
+        Oprelistea care nu tine de titluri.
+
+        Titlurile se pot nimeri: „Authentication" scrie si pe ferestre care n-au
+        nicio treaba cu tokenul. Dar o cerere de PIN are intotdeauna o caseta
+        care ascunde ce se scrie in ea — sau, daca n-are nici casete pe care sa
+        le vedem, e a unui program de token cunoscut pe nume.
+
+        Fara niciuna dintre cele doua, codul nu pleaca nicaieri. Mai bine spunem
+        ca n-am stiut unde sa-l scriem decat sa-l scriem intr-un terminal.
+    #>
+    $ascunsa = $caseta -and (($caseta.stil -band 0x20) -ne 0)
+
+    if (-not $ascunsa -and -not $cea.sigura) {
+        $motivul = 'fereastra găsită nu are casetă de cod ascunsă și nu e a unui program de token cunoscut; codul nu a fost trimis nicăieri'
+
+        Raspunde ([ordered]@{ scris = $false; motiv = $motivul })
     }
 
     $peUndeAMers = ''
@@ -342,8 +402,22 @@ try {
         Se asteapta cateva secunde, nu o clipa: dupa ce primeste codul, programul
         tokenului deschide cheia — si abia apoi isi inchide fereastra.
     #>
-    if (SeInchide 5000) {
-        Raspunde ([ordered]@{ scris = $true; motiv = '' })
+    if (SeInchide $cea.fereastra 5000) {
+        <#
+            Cate au mai ramas. Ele sunt ale celorlalte instante si cer acelasi
+            cod; de cele mai multe ori se inchid singure, fiindca tokenul il tine
+            minte odata dat. Se spune numarul lor, ca omul sa nu se mire daca mai
+            e intrebat o data.
+        #>
+        $ramase = (Ferestrele).Count
+
+        $vorba = ''
+
+        if ($ramase -gt 0) {
+            $vorba = 'a mai rămas deschisă o fereastră de PIN (' + $ramase + '), a altei lucrări'
+        }
+
+        Raspunde ([ordered]@{ scris = $true; motiv = $vorba; altele = $ramase })
     }
 
     <#
