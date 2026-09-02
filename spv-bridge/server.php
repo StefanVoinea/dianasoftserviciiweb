@@ -18,6 +18,9 @@
  * Rute:
  *   GET  /spv/<cale>      — proxy REST SPV (listaMesaje, descarcare, cerere)
  *   GET  /spv-arhiva      — aduce documentul din SPV direct în arhiva de aici
+ *   POST /spv-arhiva-lot  — aceleași documente, cerute toate deodată (NDJSON)
+ *   GET  /pin/fereastra   — stă deschisă acum o fereastră de PIN pe acest calculator?
+ *   POST /pin/scrie       — scrie codul în fereastra deschisă și apasă OK
  *   POST /decl/login      — handshake autentificare decl.anaf.mfinante.gov.ro
  *   POST /decl/upload     — depunere PDF semnat (multipart linkdoc)
  *   POST /semnare         — semnează PDF-ul din corpul cererii (PowerShell+iTextSharp)
@@ -487,6 +490,49 @@ function versiunea_curl(array $rezultat)
     return $stiut;
 }
 
+/**
+ * Sta deschisa pe ecran o fereastra de PIN?
+ *
+ * Cand legatura cu ANAF cade, pricina cea mai deasa nu e reteaua: e fereastra
+ * de PIN a tokenului, deschisa aici si asteptand pe cineva care nu se uita
+ * incoace. Din aplicatie asta arata la fel cu un server picat, iar omul cauta
+ * vina in retea.
+ *
+ * Proba nu atinge nimic si nu deschide nimic: numai se uita ce ferestre sunt.
+ * De aceea se poate chema dupa fiecare pana, fara grija.
+ *
+ * @return array{deschisa: bool, titlu: string, proces: string}
+ */
+function fereastra_de_pin()
+{
+    $script = __DIR__ . DIRECTORY_SEPARATOR . 'pin-fereastra.ps1';
+
+    if (!is_file($script)) {
+        return array('deschisa' => false, 'titlu' => '', 'proces' => '');
+    }
+
+    $argumente = array(
+        'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+        '-File', escapeshellarg($script),
+        '2>&1',
+    );
+
+    // Rabdare scurta: e o numaratoare de ferestre, nu o lucrare.
+    $rulat = exec_marginit(implode(' ', $argumente), 15);
+
+    $json = json_decode($rulat['iesire'], true);
+
+    if (!is_array($json) || !isset($json['deschisa'])) {
+        return array('deschisa' => false, 'titlu' => '', 'proces' => '');
+    }
+
+    return array(
+        'deschisa' => (bool) $json['deschisa'],
+        'titlu' => isset($json['titlu']) ? (string) $json['titlu'] : '',
+        'proces' => isset($json['proces']) ? (string) $json['proces'] : '',
+    );
+}
+
 function semnele_legaturii(array $rezultat)
 {
     $bucati = array();
@@ -662,6 +708,69 @@ function executa_curl(array $config, $url, array $optiuni = array())
  *
  * @return array{iesire: string, cod: int, oprit: bool}
  */
+/**
+ * Ruleaza o comanda dandu-i ceva pe intrarea standard.
+ *
+ * Se foloseste pentru PIN: pus in linia de comanda, el s-ar vedea in lista de
+ * procese a calculatorului — orice program care se uita acolo l-ar citi. Asa,
+ * trece printr-o teava care nu lasa urma nicaieri.
+ */
+function exec_cu_intrare($comanda, $secunde, $intrare)
+{
+    $descriptori = array(0 => array('pipe', 'r'), 1 => array('pipe', 'w'), 2 => array('pipe', 'w'));
+    $tevi = array();
+
+    $proces = @proc_open($comanda, $descriptori, $tevi);
+
+    if (!is_resource($proces)) {
+        return array('iesire' => '', 'cod' => -1, 'oprit' => false);
+    }
+
+    @fwrite($tevi[0], $intrare . PHP_EOL);
+    @fclose($tevi[0]);
+    unset($tevi[0]);
+
+    foreach ($tevi as $teava) {
+        stream_set_blocking($teava, false);
+    }
+
+    $iesire = '';
+    $pana = microtime(true) + $secunde;
+    $oprit = false;
+
+    while (true) {
+        $stare = proc_get_status($proces);
+
+        foreach ($tevi as $teava) {
+            $bucata = stream_get_contents($teava);
+
+            if ($bucata !== false) {
+                $iesire .= $bucata;
+            }
+        }
+
+        if (!$stare['running']) {
+            break;
+        }
+
+        if (microtime(true) >= $pana) {
+            proc_terminate($proces);
+            $oprit = true;
+            break;
+        }
+
+        usleep(100000);
+    }
+
+    foreach ($tevi as $teava) {
+        @fclose($teava);
+    }
+
+    $cod = proc_close($proces);
+
+    return array('iesire' => $iesire, 'cod' => $oprit ? -1 : $cod, 'oprit' => $oprit);
+}
+
 function exec_marginit($comanda, $secunde)
 {
     $descriptori = array(1 => array('pipe', 'w'), 2 => array('pipe', 'w'));
@@ -1300,47 +1409,66 @@ if ($metoda === 'GET' && preg_match('#^/spv/([A-Za-z0-9_\-/.]+)$#', $calea, $pot
         trimite_fisier($rezultat['status'], $rezultat['content_type'], $rezultat['fisier_corp']);
     }
 
+    /*
+     * Inainte de a da vina pe retea, se vede daca nu cumva tokenul isi asteapta
+     * PIN-ul: fereastra lui, deschisa aici, opreste apelul la fel de bine ca un
+     * server picat, dar se dezleaga cu totul altfel.
+     */
+    $fereastra = fereastra_de_pin();
+
     raspunde_json(502, array(
         'eroare'  => 'Apelul către ANAF a eșuat: ' . talcul_curl($rezultat['cod_iesire'], isset($rezultat['cheia']) ? $rezultat['cheia'] : 'necunoscut')
             . ' [curl ' . $rezultat['cod_iesire'] . ']' . semnele_legaturii($rezultat),
         'detalii' => $rezultat['iesire'],
+        'pin_asteapta' => $fereastra['deschisa'],
+        'pin_fereastra' => $fereastra['titlu'],
+        'pin_proces' => $fereastra['proces'],
     ));
 }
 
-/*
- * GET /spv-arhiva?id=...&firma=...&dosar=...&nume=... — aduce documentul din
- * SPV și îl scrie de-a dreptul în arhiva de pe calculatorul acesta.
+/**
+ * Aduce un document din SPV și îl scrie de-a dreptul în arhiva de aici.
  *
- * Până acum documentul făcea un ocol fără rost: venea de la ANAF aici, urca la
- * aplicație și se întorcea ca să fie scris tot aici. Acum nu mai pleacă nicăieri
- * — aplicația primește doar calea sub care l-a găsit și, la cerere, textul din
- * el, atât cât să știe ce scrie ANAF în recipisă sau în vectorul fiscal.
+ * Documentul nu mai pleacă nicăieri: aplicația primește doar calea sub care a
+ * fost pus și, la cerere, textul din el — atât cât să știe ce scrie ANAF în
+ * recipisă sau în vectorul fiscal.
  *
  * „nume" vine fără extensie: abia răspunsul ANAF spune dacă e pdf sau zip.
+ *
+ * Nu răspunde el însuși: întoarce ce a ieșit, ca să poată fi folosit și pentru
+ * un document singur, și pentru o transă întreagă.
+ *
+ * @return array cu „stare" și, după caz, „cale" sau „eroare"
  */
-if ($metoda === 'GET' && $calea === '/spv-arhiva') {
-    $id = isset($_GET['id']) ? trim($_GET['id']) : '';
-    $firma = arhiva_bucata(isset($_GET['firma']) ? $_GET['firma'] : '');
-    $nume = arhiva_bucata(isset($_GET['nume']) ? $_GET['nume'] : '');
+function spv_arhiveaza_unul($config, $radacina, $cerinta)
+{
+    $id = isset($cerinta['id']) ? trim($cerinta['id']) : '';
+    $firma = arhiva_bucata(isset($cerinta['firma']) ? $cerinta['firma'] : '');
+    $nume = arhiva_bucata(isset($cerinta['nume']) ? $cerinta['nume'] : '');
 
     if (!preg_match('/^[A-Za-z0-9_\-]{1,60}$/', $id)) {
-        raspunde_json(400, array('eroare' => 'Lipsește numărul mesajului de descărcat.'));
+        return array('stare' => 400, 'eroare' => 'Lipsește numărul mesajului de descărcat.');
     }
 
     if ($firma === '' || $nume === '') {
-        raspunde_json(400, array('eroare' => 'Lipsește firma sau numele documentului.'));
+        return array('stare' => 400, 'eroare' => 'Lipsește firma sau numele documentului.');
     }
-
-    $radacina = arhiva_radacina_pregatita($config);
 
     $rezultat = spv_cere($config, rtrim($config['base_url'], '/') . '/descarcare?id=' . rawurlencode($id));
 
     if ($rezultat['status'] < 100) {
-        raspunde_json(502, array(
+        // Inainte de a da vina pe retea: nu cumva tokenul isi asteapta PIN-ul?
+        $fereastra = fereastra_de_pin();
+
+        return array(
+            'stare' => 502,
             'eroare'  => 'Apelul către ANAF a eșuat: ' . talcul_curl($rezultat['cod_iesire'], isset($rezultat['cheia']) ? $rezultat['cheia'] : 'necunoscut')
-            . ' [curl ' . $rezultat['cod_iesire'] . ']' . semnele_legaturii($rezultat),
+                . ' [curl ' . $rezultat['cod_iesire'] . ']' . semnele_legaturii($rezultat),
             'detalii' => $rezultat['iesire'],
-        ));
+            'pin_asteapta' => $fereastra['deschisa'],
+            'pin_fereastra' => $fereastra['titlu'],
+            'pin_proces' => $fereastra['proces'],
+        );
     }
 
     /*
@@ -1354,33 +1482,35 @@ if ($metoda === 'GET' && $calea === '/spv-arhiva') {
         $primit = json_decode((string) @file_get_contents($rezultat['fisier_corp']), true);
         @unlink($rezultat['fisier_corp']);
 
-        raspunde_json(502, array(
+        return array(
+            'stare' => 502,
             'eroare' => isset($primit['eroare']) ? $primit['eroare'] : 'Descărcarea documentului a eșuat.',
             'detalii' => mb_substr($inceput, 0, 300),
-        ));
+        );
     }
 
     if ($rezultat['status'] !== 200) {
         @unlink($rezultat['fisier_corp']);
 
-        raspunde_json(502, array(
+        return array(
+            'stare' => 502,
             'eroare' => 'ANAF a răspuns cu ' . $rezultat['status'] . ' la descărcarea documentului.',
             'detalii' => mb_substr($inceput, 0, 300),
-        ));
+        );
     }
 
     $extensie = strpos(strtolower($rezultat['content_type']), 'zip') !== false ? 'zip' : 'pdf';
 
-    $dosarul = arhiva_cale_ceruta($radacina, $firma . '/' . (isset($_GET['dosar']) ? $_GET['dosar'] : ''));
+    $dosarul = arhiva_cale_ceruta($radacina, $firma . '/' . (isset($cerinta['dosar']) ? $cerinta['dosar'] : ''));
 
     if (!is_dir($dosarul) && !@mkdir($dosarul, 0777, true)) {
         @unlink($rezultat['fisier_corp']);
 
-        raspunde_json(500, array('eroare' => 'Dosarul nu poate fi creat.', 'detalii' => $dosarul));
+        return array('stare' => 500, 'eroare' => 'Dosarul nu poate fi creat.', 'detalii' => $dosarul);
     }
 
-    $inlocuieste = isset($_GET['inlocuieste'])
-        ? arhiva_cale_ceruta($radacina, $_GET['inlocuieste'])
+    $inlocuieste = isset($cerinta['inlocuieste']) && $cerinta['inlocuieste'] !== ''
+        ? arhiva_cale_ceruta($radacina, $cerinta['inlocuieste'])
         : '';
 
     $destinatie = arhiva_destinatie($dosarul, $nume . '.' . $extensie, $inlocuieste);
@@ -1393,13 +1523,14 @@ if ($metoda === 'GET' && $calea === '/spv-arhiva') {
         if (!@copy($rezultat['fisier_corp'], $destinatie)) {
             @unlink($rezultat['fisier_corp']);
 
-            raspunde_json(500, array('eroare' => 'Documentul nu a putut fi scris.', 'detalii' => $destinatie));
+            return array('stare' => 500, 'eroare' => 'Documentul nu a putut fi scris.', 'detalii' => $destinatie);
         }
 
         @unlink($rezultat['fisier_corp']);
     }
 
-    $raspuns = array(
+    $iesit = array(
+        'stare' => 200,
         'cale' => arhiva_relativa($radacina, $destinatie),
         'cale_completa' => $destinatie,
         'extensie' => $extensie,
@@ -1407,15 +1538,84 @@ if ($metoda === 'GET' && $calea === '/spv-arhiva') {
         'hash' => sha1_file($destinatie),
     );
 
-    if (!empty($_GET['text']) && $extensie === 'pdf') {
+    if (!empty($cerinta['text']) && $extensie === 'pdf') {
         $text = pdf_text(__DIR__, $destinatie);
 
         if ($text !== null) {
-            $raspuns['text'] = $text;
+            $iesit['text'] = $text;
         }
     }
 
-    raspunde_json(200, $raspuns);
+    return $iesit;
+}
+
+/*
+ * POST /spv-arhiva-lot — aceleași documente, dar cerute toate deodată.
+ *
+ * Corpul e JSON: {"documente":[{...}], "pauza_ms":1200}. Răspunsul curge, câte
+ * un obiect JSON pe rând, pe măsură ce fiecare document e scris în arhivă — așa
+ * aplicația vede unde s-a ajuns fără să mai bată drumul până aici pentru
+ * fiecare document în parte.
+ *
+ * Pauza cerută de ANAF se ține aici, unde e și apelul. Se socotește de la
+ * plecarea apelului dinainte, nu de la întoarcerea lui: altfel s-ar aștepta de
+ * două ori — o dată răspunsul, și o dată pauza pusă peste el.
+ */
+if ($metoda === 'POST' && $calea === '/spv-arhiva-lot') {
+    $primita = json_decode(file_get_contents('php://input'), true);
+    $documente = isset($primita['documente']) && is_array($primita['documente']) ? $primita['documente'] : array();
+
+    if ($documente === array()) {
+        raspunde_json(400, array('eroare' => 'Lotul nu cuprinde niciun document.'));
+    }
+
+    $pauza = isset($primita['pauza_ms']) ? (int) $primita['pauza_ms'] : 1200;
+    $radacina = arhiva_radacina_pregatita($config);
+
+    header('Content-Type: application/x-ndjson; charset=utf-8');
+    header('Cache-Control: no-cache, no-store');
+    header('X-Accel-Buffering: no');
+
+    while (ob_get_level() > 0) {
+        ob_end_flush();
+    }
+
+    $ultimul = 0.0;
+
+    foreach ($documente as $cerinta) {
+        if ($pauza > 0 && $ultimul > 0) {
+            $trecut = (int) ((microtime(true) - $ultimul) * 1000000);
+
+            if ($trecut < $pauza * 1000) {
+                usleep($pauza * 1000 - $trecut);
+            }
+        }
+
+        $ultimul = microtime(true);
+
+        $iesit = spv_arhiveaza_unul($config, $radacina, $cerinta);
+        $iesit['id'] = isset($cerinta['id']) ? $cerinta['id'] : '';
+
+        echo json_encode($iesit, JSON_UNESCAPED_UNICODE) . PHP_EOL;
+        flush();
+    }
+
+    exit;
+}
+
+/*
+ * GET /spv-arhiva?id=...&firma=...&dosar=...&nume=... — un singur document.
+ *
+ * Rămâne pentru aplicațiile care nu cer încă transe, și pentru documentul cerut
+ * singur: o recipisă abia sosită n-are cu cine să facă transă.
+ */
+if ($metoda === 'GET' && $calea === '/spv-arhiva') {
+    $iesit = spv_arhiveaza_unul($config, arhiva_radacina_pregatita($config), $_GET);
+
+    $stare = $iesit['stare'];
+    unset($iesit['stare']);
+
+    raspunde_json($stare, $iesit);
 }
 
 /*
@@ -1471,6 +1671,78 @@ if ($metoda === 'GET' && ($calea === '/certificat' || $calea === '/certificate')
  * si omul il scrie atunci, cand nu asteapta nimic dupa el. Proba e deci si
  * declansatorul — nu se poate afla fara sa se forteze.
  */
+/*
+ * GET /pin/fereastra — sta deschisa acum o fereastra de PIN?
+ *
+ * Se cheama dupa o pana, si apoi din cand in cand: aplicatia asteapta sa se
+ * inchida fereastra — adica omul sa fi scris PIN-ul — si reia singura apelul
+ * care a cazut, fara sa mai fie nevoie de o apasare.
+ *
+ * PIN-ul nu trece pe aici. El se scrie in fereastra lui, de omul care tine
+ * tokenul; aici se afla doar daca fereastra mai e pe ecran.
+ */
+/*
+ * POST /pin/scrie — scrie codul in fereastra care il asteapta si apasa OK.
+ *
+ * Codul vine in corpul cererii, nu in adresa: adresele ajung in jurnalele
+ * serverelor de web, iar acolo n-are ce cauta un PIN. De aici mai departe el
+ * merge pe intrarea standard a scriptului — nici in linia de comanda, unde
+ * l-ar vedea orice program care se uita in lista de procese.
+ *
+ * Nu se scrie nicaieri pe disc, nu intra in niciun jurnal si nu se intoarce
+ * inapoi — nici macar in mesajul de eroare. Se foloseste o data si se uita.
+ *
+ * Merge numai cand fereastra e deja deschisa: aici nu se forteaza nimic, ci se
+ * raspunde la o cerere pe care a facut-o tokenul singur.
+ */
+if ($metoda === 'POST' && $calea === '/pin/scrie') {
+    cere_amprenta($config);
+
+    $primita = json_decode(file_get_contents('php://input'), true);
+    $pin = isset($primita['pin']) ? (string) $primita['pin'] : '';
+
+    if ($pin === '') {
+        raspunde_json(400, array('scris' => false, 'motiv' => 'Nu a venit niciun cod.'));
+    }
+
+    $script = __DIR__ . DIRECTORY_SEPARATOR . 'pin-scrie.ps1';
+
+    if (!is_file($script)) {
+        raspunde_json(501, array('scris' => false, 'motiv' => 'Programul local nu cunoaște scrierea PIN-ului.'));
+    }
+
+    $argumente = array(
+        'powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass',
+        '-File', escapeshellarg($script),
+    );
+
+    $rulat = exec_cu_intrare(implode(' ', $argumente), 45, $pin);
+
+    // Codul nu mai are ce cauta in memorie de aici incolo.
+    $pin = null;
+    unset($primita);
+
+    $json = json_decode($rulat['iesire'], true);
+
+    if (!is_array($json) || !isset($json['scris'])) {
+        raspunde_json(500, array(
+            'scris' => false,
+            'motiv' => 'Scrierea PIN-ului nu a putut fi făcută.',
+        ));
+    }
+
+    raspunde_json(200, array(
+        'scris' => (bool) $json['scris'],
+        'motiv' => isset($json['motiv']) ? (string) $json['motiv'] : '',
+    ));
+}
+
+if ($metoda === 'GET' && $calea === '/pin/fereastra') {
+    cere_amprenta($config);
+
+    raspunde_json(200, fereastra_de_pin());
+}
+
 if ($metoda === 'GET' && $calea === '/pin') {
     cere_amprenta($config);
 

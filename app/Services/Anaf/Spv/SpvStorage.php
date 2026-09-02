@@ -206,6 +206,140 @@ class SpvStorage
     }
 
     /**
+     * Aduce documentele mai multor mesaje, cerute programului local in transe.
+     *
+     * Fiecare document insemna un drum intreg pana la calculatorul clientului:
+     * comanda dusa, raspunsul adus inapoi. La cincizeci de documente, cincizeci
+     * de drumuri pentru o lucrare care e, de fapt, una singura.
+     *
+     * Transele se fac numai cand toate documentele sunt de pe acelasi token.
+     * Cu mai multe, aducerea document cu document e chiar mai iute: pauza
+     * ceruta de ANAF se tine pe fiecare certificat in parte, deci cat asteapta
+     * unul, celalalt lucreaza — iar transele, care se cer una dupa alta, ar
+     * pierde tocmai suprapunerea asta.
+     *
+     * @param  array<int, SpvMesaj>  $mesaje
+     * @param  int  $cate  cate documente incap intr-o transa
+     *
+     * @return \Generator  cate un pas pentru fiecare mesaj
+     */
+    public function aduceLotul(array $mesaje, int $cate = 10): \Generator
+    {
+        $peTokene = [];
+
+        foreach ($mesaje as $mesaj) {
+            $peTokene[(string) ($mesaj->certificat_id ?: 0)][] = $mesaj;
+        }
+
+        $vrednicDeTransa = count($peTokene) === 1
+            && count($mesaje) > 1
+            && $this->arhiva
+            && $this->arhiva->activa()
+            && $this->client;
+
+        if (!$vrednicDeTransa) {
+            yield from $this->aduceUnulCateUnul($mesaje);
+
+            return;
+        }
+
+        foreach (array_chunk($mesaje, max(1, $cate)) as $transa) {
+            try {
+                yield from $this->aduceTransa($transa);
+            } catch (ProgramLocalVechiException $e) {
+                /*
+                 * Program local mai vechi, care nu stie de transe: restul
+                 * lucrarii se face pe drumul dinainte, fara sa se piarda nimic.
+                 */
+                yield from $this->aduceUnulCateUnul($transa);
+            }
+        }
+    }
+
+    /** Drumul dinainte: cate un document, cate un drum. */
+    protected function aduceUnulCateUnul(array $mesaje): \Generator
+    {
+        foreach ($mesaje as $mesaj) {
+            try {
+                $this->aduce($mesaj);
+
+                yield ['mesaj' => $mesaj, 'reusit' => true, 'eroare' => null];
+            } catch (SpvException $e) {
+                $this->insemneazaEsecul($mesaj, $e->getMessage());
+
+                yield ['mesaj' => $mesaj, 'reusit' => false, 'eroare' => $e->getMessage()];
+            }
+        }
+    }
+
+    /** O transa: o singura cerere pentru toate documentele din ea. */
+    protected function aduceTransa(array $mesaje): \Generator
+    {
+        $this->folosesteCertificatulMesajului($mesaje[0]);
+
+        $cerinte = [];
+        $peNumar = [];
+
+        foreach ($mesaje as $mesaj) {
+            $destinatie = $this->destinatiaMesajului($mesaj);
+
+            // Dosarele scrise cat timp denumirea firmei nu era stiuta se string
+            // la un loc inainte de a se scrie in ele.
+            $this->arhiva->uneste($mesaj->cif, $destinatie['firma']);
+
+            $cerinte[] = $destinatie + ['id' => $mesaj->mesaj_id];
+            $peNumar[(string) $mesaj->mesaj_id] = $mesaj;
+        }
+
+        $iesite = $this->client->descarcaLotInArhiva($cerinte);
+
+        foreach ($mesaje as $mesaj) {
+            $iesit = $iesite[(string) $mesaj->mesaj_id] ?? null;
+
+            if ($iesit === null) {
+                $pricina = 'Programul local n-a spus nimic despre documentul acesta.';
+
+                $this->insemneazaEsecul($mesaj, $pricina);
+
+                yield ['mesaj' => $mesaj, 'reusit' => false, 'eroare' => $pricina];
+
+                continue;
+            }
+
+            if (($iesit['stare'] ?? 500) !== 200 || empty($iesit['cale'])) {
+                $pricina = trim(($iesit['eroare'] ?? 'Documentul nu a putut fi adus.')
+                    . ' ' . ($iesit['detalii'] ?? ''));
+
+                $this->insemneazaEsecul($mesaj, $pricina);
+
+                yield ['mesaj' => $mesaj, 'reusit' => false, 'eroare' => $pricina];
+
+                continue;
+            }
+
+            $mesaj->update([
+                'arhiva_cale' => $iesit['cale'],
+                'hash_fisier' => ($iesit['hash'] ?? '') ?: $mesaj->hash_fisier,
+                'descarcat_la' => now(),
+                'ultima_eroare' => null,
+            ]);
+
+            $this->copiazaLangaDeclaratie($mesaj, $iesit['cale']);
+
+            yield ['mesaj' => $mesaj, 'reusit' => true, 'eroare' => null];
+        }
+    }
+
+    /** Esecul se scrie pe mesaj: dupa atatea incercari, el nu se mai cere. */
+    protected function insemneazaEsecul(SpvMesaj $mesaj, string $pricina): void
+    {
+        $mesaj->update([
+            'incercari' => $mesaj->incercari + 1,
+            'ultima_eroare' => $pricina,
+        ]);
+    }
+
+    /**
      * Recipisa primeste o copie si langa declaratia la care raspunde.
      *
      * Copia se face intre doua dosare de pe calculatorul clientului: documentul

@@ -950,9 +950,115 @@ class DeclaratiiController extends Controller
             return $this->faraDreptul('depuneți declarații');
         }
 
+        $iesit = $this->depuneUna($declaratie, $depunere);
+
+        if ($iesit['stare'] === 'ok') {
+            return response()->json(['success' => true, 'data' => $this->prezinta($declaratie->fresh())]);
+        }
+
+        return response()->json(
+            ['success' => false, 'message' => $iesit['mesaj']],
+            $iesit['stare'] === 'respins' ? 422 : 500
+        );
+    }
+
+    /**
+     * Depune mai multe declaratii dintr-o singura cerere, spunand pe drum a cata
+     * e din cate.
+     *
+     * Pana acum fila trimitea cate o cerere de fiecare declaratie: la patruzeci
+     * de declaratii, patruzeci de porniri de aplicatie, patruzeci de
+     * autentificari ale cererii si tot atatea cautari ale declaratiei in baza —
+     * toate pentru o lucrare care e, de fapt, una singura.
+     *
+     * Ordinea ceruta se pastreaza: omul a ales-o uitandu-se la tabel.
+     */
+    public function depuneFlux(Request $request, DepunereService $depunere)
+    {
+        if (!ContextUtilizator::poateDepune()) {
+            return $this->faraDreptul('depuneți declarații');
+        }
+
+        $date = $request->validate([
+            'id' => 'required|array|min:1',
+            'id.*' => 'integer',
+        ]);
+
+        $declaratii = AnafDeclaratie::whereIn('id', $date['id'])
+            ->get()
+            ->sortBy(function (AnafDeclaratie $declaratie) use ($date) {
+                return array_search($declaratie->id, $date['id'], true);
+            })
+            ->values();
+
+        return Flux::raspunde(function () use ($declaratii, $depunere) {
+            yield from $this->pasiiDepunerii($declaratii, $depunere);
+        });
+    }
+
+    /**
+     * Depunerea lotului, spusa pas cu pas.
+     *
+     * Sta aparte de raspunsul care curge fiindca acela isi goleste toate
+     * tampoanele ca sa ajunga randurile pe fir de indata — si atunci nu se mai
+     * poate citi nimic din el, nici macar in probe. Asa, lucrarea se poate
+     * urmari si de acolo, rand cu rand.
+     *
+     * @param  iterable<AnafDeclaratie>  $declaratii
+     * @return \Generator
+     */
+    public function pasiiDepunerii(iterable $declaratii, DepunereService $depunere): \Generator
+    {
+        $total = is_countable($declaratii) ? count($declaratii) : iterator_count($declaratii);
+
+        yield ['tip' => 'inceput', 'total' => $total];
+
+        $depuse = 0;
+        $erori = [];
+        $facute = 0;
+
+        foreach ($declaratii as $declaratie) {
+            // Fiecare depunere isi cere ragazul ei, socotit de la capat.
+            ragaz(120);
+
+            $iesit = $this->depuneUna($declaratie, $depunere);
+            $facute++;
+
+            if ($iesit['stare'] === 'ok') {
+                $depuse++;
+            } else {
+                $erori[] = trim($declaratie->tip . ' ' . $declaratie->cui) . ': ' . $iesit['mesaj'];
+            }
+
+            yield [
+                'tip' => 'pas',
+                'facute' => $facute,
+                'total' => $total,
+                'reusit' => $iesit['stare'] === 'ok',
+                'ce' => trim($declaratie->tip . ' ' . $declaratie->cui),
+                'de_ce' => $iesit['mesaj'],
+            ];
+        }
+
+        yield [
+            'tip' => 'gata',
+            'depuse' => $depuse,
+            'total' => $total,
+            'erori' => $erori,
+        ];
+    }
+
+    /**
+     * Depune o declaratie si spune ce a iesit.
+     *
+     * @return array{stare: string, mesaj: ?string}  „ok", „respins" (de ANAF)
+     *                                               sau „esuat" (n-a ajuns acolo)
+     */
+    protected function depuneUna(AnafDeclaratie $declaratie, DepunereService $depunere): array
+    {
         // Documentul semnat poate sta pe server sau doar in arhiva clientului.
         if (!$declaratie->cale_pdf_semnat && !$declaratie->arhiva_semnat) {
-            return response()->json(['success' => false, 'message' => 'Declarația nu este semnată.'], 422);
+            return ['stare' => 'respins', 'mesaj' => 'Declarația nu este semnată.'];
         }
 
         $this->folosesteCertificatulEntitatii($declaratie);
@@ -968,7 +1074,7 @@ class DeclaratiiController extends Controller
                 $declaratie->cui
             );
 
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return ['stare' => 'esuat', 'mesaj' => $e->getMessage()];
         }
 
         if ($rezultat['index_recipisa'] === null) {
@@ -984,7 +1090,7 @@ class DeclaratiiController extends Controller
                 $declaratie->cui
             );
 
-            return response()->json(['success' => false, 'message' => $rezultat['eroare']], 422);
+            return ['stare' => 'respins', 'mesaj' => $rezultat['eroare']];
         }
 
         $declaratie->update([
@@ -1012,7 +1118,7 @@ class DeclaratiiController extends Controller
             $declaratie->cui
         );
 
-        return response()->json(['success' => true, 'data' => $this->prezinta($declaratie)]);
+        return ['stare' => 'ok', 'mesaj' => null];
     }
 
     /** Verifica recipisele pentru toate declaratiile depuse care asteapta raspuns. */

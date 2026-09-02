@@ -25,6 +25,10 @@
         Nu aveți drepturi pentru nicio operațiune din acest modul.
       </div>
     </b-card>
+
+    <!-- Cererea PIN-ului pentru tokenul care il asteapta. Sta aici, langa
+         toate filele modulului: lucrarea se poate opri in oricare dintre ele. -->
+    <cereri-de-pin />
   </div>
 </template>
 
@@ -36,6 +40,7 @@ import SolicitariTab from './spv/Solicitari.vue'
 import CertificateTab from './spv/Certificate.vue'
 import JurnalTab from './spv/Jurnal.vue'
 import UtilizatoriTab from './spv/Utilizatori.vue'
+import CereriDePin from './spv/CereriDePin.vue'
 
 /*
  * Drepturile pe operațiuni sunt dezactivate: accesul ține doar de societatea
@@ -70,7 +75,14 @@ const TABURI = [
 export default {
   name: 'Spv',
   components: {
-    SocietatiTab, DeclaratiiTab, MesajeTab, SolicitariTab, CertificateTab, JurnalTab, UtilizatoriTab,
+    SocietatiTab,
+    DeclaratiiTab,
+    MesajeTab,
+    SolicitariTab,
+    CertificateTab,
+    JurnalTab,
+    UtilizatoriTab,
+    CereriDePin,
   },
   data() {
     return {

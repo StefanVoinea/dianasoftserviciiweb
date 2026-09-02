@@ -2130,10 +2130,59 @@ export default {
     },
 
     /** Trimiterea propriu-zisă: una câte una, un eșec nu le oprește pe următoarele. */
+    /**
+     * Trimite declarațiile la ANAF dintr-o singură cerere.
+     *
+     * Pe rând, fiecare declarație însemna o cerere a ei: patruzeci de porniri
+     * ale aplicației și tot atâtea autentificări, pentru o lucrare care e una
+     * singură. Serverul le ia acum pe toate și spune pe drum a câta e din câte,
+     * iar mesajul de sub buton se face din ce spune el.
+     *
+     * Browserele fără fetch cu flux rămân pe calea dinainte: ea merge oriunde.
+     */
     trimiteLaAnaf(declaratii) {
       this.eroare = ''
       this.depunereInCurs = true
 
+      if (!areFlux()) {
+        return this.trimiteLaAnafPeRand(declaratii)
+      }
+
+      const esuate = []
+      let depuse = 0
+
+      return citesteFluxul('/declaratii/depune/flux', pas => {
+        if (pas.tip === 'pas') {
+          this.depunereMesaj = `${pas.ce} (${pas.facute} din ${pas.total})`
+        }
+
+        if (pas.tip === 'gata') {
+          depuse = pas.depuse
+          esuate.push(...(pas.erori || []))
+        }
+      }, { corp: { id: declaratii.map(declaratie => declaratie.id) } })
+        .catch(err => {
+          this.eroare = `Depunerea nu s-a putut face: ${err.message || err}`
+        })
+        .then(() => {
+          if (esuate.length) {
+            this.eroare = `Nu s-au putut depune: ${esuate.join(' | ')}`
+          }
+
+          if (!this.eroare || esuate.length) {
+            this.notifica(
+              `${depuse} din ${declaratii.length} depuse`,
+              esuate.length ? 'warning' : 'success',
+            )
+          }
+
+          this.depunereInCurs = false
+          this.depunereMesaj = ''
+          this.incarcaLista()
+        })
+    },
+    /** Calea dinainte: câte o cerere de fiecare declarație. */
+    trimiteLaAnafPeRand(declaratii) {
       const esuate = []
 
       const urmatoarea = i => {

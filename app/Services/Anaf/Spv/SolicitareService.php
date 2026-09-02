@@ -6,6 +6,7 @@ use App\Models\AlertaMesajSpv;
 use App\Models\AnafSocietate;
 use App\Models\SpvSolicitare;
 use App\Models\VectorFiscal;
+use App\Support\PeRand;
 use App\Services\Anaf\Arhiva\ArhivaService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -25,6 +26,17 @@ class SolicitareService
 
     /** Arhiva de pe calculatorul clientului; lipseste doar in teste. */
     protected $arhiva;
+
+    /**
+     * Denumirile aflate pe durata cererii de acum.
+     *
+     * „Cere datele lipsa" trimite sute de solicitari, iar aceleasi firme se
+     * repeta intre ele: cautata de fiecare data, denumirea insemna doua
+     * interogari la fiecare cerere trimisa.
+     *
+     * @var array<string, ?string>
+     */
+    protected $denumiri = [];
 
     public function __construct(
         SpvClient $client,
@@ -46,8 +58,7 @@ class SolicitareService
 
         return SpvSolicitare::create([
             'cif' => $cui,
-            'den_firma' => optional(AnafSocietate::where('cif', $cui)->first())->denumire
-                ?: optional(VectorFiscal::where('cui', $cui)->first())->denumire,
+            'den_firma' => $this->denumirea($cui),
             'tip_document' => $tipDocument,
             'an' => $optiuni['an'] ?? null,
             'luna' => $optiuni['luna'] ?? null,
@@ -171,6 +182,17 @@ class SolicitareService
      *
      * @return array{verificate: int, preluate: int, ramase: int, erori: array}
      */
+    /** Denumirea firmei, cautata o singura data pe cerere. */
+    protected function denumirea(string $cui): ?string
+    {
+        if (array_key_exists($cui, $this->denumiri)) {
+            return $this->denumiri[$cui];
+        }
+
+        return $this->denumiri[$cui] = optional(AnafSocietate::where('cif', $cui)->first())->denumire
+            ?: optional(VectorFiscal::where('cui', $cui)->first())->denumire;
+    }
+
     public function preiaRaspunsuri(int $zile = 60, ?int $limita = null): array
     {
         $solicitari = SpvSolicitare::inAsteptare()->get();
@@ -282,6 +304,12 @@ class SolicitareService
                 $deAdus[] = [$solicitare, $mesaj];
             }
         }
+
+        // Raspunsurile se iau pe rand de la fiecare token: pauza ceruta de ANAF
+        // e a fiecarui certificat, deci cat asteapta unul, celalalt lucreaza.
+        $deAdus = PeRand::intercalat($deAdus, function (array $pereche) {
+            return $pereche[0]->certificat_id ?: 0;
+        });
 
         $total = count($deAdus);
 

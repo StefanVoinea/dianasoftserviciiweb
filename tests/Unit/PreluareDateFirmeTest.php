@@ -2,8 +2,10 @@
 
 namespace Tests\Unit;
 
+use App\Models\AnafCertificat;
 use App\Models\AnafSocietate;
 use App\Models\SpvSolicitare;
+use App\Services\Anaf\Spv\CertificatService;
 use App\Services\Anaf\Spv\SocietatiService;
 use App\Services\Anaf\Spv\SolicitareService;
 use App\Services\Anaf\Spv\SpvClient;
@@ -28,14 +30,13 @@ class PreluareDateFirmeTest extends TestCase
         ContextUtilizator::faraLimitare(function () {
             AnafSocietate::query()->toateCompaniile()->where('company_id', self::COMPANIE)->delete();
             SpvSolicitare::query()->toateCompaniile()->where('company_id', self::COMPANIE)->delete();
+            AnafCertificat::query()->toateCompaniile()->where('company_id', self::COMPANIE)->delete();
         });
 
         ContextCompanie::elibereaza();
 
         parent::tearDown();
-    }
-
-    /** Cu lista de CIF-uri data, se lucreaza doar pe firmele acelea. */
+    }    /** Cu lista de CIF-uri data, se lucreaza doar pe firmele acelea. */
     public function test_solicitarile_pleaca_doar_pentru_firmele_din_transa(): void
     {
         ContextCompanie::pentru(self::COMPANIE, function () {
@@ -202,5 +203,56 @@ class PreluareDateFirmeTest extends TestCase
                 'S-au numărat încercările, nu izbânzile: lotul trebuia să se oprească după două.'
             );
         });
+    }
+
+    /**
+     * Cererea pleaca cu certificatul pe care e inrolata firma.
+     *
+     * Cu altul, SPV o refuza — si refuzul costa tot un apel din cele numarate
+     * de ANAF. La un client cu doua tokene, jumatate din cereri se pierdeau asa.
+     */
+    public function test_cererea_pleaca_cu_certificatul_firmei(): void
+    {
+        ContextCompanie::pentru(self::COMPANIE, function () {
+            $unul = $this->certificat('TOKENUL DINTÂI');
+            $altul = $this->certificat('TOKENUL AL DOILEA');
+
+            AnafSocietate::create(['cif' => 'FIRMA-A', 'tip' => 'pj', 'activ' => true, 'certificat_id' => $unul->id]);
+            AnafSocietate::create(['cif' => 'FIRMA-B', 'tip' => 'pj', 'activ' => true, 'certificat_id' => $altul->id]);
+
+            $certificate = $this->app->make(CertificatService::class);
+            $cuCine = [];
+
+            $this->mock(SolicitareService::class, function ($mock) use (&$cuCine, $certificate) {
+                $mock->shouldReceive('citesteDenumirileDinIdentificare')
+                    ->andReturn(['citite' => 0, 'denumiri' => 0, 'cu_document' => []]);
+                $mock->shouldReceive('solicita')->andReturnUsing(function ($cif) use (&$cuCine, $certificate) {
+                    $cuCine[$cif] = optional($certificate->activ())->cn;
+
+                    return new SpvSolicitare();
+                });
+            });
+
+            $this->app->make(SocietatiService::class)->solicitaDocumente(
+                ['DATE IDENTIFICARE'],
+                null,
+                ['FIRMA-A', 'FIRMA-B'],
+                false
+            );
+
+            $this->assertSame('TOKENUL DINTÂI', $cuCine['FIRMA-A']);
+            $this->assertSame('TOKENUL AL DOILEA', $cuCine['FIRMA-B']);
+        });
+    }
+
+    protected function certificat(string $cn): AnafCertificat
+    {
+        return AnafCertificat::create([
+            'company_id' => self::COMPANIE,
+            'thumbprint' => strtoupper(bin2hex(random_bytes(20))),
+            'cn' => $cn,
+            'activ' => true,
+            'valabil_pana_la' => now()->addYear(),
+        ]);
     }
 }

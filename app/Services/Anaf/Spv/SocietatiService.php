@@ -4,6 +4,8 @@ namespace App\Services\Anaf\Spv;
 
 use App\Models\AnafCertificat;
 use App\Models\AnafSocietate;
+use App\Support\ContextCompanie;
+use App\Support\PeRand;
 use App\Models\SpvSolicitare;
 
 /**
@@ -65,7 +67,6 @@ class SocietatiService
         }
 
         $cifuri = array_values(array_unique(array_filter(array_map('trim', explode(',', $lista)))));
-        $noi = 0;
 
         /*
          * Certificatul care a returnat lista devine cel asociat entitatilor.
@@ -85,25 +86,7 @@ class SocietatiService
                 'cnp' => $raspuns['cnp'] ?? null,
             ]);
 
-        foreach ($cifuri as $cif) {
-            $societate = AnafSocietate::firstOrNew(['cif' => $cif]);
-            $noi += $societate->exists ? 0 : 1;
-
-            /*
-             * „activ" e cuvantul ANAF-ului, si numai al lui. Scoaterea din uz,
-             * hotarata de om, sta in alta coloana si nu se atinge aici — altfel
-             * prima sincronizare i-ar sterge alegerea, iar entitatea ar invia
-             * singura, ca certificatele dezactivate odinioara.
-             */
-            $societate->fill([
-                'tip' => AnafSocietate::tipDupaCif($cif),
-                'activ' => true,
-                'cnp_reprezentant' => $raspuns['cnp'] ?? null,
-                'serial_certificat' => $raspuns['serial'] ?? null,
-                'certificat_id' => $certificat->id,
-                'sincronizat_la' => now(),
-            ])->save();
-        }
+        $noi = $this->scrieCifurile($cifuri, $certificat, $raspuns);
 
         // Entitatile la care ACEST certificat nu mai are drepturi raman in evidenta,
         // dar devin inactive. Cele ale altor certificate nu sunt atinse.
@@ -120,6 +103,75 @@ class SocietatiService
             'dezactivate' => $dezactivate,
             'cif' => $cifuri,
         ];
+    }
+
+    /**
+     * Scrie lista de CIF-uri primita de la ANAF si spune cate erau noi.
+     *
+     * Rand cu rand, asta insemna doua interogari de fiecare firma — la un
+     * client cu doua sute cincizeci de entitati, cinci sute de drumuri la baza
+     * de date pentru o lista care se scrie la fel peste tot. Aici se afla intai
+     * ce exista, apoi cele vechi se schimba din doua interogari (una de fiecare
+     * fel de firma) si cele noi se scriu dintr-una singura.
+     *
+     * „activ" e cuvantul ANAF-ului, si numai al lui. Scoaterea din uz, hotarata
+     * de om, sta in alta coloana si nu se atinge aici — altfel prima
+     * sincronizare i-ar sterge alegerea, iar entitatea ar invia singura, ca
+     * certificatele dezactivate odinioara.
+     *
+     * @param  array<int, string>  $cifuri
+     */
+    protected function scrieCifurile(array $cifuri, AnafCertificat $certificat, array $raspuns): int
+    {
+        if ($cifuri === []) {
+            return 0;
+        }
+
+        $deAcum = [
+            'activ' => true,
+            'cnp_reprezentant' => $raspuns['cnp'] ?? null,
+            'serial_certificat' => $raspuns['serial'] ?? null,
+            'certificat_id' => $certificat->id,
+            'sincronizat_la' => now(),
+        ];
+
+        $stiute = AnafSocietate::whereIn('cif', $cifuri)->pluck('cif')->all();
+        $peFeluri = [];
+
+        foreach ($stiute as $cif) {
+            $peFeluri[AnafSocietate::tipDupaCif($cif)][] = $cif;
+        }
+
+        // Firmele stiute: cate o interogare de fiecare fel, nu de fiecare firma.
+        foreach ($peFeluri as $fel => $aleLui) {
+            AnafSocietate::whereIn('cif', $aleLui)->update($deAcum + ['tip' => $fel]);
+        }
+
+        $noi = array_values(array_diff($cifuri, $stiute));
+
+        if ($noi === []) {
+            return 0;
+        }
+
+        /*
+         * Cele noi se scriu dintr-o data. Se trece si company_id, fiindca
+         * scrierea in bloc nu mai chema modelul care il pune singur — iar fara
+         * el entitatile ar ramane ale nimanui.
+         */
+        $acum = now();
+        $companie = ContextCompanie::curenta();
+
+        AnafSocietate::insert(array_map(function (string $cif) use ($deAcum, $acum, $companie) {
+            return $deAcum + [
+                'cif' => $cif,
+                'tip' => AnafSocietate::tipDupaCif($cif),
+                'company_id' => $companie,
+                'created_at' => $acum,
+                'updated_at' => $acum,
+            ];
+        }, $noi));
+
+        return count($noi);
     }
 
     /**
@@ -213,6 +265,19 @@ class SocietatiService
             ->orderBy('cif')
             ->get();
 
+        /*
+         * Firmele se iau pe rand de la fiecare token, nu toate ale unuia si
+         * apoi toate ale celuilalt: pauza ceruta de ANAF se tine pe fiecare
+         * certificat, deci cat asteapta unul, celalalt poate lucra.
+         */
+        $firme = PeRand::intercalat($firme, function (AnafSocietate $societate) {
+            return $societate->certificat_id ?: 0;
+        });
+
+        // Cererile in curs, aflate dintr-o singura interogare: pe rand, ele
+        // insemnau o intrebare de fiecare firma si de fiecare fel de document.
+        $inCurs = $this->cererileInCurs($firme, $tipuri);
+
         foreach ($firme as $societate) {
             // ANAF accepta aceste rapoarte doar pentru persoane juridice.
             if ($societate->tip === 'pf') {
@@ -236,10 +301,19 @@ class SocietatiService
                     continue;
                 }
 
-                if ($this->existaSolicitareInCurs($societate->cif, $tip)) {
+                if (isset($inCurs[$societate->cif . '|' . $tip])) {
                     $sarite++;
                     continue;
                 }
+
+                /*
+                 * Cererea pleaca cu certificatul pe care e inrolata firma. Cu
+                 * altul, SPV o refuza — si refuzul costa tot un apel din cele
+                 * numarate de ANAF.
+                 */
+                $this->certificate->folosesteDupaId(
+                    $societate->certificat_id ? (int) $societate->certificat_id : null
+                );
 
                 try {
                     $this->solicitari->solicita($societate->cif, $tip, [], $userId);
@@ -275,16 +349,45 @@ class SocietatiService
         return $cand !== null;
     }
 
-    /** O cerere trimisa azi si inca fara raspuns nu se repeta. */
-    protected function existaSolicitareInCurs(string $cif, string $tip): bool
+    /**
+     * Cererile trimise si inca fara raspuns, pentru firmele si felurile acestea.
+     *
+     * O cerere trimisa azi, sau una care isi asteapta inca raspunsul, nu se
+     * repeta. Intrebarea se punea pe rand pentru fiecare firma si fiecare fel
+     * de document — la doua sute cincizeci de firme, cinci sute de drumuri la
+     * baza de date inainte de orice apel catre ANAF.
+     *
+     * @param  iterable<AnafSocietate>  $firme
+     * @param  array<int, string>  $tipuri
+     * @return array<string, true>  cheia e „cif|tip"
+     */
+    protected function cererileInCurs(iterable $firme, array $tipuri): array
     {
-        return SpvSolicitare::where('cif', $cif)
-            ->where('tip_document', $tip)
+        $cifuri = [];
+
+        foreach ($firme as $societate) {
+            $cifuri[] = $societate->cif;
+        }
+
+        if ($cifuri === [] || $tipuri === []) {
+            return [];
+        }
+
+        $randuri = SpvSolicitare::whereIn('cif', $cifuri)
+            ->whereIn('tip_document', $tipuri)
             ->where(function ($query) {
                 $query->whereNull('data_afisare')
                     ->orWhere('data_solicitarii', '>=', now()->startOfDay());
             })
-            ->exists();
+            ->get(['cif', 'tip_document']);
+
+        $inCurs = [];
+
+        foreach ($randuri as $rand) {
+            $inCurs[$rand->cif . '|' . $rand->tip_document] = true;
+        }
+
+        return $inCurs;
     }
 
     /** Denumirile cunoscute, pentru afisarea mesajelor si solicitarilor SPV. */

@@ -3,30 +3,60 @@
 namespace App\Services\Anaf\Spv;
 
 use App\Services\Anaf\Spv\Contracts\SpvTransport;
+use App\Support\Aplicatia;
+use App\Support\ContextUtilizator;
 use Illuminate\Http\Client\Response;
 
 class SpvClient
 {
     protected $transport;
     protected $config;
+    protected $certificate;
 
-    /** Cand a plecat spre ANAF apelul dinainte (microtime). */
-    protected $ultimulApel = 0.0;
+    /**
+     * Cand a plecat spre ANAF apelul dinainte, pe fiecare certificat (microtime).
+     *
+     * @var array<string, float>
+     */
+    protected $ultimulApel = [];
 
-    public function __construct(SpvTransport $transport, array $config)
+    public function __construct(SpvTransport $transport, array $config, ?CertificatService $certificate = null)
     {
         $this->transport = $transport;
         $this->config = $config;
+        $this->certificate = $certificate;
     }
 
     /**
-     * Pauza ceruta de ANAF intre doua apeluri.
+     * Certificatul pe care se tine socoteala pauzei.
+     *
+     * ANAF numara apelurile pe certificatul care le face, deci si pauza e a
+     * lui. Cand nu se stie cu care se lucreaza — configuratie fara evidenta de
+     * certificate —, toate apelurile impart aceeasi socoteala, ca pana acum.
+     */
+    protected function cheiaRandului(): string
+    {
+        if (!($this->config['throttle_pe_certificat'] ?? true)) {
+            return 'toate';
+        }
+
+        $id = $this->certificate ? $this->certificate->idCurent() : null;
+
+        return $id === null ? 'toate' : (string) $id;
+    }
+
+    /**
+     * Pauza ceruta de ANAF intre doua apeluri, tinuta pe fiecare certificat.
      *
      * Se socoteste de la plecarea apelului dinainte, nu de la intoarcerea lui.
      * Asa ANAF primeste tot cel mult un apel la ragazul cerut, dar noi nu mai
      * asteptam de doua ori: un lot de mesaje aduse prin tunel are fiecare apel
      * de cateva secunde, iar pauza intreaga se adauga peste ele degeaba. La o
      * suta de mesaje, asta insemna doua minute de asteptare fara rost.
+     *
+     * Socoteala e pe certificat fiindca si a ANAF-ului e tot asa: doua tokene
+     * ale aceluiasi client n-au nicio treaba unul cu altul. Tinuta pe toate
+     * laolalta, ea incetinea de doua ori un client cu doua tokene, degeaba.
      */
     protected function asteaptaRandul(): void
     {
@@ -36,13 +66,15 @@ class SpvClient
             return;
         }
 
-        $trecut = (int) ((microtime(true) - $this->ultimulApel) * 1000000);
+        $cheia = $this->cheiaRandului();
+        $atunci = $this->ultimulApel[$cheia] ?? 0.0;
+        $trecut = (int) ((microtime(true) - $atunci) * 1000000);
 
-        if ($this->ultimulApel > 0 && $trecut < $ragaz) {
+        if ($atunci > 0 && $trecut < $ragaz) {
             usleep($ragaz - $trecut);
         }
 
-        $this->ultimulApel = microtime(true);
+        $this->ultimulApel[$cheia] = microtime(true);
     }
 
     public function listaMesaje(int $zile = 60, ?string $cif = null): array
@@ -130,6 +162,55 @@ class SpvClient
         return $this->transport->descarcaInArhiva($id, $destinatie);
     }
 
+    /**
+     * Aceleasi documente, cerute programului local toate deodata.
+     *
+     * Pauza dintre apeluri o tine acum el, unde e si apelul; aici se tine minte
+     * doar ca s-a lucrat, ca urmatorul apel obisnuit sa nu plece prea devreme.
+     *
+     * @param  array<int, array>  $documente
+     * @return array<string, array>
+     */
+    public function descarcaLotInArhiva(array $documente): array
+    {
+        $this->asteaptaRandul();
+
+        $iesite = $this->transport->descarcaLotInArhiva($documente, (int) $this->config['throttle_ms']);
+
+        // Ultimul apel al lotului a plecat de la programul local, nu de aici:
+        // socoteala se pune la zi ca sa nu se calce peste pauza lui.
+        $this->ultimulApel[$this->cheiaRandului()] = microtime(true);
+
+        return $iesite;
+    }
+
+    /**
+     * Ce i se spune omului cand tokenul isi asteapta PIN-ul.
+     *
+     * Se numeste tokenul, fiindca un contabil are des doua si trebuie sa stie
+     * la care sa se duca; si se spune unde e fereastra — pe calculatorul
+     * clientului, nu aici.
+     */
+    protected function vorbaPinului(array $payload): string
+    {
+        $tokenul = $this->certificate ? optional($this->certificate->activ())->cn : null;
+
+        $vorba = $tokenul
+            ? 'Tokenul „' . $tokenul . '" își așteaptă PIN-ul'
+            : 'Tokenul își așteaptă PIN-ul';
+
+        $vorba .= ' pe calculatorul clientului';
+
+        $fereastra = trim((string) ($payload['pin_fereastra'] ?? ''));
+
+        if ($fereastra !== '') {
+            $vorba .= ' („' . $fereastra . '")';
+        }
+
+        return $vorba . '. Scrieți-l acolo, apoi încercați din nou —'
+            . ' codul nu se poate trimite de aici.';
+    }
+
     private function json(string $path, array $query): array
     {
         $response = $this->call($path, $query);
@@ -163,6 +244,46 @@ class SpvClient
              * caută zadarnic vinovăția în certificat.
              */
             $payload = json_decode($response->body(), true);
+
+            /*
+             * Tokenul isi asteapta PIN-ul, iar omul n-a apucat sa-l scrie.
+             *
+             * Se spune deosebit fiindca se dezleaga cu totul altfel decat o
+             * pana de retea: nu are ce mai incerca serverul, ci trebuie ca
+             * cineva sa se duca la calculatorul acela — sau sa intre pe el de
+             * la distanta — si sa scrie codul. Spus ca „apelul a esuat", omul
+             * cauta zadarnic vina in legatura.
+             */
+            if (!empty($payload['pin_asteapta'])) {
+                /*
+                 * Se insemneaza pe token ca isi asteapta codul, si de unde a
+                 * plecat lucrarea: cine a apasat butonul pe telefon trebuie
+                 * intrebat pe telefon, nu intr-o fila din browser pe care poate
+                 * n-o are nimeni in fata.
+                 *
+                 * Lucrarile pornite de la sine — dosarul urmarit, sarcina de
+                 * noapte — n-au pe nimeni in spate: acelea se arata oriunde,
+                 * fiindca oricine e prin preajma le poate dezlega.
+                 */
+                $tokenul = $this->certificate ? $this->certificate->activ() : null;
+
+                if ($tokenul) {
+                    $tokenul->update([
+                        'pin_stare' => 'asteapta',
+                        'pin_motiv' => trim((string) ($payload['pin_fereastra'] ?? '')),
+                        'pin_verificat_la' => now(),
+                        'pin_cerut_de' => optional(ContextUtilizator::curent())->id,
+                        'pin_cerut_din' => Aplicatia::curenta(),
+                    ]);
+                }
+
+                throw new PinAsteaptaException(
+                    $this->vorbaPinului($payload),
+                    (string) ($payload['pin_fereastra'] ?? ''),
+                    (string) ($payload['pin_proces'] ?? ''),
+                    $this->certificate ? $this->certificate->activ() : null
+                );
+            }
 
             if (!empty($payload['eroare'])) {
                 throw new SpvException(trim($payload['eroare'] . ' ' . ($payload['detalii'] ?? '')));

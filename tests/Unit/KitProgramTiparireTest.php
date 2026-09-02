@@ -23,7 +23,7 @@ class KitProgramTiparireTest extends TestCase
         mkdir($this->dosar . DIRECTORY_SEPARATOR . 'kit');
 
         // Fisierele fara de care kitul nu se poate construi
-        foreach (['server.php', 'curl-talcuri.php', 'agent.php', 'agent-functii.php', 'agent-lucreaza.php', 'agent-actualizare.php', 'cert-info.ps1', 'pin-test.ps1', 'sign-pdf.ps1', 'merge-pdf.ps1', 'pdf-info.ps1', 'imprimante.ps1', 'print-pdf.ps1', 'itextsharp.dll'] as $fisier) {
+        foreach (['server.php', 'curl-talcuri.php', 'agent.php', 'agent-functii.php', 'agent-lucreaza.php', 'agent-actualizare.php', 'cert-info.ps1', 'pin-test.ps1', 'pin-fereastra.ps1', 'pin-scrie.ps1', 'sign-pdf.ps1', 'merge-pdf.ps1', 'pdf-info.ps1', 'imprimante.ps1', 'print-pdf.ps1', 'itextsharp.dll'] as $fisier) {
             file_put_contents($this->dosar . DIRECTORY_SEPARATOR . $fisier, 'proba');
         }
     }

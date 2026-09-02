@@ -10,6 +10,8 @@ use App\Services\Anaf\Spv\CertificatService;
 use App\Services\Anaf\Spv\SpvClient;
 use App\Services\Anaf\Spv\SpvException;
 use App\Services\Anaf\Spv\SpvStorage;
+use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -32,6 +34,15 @@ class RecipisaService
 
     /** Listele de mesaje SPV deja aduse, una pe certificat. */
     protected $liste = [];
+
+    /**
+     * Paginile StareD112 aduse deodată, pe numărul declarației.
+     *
+     * Se țin doar cât ține cererea de acum: starea unei declarații se schimbă
+     * la ANAF de la un ceas la altul, iar o pagină păstrată mai mult ar spune
+     * ce era, nu ce este.
+     */
+    protected $paginiStare = [];
 
     public function __construct(
         array $config,
@@ -65,6 +76,8 @@ class RecipisaService
         // Se retin si declaratiile a caror recipisa tocmai a venit: din ele se
         // poate face pe loc un singur fisier de tiparit.
         $descarcate = [];
+
+        $this->pregatesteStarilePublice($declaratii);
 
         foreach ($declaratii as $declaratie) {
             try {
@@ -109,6 +122,10 @@ class RecipisaService
         $erori = [];
         $descarcate = [];
         $facute = 0;
+
+        // Starile publice se intreaba toate deodata, inainte de lucrul propriu-zis:
+        // ele nu tin nici de certificat, nici de pauza ceruta de ANAF pentru SPV.
+        $this->pregatesteStarilePublice($declaratii);
 
         foreach ($declaratii as $declaratie) {
             // Fiecare declaratie isi cere ragazul ei, socotit de la capat.
@@ -296,6 +313,68 @@ class RecipisaService
      * Starea publica de pe StareD112 (fara certificat). Se cauta randul cu
      * indicele de incarcare in tabelul HTML returnat.
      */
+    /**
+     * Intreaba deodata starea publica a mai multor declaratii.
+     *
+     * StareD112 e o pagina publica, ceruta de pe serverul nostru: n-are nici
+     * certificat, nici bridge, nici pauza ceruta de ANAF pentru SPV. Nimic nu
+     * cere deci ca intrebarile sa stea la rand — iar pe rand ele adaugau o
+     * secunda de fiecare declaratie fara recipisa.
+     *
+     * Ce se afla se tine minte pentru cererea de acum; declaratiile ale caror
+     * pagini n-au venit trec mai departe pe drumul dinainte, una cate una.
+     *
+     * @param iterable<AnafDeclaratie> $declaratii
+     */
+    public function pregatesteStarilePublice(iterable $declaratii): void
+    {
+        $deIntrebat = [];
+
+        foreach ($declaratii as $declaratie) {
+            if ($declaratie->index_recipisa && !isset($this->paginiStare[$declaratie->id])) {
+                $deIntrebat[] = $declaratie;
+            }
+        }
+
+        if ($deIntrebat === []) {
+            return;
+        }
+
+        $deodata = max(1, (int) ($this->config['stari_deodata'] ?? 8));
+
+        foreach (array_chunk($deIntrebat, $deodata) as $lot) {
+            $raspunsuri = Http::pool(function (Pool $bazin) use ($lot) {
+                $cereri = [];
+
+                foreach ($lot as $declaratie) {
+                    $cereri[] = $bazin->as((string) $declaratie->id)
+                        ->asForm()
+                        ->timeout($this->config['timeout'])
+                        ->post($this->config['url_stare'], [
+                            'ghis' => 'N',
+                            'id' => $declaratie->index_recipisa,
+                            'cui' => $declaratie->cui,
+                        ]);
+                }
+
+                return $cereri;
+            });
+
+            foreach ($lot as $declaratie) {
+                $raspuns = $raspunsuri[(string) $declaratie->id] ?? null;
+
+                /*
+                 * Ce n-a venit nu se tine minte: declaratia va merge pe drumul
+                 * dinainte, cu o intrebare a ei, si acolo pricina ajunge in
+                 * jurnal ca pana acum.
+                 */
+                if ($raspuns instanceof Response && $raspuns->successful()) {
+                    $this->paginiStare[$declaratie->id] = $raspuns->body();
+                }
+            }
+        }
+    }
+
     protected function preiaStareaPublica(AnafDeclaratie $declaratie): void
     {
         /*
@@ -314,31 +393,37 @@ class RecipisaService
             $declaratie->update(['stare_declaratie' => 'In prelucrare']);
         };
 
-        try {
-            $raspuns = Http::asForm()
-                ->timeout($this->config['timeout'])
-                ->post($this->config['url_stare'], [
-                    'ghis' => 'N',
-                    'id' => $declaratie->index_recipisa,
-                    'cui' => $declaratie->cui,
-                ]);
+        // Pagina adusa in lotul dinainte nu se mai cere inca o data.
+        $html = $this->paginiStare[$declaratie->id] ?? null;
 
-            $html = $raspuns->body();
-        } catch (\Exception $e) {
-            $nuSAPutut($e->getMessage());
+        if ($html === null) {
+            try {
+                $raspuns = Http::asForm()
+                    ->timeout($this->config['timeout'])
+                    ->post($this->config['url_stare'], [
+                        'ghis' => 'N',
+                        'id' => $declaratie->index_recipisa,
+                        'cui' => $declaratie->cui,
+                    ]);
 
-            return;
-        }
+                $html = $raspuns->body();
+            } catch (\Exception $e) {
+                $nuSAPutut($e->getMessage());
 
-        /*
-         * O adresa mutata nu arunca exceptie: intoarce o pagina de eroare, care
-         * trece de aici mai departe si sfarseste tot in „In prelucrare”. Asa a
-         * si trecut neobservata mutarea StareD112 pe alta gazda.
-         */
-        if ($raspuns->failed()) {
-            $nuSAPutut('ANAF a raspuns ' . $raspuns->status());
+                return;
+            }
 
-            return;
+            /*
+             * O adresa mutata nu arunca exceptie: intoarce o pagina de eroare,
+             * care trece de aici mai departe si sfarseste tot in „In
+             * prelucrare”. Asa a si trecut neobservata mutarea StareD112 pe
+             * alta gazda.
+             */
+            if ($raspuns->failed()) {
+                $nuSAPutut('ANAF a raspuns ' . $raspuns->status());
+
+                return;
+            }
         }
 
         if (strpos($html, 'Fisierul depus nu este un document valid') !== false) {

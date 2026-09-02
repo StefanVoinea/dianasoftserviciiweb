@@ -49,7 +49,9 @@ class AnafServiceProvider extends ServiceProvider
         $this->app->singleton(SpvClient::class, function ($app) {
             return new SpvClient(
                 $app->make(SpvTransport::class),
-                config('anaf.spv')
+                config('anaf.spv'),
+                // Pentru pauza tinuta pe fiecare certificat in parte.
+                $app->make(CertificatService::class)
             );
         });
 

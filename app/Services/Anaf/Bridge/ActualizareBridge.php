@@ -34,6 +34,8 @@ class ActualizareBridge
         'agent-actualizare.php',
         'cert-info.ps1',
         'pin-test.ps1',
+        'pin-fereastra.ps1',
+        'pin-scrie.ps1',
         'sign-pdf.ps1',
         'merge-pdf.ps1',
         'pdf-info.ps1',

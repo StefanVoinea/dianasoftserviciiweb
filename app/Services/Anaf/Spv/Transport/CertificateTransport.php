@@ -21,6 +21,13 @@ class CertificateTransport implements SpvTransport
      * nu exista niciun calculator al lui pe care sa fie scris documentul.
      * Lucrarea se face pe drumul dinainte, prin server.
      */
+    public function descarcaLotInArhiva(array $documente, int $pauzaMs): array
+    {
+        throw new ProgramLocalVechiException(
+            'Aducerea în transe merge doar prin programul local al clientului.'
+        );
+    }
+
     public function descarcaInArhiva(string $id, array $destinatie): array
     {
         throw new ProgramLocalVechiException(

@@ -12,9 +12,12 @@ use App\Services\Anaf\CaleWindows;
 use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\CertificatService;
+use App\Services\Anaf\Spv\Contracts\SpvTransport;
 use App\Services\Anaf\Spv\KitBridge;
 use App\Services\Anaf\Spv\SocietatiService;
 use App\Services\Anaf\Spv\SpvException;
+use App\Support\Aplicatia;
+use App\Support\ContextUtilizator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -55,6 +58,7 @@ class CertificateController extends Controller
                     'pin_stare' => $certificat->pin_stare,
                     'pin_motiv' => $certificat->pin_motiv,
                     'pin_verificat_la' => Format::dataOra($certificat->pin_verificat_la),
+                    'pin_de_la_distanta' => (bool) $certificat->pin_de_la_distanta,
                     'mod_legatura' => $certificat->mod_legatura ?: 'direct',
                     'agent_vazut_la' => Format::dataOra($certificat->agent_vazut_la),
                     'agent_treaz' => app(Punte::class)->agentulEsteTreaz($certificat),
@@ -219,6 +223,153 @@ class CertificateController extends Controller
             // Tokenul e si in arhiva, dar il expunem si aici pentru interfata.
             'X-Bridge-Token' => $arhiva['token'],
         ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Duce PIN-ul scris de om pana la fereastra care il asteapta.
+     *
+     * Codul trece o singura data, prin cererea aceasta, si nu se opreste
+     * nicaieri: nu se scrie in baza de date, nu intra in jurnal si nu se
+     * intoarce inapoi. In jurnal ramane doar ca s-a trimis un cod pentru
+     * tokenul cutare — atat cat sa se stie cine a facut-o si cand.
+     *
+     * Merge numai la tokenele pentru care omul a pornit anume facilitatea: e
+     * cheia lui, si el hotaraste daca vrea s-o poata trimite de la distanta.
+     */
+    public function trimitePin(Request $request, AnafCertificat $certificat, CertificatService $certificate)
+    {
+        $date = $request->validate([
+            'pin' => 'required|string|max:64',
+        ]);
+
+        if (!$certificat->pin_de_la_distanta) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pentru tokenul „' . $certificat->cn . '" nu e pornită trimiterea PIN-ului de la distanță.',
+            ], 422);
+        }
+
+        $certificate->foloseste($certificat);
+
+        $transport = app(SpvTransport::class);
+
+        if (!method_exists($transport, 'scriePinul')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Legătura cu programul local nu poate duce PIN-ul.',
+            ], 422);
+        }
+
+        $iesit = $transport->scriePinul($date['pin']);
+
+        // Codul nu mai are ce cauta in memorie de aici incolo.
+        unset($date);
+
+        Jurnal::scrie(
+            'pin_trimis',
+            ($iesit['scris'] ? 'A trimis PIN-ul pentru tokenul „' : 'A încercat să trimită PIN-ul pentru tokenul „')
+                . $certificat->cn . '”'
+                . ($iesit['scris'] ? '' : ': ' . $iesit['motiv']),
+            // Aici nu intra codul, si nici vreo bucata din el.
+            ['certificat_id' => $certificat->id],
+            null,
+            $iesit['scris']
+        );
+
+        $certificat->update([
+            'pin_stare' => $iesit['scris'] ? 'gata' : 'refuzat',
+            'pin_motiv' => $iesit['scris'] ? null : $iesit['motiv'],
+            'pin_verificat_la' => now(),
+            // Codul a fost scris: nu mai are cine sa fie intrebat de el.
+            'pin_cerut_de' => $iesit['scris'] ? null : $certificat->pin_cerut_de,
+            'pin_cerut_din' => $iesit['scris'] ? null : $certificat->pin_cerut_din,
+        ]);
+
+        return response()->json([
+            'success' => $iesit['scris'],
+            'message' => $iesit['scris']
+                ? 'PIN-ul a fost scris în fereastra tokenului.'
+                : $iesit['motiv'],
+        ], $iesit['scris'] ? 200 : 422);
+    }
+
+    /**
+     * Tokenurile care isi asteapta acum PIN-ul si pentru care omul a pornit
+     * trimiterea de la distanta.
+     *
+     * De aici afla fila si telefonul ca au ce cere: fara asta, fiecare loc din
+     * aplicatie ar fi trebuit sa duca vestea mai departe, iar o lucrare pornita
+     * din alta parte — dosarul urmarit, sarcina de noapte — n-ar fi spus-o
+     * nimanui.
+     */
+    public function pinInAsteptare()
+    {
+        $omul = optional(ContextUtilizator::curent())->id;
+        $deUnde = Aplicatia::curenta();
+
+        $tokene = AnafCertificat::where('activ', true)
+            ->where('pin_stare', 'asteapta')
+            ->where('pin_de_la_distanta', true)
+            ->where(function ($intrebare) use ($omul, $deUnde) {
+                /*
+                 * Fiecare e intrebat unde a apasat: cel care a pornit lucrarea
+                 * de pe telefon nu are de ce sa fie intrebat intr-o fila din
+                 * browser, si nici invers.
+                 */
+                $intrebare->where(function ($alLui) use ($omul, $deUnde) {
+                    $alLui->where('pin_cerut_de', $omul)
+                        ->where('pin_cerut_din', $deUnde);
+                })
+                /*
+                 * …afara de lucrarile pornite de la sine, care n-au pe nimeni in
+                 * spate: acelea se arata oriunde, fiindca oricine e prin preajma
+                 * le poate dezlega.
+                 */
+                ->orWhere('pin_cerut_din', Aplicatia::FUNDAL)
+                ->orWhereNull('pin_cerut_din');
+            })
+            ->orderByDesc('pin_verificat_la')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $tokene->map(function (AnafCertificat $certificat) {
+                return [
+                    'id' => $certificat->id,
+                    'cn' => $certificat->cn,
+                    // Ce scrie pe fereastra deschisa, asa cum a citit-o programul local
+                    'fereastra' => $certificat->pin_motiv,
+                    'de_cand' => Format::dataOra($certificat->pin_verificat_la),
+                    // Lucrarile pornite de la sine se spun asa: omul sa stie ca
+                    // nu el a cerut-o, si totusi el o poate dezlega.
+                    'din_fundal' => $certificat->pin_cerut_din === Aplicatia::FUNDAL
+                        || $certificat->pin_cerut_din === null,
+                ];
+            })->all(),
+        ]);
+    }
+
+    /** Sta deschisa acum o fereastra de PIN pe calculatorul acestui token? */
+    public function fereastraPin(AnafCertificat $certificat, CertificatService $certificate)
+    {
+        $certificate->foloseste($certificat);
+
+        $transport = app(SpvTransport::class);
+
+        $fereastra = method_exists($transport, 'fereastraDePin')
+            ? $transport->fereastraDePin()
+            : null;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'stiuta' => $fereastra !== null,
+                'deschisa' => $fereastra['deschisa'] ?? false,
+                'titlu' => $fereastra['titlu'] ?? '',
+                'proces' => $fereastra['proces'] ?? '',
+                'pin_de_la_distanta' => (bool) $certificat->pin_de_la_distanta,
+            ],
+        ]);
     }
 
     /**
@@ -494,6 +645,12 @@ class CertificateController extends Controller
             'arhiva_cale' => ['nullable', 'string', 'max:300', $this->caleDeCalculator('Calea arhivei')],
             'implicit' => 'nullable|boolean',
             'activ' => 'nullable|boolean',
+            /*
+             * Trimiterea PIN-ului de la distanta, pornita anume pentru tokenul
+             * acesta. Nu e pornita din start si nu se porneste singura: e
+             * alegerea celui care tine tokenul.
+             */
+            'pin_de_la_distanta' => 'nullable|boolean',
             // Dosarul urmarit: aceleasi reguli ca la arhiva
             'monitorizare_cale' => ['nullable', 'string', 'max:300', $this->caleDeCalculator('Dosarul urmărit')],
             'monitorizare_activa' => 'nullable|boolean',

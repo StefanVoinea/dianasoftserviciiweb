@@ -143,4 +143,50 @@ class RecipiseleAmandurorTokenelorTest extends TestCase
         // Cate o lista pe certificat — nu una singura si nu cate una pe declaratie.
         $this->assertSame(['TOKENUL DINTÂI', 'TOKENUL AL DOILEA'], $client->intrebat);
     }
+
+    /**
+     * Starile publice se intreaba o data pentru fiecare declaratie, nu de doua ori.
+     *
+     * Ele se aduc acum toate deodata, inainte de lucrul propriu-zis, fiindca
+     * StareD112 e o pagina publica ceruta de pe serverul nostru: n-are nici
+     * certificat, nici bridge, nici pauza ceruta de ANAF pentru SPV. Pagina
+     * adusa asa trebuie insa si folosita — altfel fiecare declaratie ar fi
+     * intrebata a doua oara si n-am fi castigat nimic, ci am fi indoit munca.
+     */
+    public function test_starea_publica_se_cere_o_singura_data_de_declaratie(): void
+    {
+        Http::fake(['*' => Http::response('<html><body>nimic</body></html>', 200)]);
+
+        $this->declaratie('111', $this->unul->id);
+        $this->declaratie('222', $this->unul->id);
+        $this->declaratie('333', $this->unul->id);
+
+        $certificate = new CertificatService([]);
+
+        $client = new class($certificate) extends SpvClient {
+            protected $alegerea;
+
+            public function __construct(CertificatService $alegerea)
+            {
+                $this->alegerea = $alegerea;
+            }
+
+            public function listaMesaje(int $zile = 60, ?string $cif = null): array
+            {
+                return ['mesaje' => []];
+            }
+        };
+
+        $serviciu = new RecipisaService(
+            config('anaf.declaratii'),
+            $client,
+            app(SpvStorage::class),
+            null,
+            $certificate
+        );
+
+        $serviciu->verificaToate();
+
+        Http::assertSentCount(3);
+    }
 }

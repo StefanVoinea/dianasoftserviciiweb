@@ -18,4 +18,21 @@ interface SpvTransport
      * @return array{cale: string, extensie: string, marime: int, hash: string, text?: string}
      */
     public function descarcaInArhiva(string $id, array $destinatie): array;
+
+    /**
+     * Aceleasi documente, cerute toate deodata.
+     *
+     * Fiecare document insemna un drum intreg pana la calculatorul clientului:
+     * comanda dusa, raspunsul adus inapoi. La cincizeci de documente, cincizeci
+     * de drumuri pentru o lucrare care e una singura.
+     *
+     * Pauza ceruta de ANAF nu dispare — ea se tine acum acolo, unde e si apelul.
+     *
+     * @param  array<int, array>  $documente  fiecare cu id, firma, dosar, nume,
+     *                                        inlocuieste, text
+     * @param  int  $pauzaMs  ragazul dintre doua apeluri catre ANAF
+     *
+     * @return array<string, array>  ce a iesit, pe numarul mesajului
+     */
+    public function descarcaLotInArhiva(array $documente, int $pauzaMs): array;
 }

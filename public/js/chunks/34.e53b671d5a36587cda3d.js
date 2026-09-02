@@ -1,4 +1,4 @@
-(window["webpackJsonp"] = window["webpackJsonp"] || []).push([[39],{
+(window["webpackJsonp"] = window["webpackJsonp"] || []).push([[34],{
 
 /***/ "./node_modules/babel-loader/lib/index.js?!./node_modules/vue-loader/lib/index.js?!./resources/js/src/views/app_pages/Spv.vue?vue&type=script&lang=js&":
 /*!***********************************************************************************************************************************************************************!*\
@@ -29,6 +29,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _spv_Certificate_vue__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./spv/Certificate.vue */ "./resources/js/src/views/app_pages/spv/Certificate.vue");
 /* harmony import */ var _spv_Jurnal_vue__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./spv/Jurnal.vue */ "./resources/js/src/views/app_pages/spv/Jurnal.vue");
 /* harmony import */ var _spv_Utilizatori_vue__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ./spv/Utilizatori.vue */ "./resources/js/src/views/app_pages/spv/Utilizatori.vue");
+/* harmony import */ var _spv_CereriDePin_vue__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./spv/CereriDePin.vue */ "./resources/js/src/views/app_pages/spv/CereriDePin.vue");
 
 
 
@@ -66,6 +67,11 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
+//
+//
+//
+//
+
 
 
 
@@ -126,7 +132,8 @@ var TABURI = [{
     SolicitariTab: _spv_Solicitari_vue__WEBPACK_IMPORTED_MODULE_10__["default"],
     CertificateTab: _spv_Certificate_vue__WEBPACK_IMPORTED_MODULE_11__["default"],
     JurnalTab: _spv_Jurnal_vue__WEBPACK_IMPORTED_MODULE_12__["default"],
-    UtilizatoriTab: _spv_Utilizatori_vue__WEBPACK_IMPORTED_MODULE_13__["default"]
+    UtilizatoriTab: _spv_Utilizatori_vue__WEBPACK_IMPORTED_MODULE_13__["default"],
+    CereriDePin: _spv_CereriDePin_vue__WEBPACK_IMPORTED_MODULE_14__["default"]
   },
   data: function data() {
     return {
@@ -221,6 +228,159 @@ var TABURI = [{
 
 /***/ }),
 
+/***/ "./node_modules/babel-loader/lib/index.js?!./node_modules/vue-loader/lib/index.js?!./resources/js/src/views/app_pages/spv/CereriDePin.vue?vue&type=script&lang=js&":
+/*!***********************************************************************************************************************************************************************************!*\
+  !*** ./node_modules/babel-loader/lib??ref--4-0!./node_modules/vue-loader/lib??vue-loader-options!./resources/js/src/views/app_pages/spv/CereriDePin.vue?vue&type=script&lang=js& ***!
+  \***********************************************************************************************************************************************************************************/
+/*! exports provided: default */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony import */ var core_js_modules_es_object_to_string_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! core-js/modules/es.object.to-string.js */ "./node_modules/core-js/modules/es.object.to-string.js");
+/* harmony import */ var core_js_modules_es_object_to_string_js__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_object_to_string_js__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var bootstrap_vue__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! bootstrap-vue */ "./node_modules/bootstrap-vue/esm/index.js");
+
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+
+/*
+ * Cererea PIN-ului pentru tokenul care îl așteaptă.
+ *
+ * Când o lucrare se oprește fiindcă tokenul cere PIN-ul, fereastra aceea stă
+ * deschisă pe calculatorul clientului — adesea pe alt ecran decât al omului
+ * care a apăsat butonul, uneori în alt oraș. Până acum lucrarea pica, iar din
+ * aplicație pana semăna cu una de rețea.
+ *
+ * Se cere numai pentru tokenele la care omul a pornit anume facilitatea, din
+ * fila Certificate. Pentru celelalte, aplicația spune doar care token așteaptă,
+ * iar codul se scrie de mână, acolo.
+ */
+
+/** Din cât în cât se întreabă dacă vreun token își așteaptă codul. */
+
+var LA_CATE_SECUNDE = 20;
+/* harmony default export */ __webpack_exports__["default"] = ({
+  components: {
+    BModal: bootstrap_vue__WEBPACK_IMPORTED_MODULE_1__["BModal"],
+    BFormInput: bootstrap_vue__WEBPACK_IMPORTED_MODULE_1__["BFormInput"],
+    BAlert: bootstrap_vue__WEBPACK_IMPORTED_MODULE_1__["BAlert"]
+  },
+  data: function data() {
+    return {
+      tokenul: {},
+      pin: '',
+      vizibil: false,
+      inCurs: false,
+      eroare: '',
+      ceasul: null
+    };
+  },
+  created: function created() {
+    this.intreaba();
+    this.ceasul = setInterval(this.intreaba, LA_CATE_SECUNDE * 1000);
+  },
+  beforeDestroy: function beforeDestroy() {
+    if (this.ceasul) clearInterval(this.ceasul);
+  },
+  methods: {
+    /** Tokenurile care își așteaptă codul acum și pentru care e voie să-l trimitem. */
+    intreaba: function intreaba() {
+      var _this = this;
+
+      // Fila ascunsă nu are cui să arate fereastra; se întreabă când revine.
+      if (document.hidden || this.vizibil || this.inCurs) return null;
+      return this.$http.get('/anaf-certificate/pin/asteptare').then(function (_ref) {
+        var data = _ref.data;
+        var asteapta = (data.data || [])[0];
+        if (!asteapta) return;
+        _this.tokenul = asteapta;
+        _this.pin = '';
+        _this.eroare = '';
+        _this.vizibil = true;
+      })["catch"](function () {// O întrebare picată nu are de ce să tulbure fila.
+      });
+    },
+    trimite: function trimite() {
+      var _this2 = this;
+
+      if (!this.pin || this.inCurs) return null;
+      this.inCurs = true;
+      this.eroare = '';
+      return this.$http.post("/anaf-certificate/".concat(this.tokenul.id, "/pin"), {
+        pin: this.pin
+      }).then(function () {
+        _this2.vizibil = false;
+
+        _this2.uita();
+      })["catch"](function (err) {
+        _this2.eroare = err.response && err.response.data && err.response.data.message || 'Codul nu a putut fi trimis.';
+      })["finally"](function () {
+        _this2.inCurs = false;
+      });
+    },
+
+    /** Codul nu rămâne în filă nici după ce fereastra s-a închis. */
+    uita: function uita() {
+      this.pin = '';
+    }
+  }
+});
+
+/***/ }),
+
 /***/ "./node_modules/babel-loader/lib/index.js?!./node_modules/vue-loader/lib/index.js?!./resources/js/src/views/app_pages/spv/Certificate.vue?vue&type=script&lang=js&":
 /*!***********************************************************************************************************************************************************************************!*\
   !*** ./node_modules/babel-loader/lib??ref--4-0!./node_modules/vue-loader/lib??vue-loader-options!./resources/js/src/views/app_pages/spv/Certificate.vue?vue&type=script&lang=js& ***!
@@ -266,6 +426,29 @@ __webpack_require__.r(__webpack_exports__);
 
 
 
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
 //
 //
 //
@@ -1442,6 +1625,7 @@ __webpack_require__.r(__webpack_exports__);
         monitorizare_cadenta: certificat.monitorizare_cadenta || 5,
         monitorizare_semneaza: certificat.monitorizare_semneaza !== false,
         monitorizare_depune: Boolean(certificat.monitorizare_depune),
+        pin_de_la_distanta: Boolean(certificat.pin_de_la_distanta),
         monitorizare_la: certificat.monitorizare_la,
         mod_legatura: certificat.mod_legatura || 'direct',
         implicit: certificat.implicit
@@ -1503,6 +1687,7 @@ __webpack_require__.r(__webpack_exports__);
         monitorizare_cadenta: this.bridgeFormular.monitorizare_cadenta,
         monitorizare_semneaza: this.bridgeFormular.monitorizare_semneaza,
         monitorizare_depune: this.bridgeFormular.monitorizare_depune,
+        pin_de_la_distanta: this.bridgeFormular.pin_de_la_distanta,
         mod_legatura: this.bridgeFormular.mod_legatura,
         implicit: this.bridgeFormular.implicit
       }).then(function () {
@@ -3999,42 +4184,97 @@ __webpack_require__.r(__webpack_exports__);
     },
 
     /** Trimiterea propriu-zisă: una câte una, un eșec nu le oprește pe următoarele. */
+
+    /**
+     * Trimite declarațiile la ANAF dintr-o singură cerere.
+     *
+     * Pe rând, fiecare declarație însemna o cerere a ei: patruzeci de porniri
+     * ale aplicației și tot atâtea autentificări, pentru o lucrare care e una
+     * singură. Serverul le ia acum pe toate și spune pe drum a câta e din câte,
+     * iar mesajul de sub buton se face din ce spune el.
+     *
+     * Browserele fără fetch cu flux rămân pe calea dinainte: ea merge oriunde.
+     */
     trimiteLaAnaf: function trimiteLaAnaf(declaratii) {
       var _this12 = this;
 
       this.eroare = '';
       this.depunereInCurs = true;
+
+      if (!Object(_libs_flux__WEBPACK_IMPORTED_MODULE_24__["areFlux"])()) {
+        return this.trimiteLaAnafPeRand(declaratii);
+      }
+
       var esuate = [];
-
-      var urmatoarea = function urmatoarea(i) {
-        if (i >= declaratii.length) {
-          if (esuate.length) {
-            _this12.eroare = "Nu s-au putut depune: ".concat(esuate.join(' | '));
-          }
-
-          _this12.notifica("".concat(declaratii.length - esuate.length, " din ").concat(declaratii.length, " depuse"), esuate.length ? 'warning' : 'success');
-
-          return null;
+      var depuse = 0;
+      return Object(_libs_flux__WEBPACK_IMPORTED_MODULE_24__["default"])('/declaratii/depune/flux', function (pas) {
+        if (pas.tip === 'pas') {
+          _this12.depunereMesaj = "".concat(pas.ce, " (").concat(pas.facute, " din ").concat(pas.total, ")");
         }
 
-        var declaratie = declaratii[i];
-        _this12.depunereMesaj = "".concat(declaratie.tip, " (").concat(i + 1, " din ").concat(declaratii.length, ")");
-        return _this12.$http.post("/declaratii/".concat(declaratie.id, "/depune"))["catch"](function (err) {
-          esuate.push("".concat(declaratie.tip, " ").concat(declaratie.cui, ": ").concat(_this12.mesajEroare(err, 'depunere eșuată')));
-        }).then(function () {
-          return urmatoarea(i + 1);
-        });
-      };
+        if (pas.tip === 'gata') {
+          depuse = pas.depuse;
+          esuate.push.apply(esuate, Object(C_dianasoft_serviciiweb_web_node_modules_babel_runtime_helpers_esm_toConsumableArray_js__WEBPACK_IMPORTED_MODULE_1__["default"])(pas.erori || []));
+        }
+      }, {
+        corp: {
+          id: declaratii.map(function (declaratie) {
+            return declaratie.id;
+          })
+        }
+      })["catch"](function (err) {
+        _this12.eroare = "Depunerea nu s-a putut face: ".concat(err.message || err);
+      }).then(function () {
+        if (esuate.length) {
+          _this12.eroare = "Nu s-au putut depune: ".concat(esuate.join(' | '));
+        }
 
-      return urmatoarea(0).then(function () {
+        if (!_this12.eroare || esuate.length) {
+          _this12.notifica("".concat(depuse, " din ").concat(declaratii.length, " depuse"), esuate.length ? 'warning' : 'success');
+        }
+
         _this12.depunereInCurs = false;
         _this12.depunereMesaj = '';
 
         _this12.incarcaLista();
       });
     },
-    actiune: function actiune(declaratie, tip) {
+
+    /** Calea dinainte: câte o cerere de fiecare declarație. */
+    trimiteLaAnafPeRand: function trimiteLaAnafPeRand(declaratii) {
       var _this13 = this;
+
+      var esuate = [];
+
+      var urmatoarea = function urmatoarea(i) {
+        if (i >= declaratii.length) {
+          if (esuate.length) {
+            _this13.eroare = "Nu s-au putut depune: ".concat(esuate.join(' | '));
+          }
+
+          _this13.notifica("".concat(declaratii.length - esuate.length, " din ").concat(declaratii.length, " depuse"), esuate.length ? 'warning' : 'success');
+
+          return null;
+        }
+
+        var declaratie = declaratii[i];
+        _this13.depunereMesaj = "".concat(declaratie.tip, " (").concat(i + 1, " din ").concat(declaratii.length, ")");
+        return _this13.$http.post("/declaratii/".concat(declaratie.id, "/depune"))["catch"](function (err) {
+          esuate.push("".concat(declaratie.tip, " ").concat(declaratie.cui, ": ").concat(_this13.mesajEroare(err, 'depunere eșuată')));
+        }).then(function () {
+          return urmatoarea(i + 1);
+        });
+      };
+
+      return urmatoarea(0).then(function () {
+        _this13.depunereInCurs = false;
+        _this13.depunereMesaj = '';
+
+        _this13.incarcaLista();
+      });
+    },
+    actiune: function actiune(declaratie, tip) {
+      var _this14 = this;
 
       this.eroare = '';
       this.ocupat = declaratie.id;
@@ -4043,15 +4283,15 @@ __webpack_require__.r(__webpack_exports__);
         depune: 'Declarația a fost depusă la ANAF'
       };
       this.$http.post("/declaratii/".concat(declaratie.id, "/").concat(tip)).then(function () {
-        _this13.notifica(mesaje[tip], 'success');
+        _this14.notifica(mesaje[tip], 'success');
 
-        _this13.incarcaLista();
+        _this14.incarcaLista();
       })["catch"](function (err) {
-        _this13.eroare = _this13.mesajEroare(err, 'Operația a eșuat');
+        _this14.eroare = _this14.mesajEroare(err, 'Operația a eșuat');
 
-        _this13.incarcaLista();
+        _this14.incarcaLista();
       })["finally"](function () {
-        _this13.ocupat = null;
+        _this14.ocupat = null;
       });
     },
 
@@ -4062,7 +4302,7 @@ __webpack_require__.r(__webpack_exports__);
      * miile —, așa că se cer abia acum, când e cine să le vadă.
      */
     deschideConsistenta: function deschideConsistenta(declaratie) {
-      var _this14 = this;
+      var _this15 = this;
 
       this.consistentaDeclaratie = declaratie;
       this.consistentaDate = null;
@@ -4070,17 +4310,17 @@ __webpack_require__.r(__webpack_exports__);
       this.consistentaVizibila = true;
       this.consistentaInCurs = true;
       this.$http.get("/declaratii/".concat(declaratie.id, "/consistenta")).then(function (raspuns) {
-        _this14.consistentaDate = raspuns.data.data;
+        _this15.consistentaDate = raspuns.data.data;
       })["catch"](function (err) {
-        _this14.consistentaEroare = _this14.mesajEroare(err, 'Rezultatul verificării nu a putut fi citit');
+        _this15.consistentaEroare = _this15.mesajEroare(err, 'Rezultatul verificării nu a putut fi citit');
       })["finally"](function () {
-        _this14.consistentaInCurs = false;
+        _this15.consistentaInCurs = false;
       });
     },
 
     /** Rândurile care nu se potrivesc, aduse de la server. */
     deschidePotrivirea: function deschidePotrivirea(declaratie) {
-      var _this15 = this;
+      var _this16 = this;
 
       this.potrivireDeclaratie = declaratie;
       this.potrivireDate = null;
@@ -4088,11 +4328,11 @@ __webpack_require__.r(__webpack_exports__);
       this.potrivireVizibila = true;
       this.potrivireInCurs = true;
       this.$http.get("/declaratii/".concat(declaratie.id, "/potrivire")).then(function (raspuns) {
-        _this15.potrivireDate = raspuns.data.data;
+        _this16.potrivireDate = raspuns.data.data;
       })["catch"](function (err) {
-        _this15.potrivireEroare = _this15.mesajEroare(err, 'Rezultatul comparației nu a putut fi citit');
+        _this16.potrivireEroare = _this16.mesajEroare(err, 'Rezultatul comparației nu a putut fi citit');
       })["finally"](function () {
-        _this15.potrivireInCurs = false;
+        _this16.potrivireInCurs = false;
       });
     },
 
@@ -4103,7 +4343,7 @@ __webpack_require__.r(__webpack_exports__);
      * fișierului, nu o declarație care să aibă nevoie de istoric.
      */
     deschideDecontul: function deschideDecontul(declaratie) {
-      var _this16 = this;
+      var _this17 = this;
 
       this.decontDeclaratie = declaratie;
       this.decontDate = null;
@@ -4112,12 +4352,12 @@ __webpack_require__.r(__webpack_exports__);
       this.decontInCurs = true;
       this.ocupat = declaratie.id;
       this.$http.post("/declaratii/".concat(declaratie.id, "/decont")).then(function (raspuns) {
-        _this16.decontDate = raspuns.data.data;
+        _this17.decontDate = raspuns.data.data;
       })["catch"](function (err) {
-        _this16.decontEroare = _this16.mesajEroare(err, 'Decontul nu a putut fi scos');
+        _this17.decontEroare = _this17.mesajEroare(err, 'Decontul nu a putut fi scos');
       })["finally"](function () {
-        _this16.decontInCurs = false;
-        _this16.ocupat = null;
+        _this17.decontInCurs = false;
+        _this17.ocupat = null;
       });
     },
 
@@ -4143,7 +4383,7 @@ __webpack_require__.r(__webpack_exports__);
 
     /** Cere serverului fișierul cerut și îl dă omului. */
     aduFisierulDecontului: function aduFisierulDecontului(fel, numeImplicit, mesajDeEroare) {
-      var _this17 = this;
+      var _this18 = this;
 
       this.decontEroare = '';
       this.decontInCurs = true;
@@ -4162,11 +4402,11 @@ __webpack_require__.r(__webpack_exports__);
           return window.URL.revokeObjectURL(url);
         }, 60000);
 
-        _this17.notifica("Fi\u0219ierul ".concat(nume, " a fost scris"), 'success');
+        _this18.notifica("Fi\u0219ierul ".concat(nume, " a fost scris"), 'success');
       })["catch"](function (err) {
-        _this17.decontEroare = _this17.mesajEroareDinBlob(err, mesajDeEroare);
+        _this18.decontEroare = _this18.mesajEroareDinBlob(err, mesajDeEroare);
       })["finally"](function () {
-        _this17.decontInCurs = false;
+        _this18.decontInCurs = false;
       });
     },
 
@@ -4177,7 +4417,7 @@ __webpack_require__.r(__webpack_exports__);
      * mesajul serverului ar rămâne necitit dacă nu e desfăcut aici.
      */
     mesajEroareDinBlob: function mesajEroareDinBlob(err, implicit) {
-      var _this18 = this;
+      var _this19 = this;
 
       var date = err.response && err.response.data;
 
@@ -4187,7 +4427,7 @@ __webpack_require__.r(__webpack_exports__);
             var raspuns = JSON.parse(text);
 
             if (raspuns.message) {
-              _this18.decontEroare = raspuns.message;
+              _this19.decontEroare = raspuns.message;
             }
           } catch (e) {// Nu era json: rămâne mesajul obișnuit.
           }
@@ -4207,7 +4447,7 @@ __webpack_require__.r(__webpack_exports__);
 
     /** Trece încă o dată prin declarație cu unealta ANAF. */
     verificaConsistenta: function verificaConsistenta(declaratie) {
-      var _this19 = this;
+      var _this20 = this;
 
       if (!declaratie) {
         return;
@@ -4218,16 +4458,16 @@ __webpack_require__.r(__webpack_exports__);
       this.ocupat = declaratie.id;
       this.consistentaInCurs = true;
       this.$http.post("/declaratii/".concat(declaratie.id, "/verifica-consistenta")).then(function (raspuns) {
-        _this19.consistentaDeclaratie = raspuns.data.data;
-        _this19.consistentaDate = raspuns.data.consistenta;
-        _this19.consistentaVizibila = true;
+        _this20.consistentaDeclaratie = raspuns.data.data;
+        _this20.consistentaDate = raspuns.data.consistenta;
+        _this20.consistentaVizibila = true;
 
-        _this19.incarcaLista();
+        _this20.incarcaLista();
       })["catch"](function (err) {
-        _this19.consistentaEroare = _this19.mesajEroare(err, 'Verificarea de consistență a eșuat');
+        _this20.consistentaEroare = _this20.mesajEroare(err, 'Verificarea de consistență a eșuat');
       })["finally"](function () {
-        _this19.ocupat = null;
-        _this19.consistentaInCurs = false;
+        _this20.ocupat = null;
+        _this20.consistentaInCurs = false;
       });
     },
 
@@ -4237,7 +4477,7 @@ __webpack_require__.r(__webpack_exports__);
      *                        cu mesaje „0 recipise" la fiecare interval.
      */
     verificaRecipise: function verificaRecipise() {
-      var _this20 = this;
+      var _this21 = this;
 
       var tacut = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : false;
       this.eroare = '';
@@ -4246,38 +4486,38 @@ __webpack_require__.r(__webpack_exports__);
       this.cercetate = 0;
       this.deCercetat = 0;
       this.cereRecipisele().then(function (rezultat) {
-        _this20.ultimaDescarcare = _this20.acum();
-        _this20.ultimaDescarcareNumar = rezultat.descarcate || 0;
+        _this21.ultimaDescarcare = _this21.acum();
+        _this21.ultimaDescarcareNumar = rezultat.descarcate || 0;
         window.localStorage.setItem('declaratii_recipise_ultima', JSON.stringify({
-          la: _this20.ultimaDescarcare,
-          descarcate: _this20.ultimaDescarcareNumar
+          la: _this21.ultimaDescarcare,
+          descarcate: _this21.ultimaDescarcareNumar
         }));
 
         if (!tacut || rezultat.descarcate > 0) {
-          _this20.notifica("Verificate: ".concat(rezultat.verificate, ", recipise desc\u0103rcate: ").concat(rezultat.descarcate), rezultat.descarcate > 0 ? 'success' : 'info');
+          _this21.notifica("Verificate: ".concat(rezultat.verificate, ", recipise desc\u0103rcate: ").concat(rezultat.descarcate), rezultat.descarcate > 0 ? 'success' : 'info');
         }
 
         if (rezultat.erori && rezultat.erori.length) {
-          _this20.eroare = rezultat.erori.join(' | ');
+          _this21.eroare = rezultat.erori.join(' | ');
         }
 
-        _this20.incarcaLista(); // Recipisele venite acum se pot aduna într-un singur fișier de tipărit.
+        _this21.incarcaLista(); // Recipisele venite acum se pot aduna într-un singur fișier de tipărit.
 
 
         var aduse = rezultat.descarcate_id || [];
 
-        if (_this20.tiparireRecipise && aduse.length) {
-          return _this20.descarcaPentruTiparire(aduse, 'recipisa');
+        if (_this21.tiparireRecipise && aduse.length) {
+          return _this21.descarcaPentruTiparire(aduse, 'recipisa');
         }
 
         return null;
       })["catch"](function (err) {
-        _this20.eroare = _this20.mesajEroare(err, 'Descărcarea recipiselor a eșuat');
+        _this21.eroare = _this21.mesajEroare(err, 'Descărcarea recipiselor a eșuat');
       })["finally"](function () {
-        _this20.recipiseInCurs = false;
-        _this20.mersul = '';
-        _this20.cercetate = 0;
-        _this20.deCercetat = 0;
+        _this21.recipiseInCurs = false;
+        _this21.mersul = '';
+        _this21.cercetate = 0;
+        _this21.deCercetat = 0;
       });
     },
 
@@ -4293,7 +4533,7 @@ __webpack_require__.r(__webpack_exports__);
      * @returns {Promise<object>} rezultatul, în forma răspunsului obișnuit
      */
     cereRecipisele: function cereRecipisele() {
-      var _this21 = this;
+      var _this22 = this;
 
       // Browserele fără fetch cu flux rămân pe calea dinainte, fără numărătoare.
       if (!Object(_libs_flux__WEBPACK_IMPORTED_MODULE_24__["areFlux"])()) {
@@ -4310,17 +4550,17 @@ __webpack_require__.r(__webpack_exports__);
       };
       return Object(_libs_flux__WEBPACK_IMPORTED_MODULE_24__["default"])('declaratii/recipise/flux', function (pas) {
         if (pas.tip === 'inceput') {
-          _this21.deCercetat = pas.total;
-          _this21.cercetate = 0;
-          if (pas.total) _this21.mersul = "0 din ".concat(pas.total, " declara\u021Bii cercetate...");
+          _this22.deCercetat = pas.total;
+          _this22.cercetate = 0;
+          if (pas.total) _this22.mersul = "0 din ".concat(pas.total, " declara\u021Bii cercetate...");
           return;
         }
 
         if (pas.tip === 'pas') {
-          _this21.cercetate = pas.facute;
+          _this22.cercetate = pas.facute;
           var care = pas.ce ? " \u2014 ".concat(pas.ce) : '';
           var adusa = pas.adus ? ' (recipisă adusă)' : '';
-          _this21.mersul = "".concat(pas.facute, " din ").concat(pas.total, " declara\u021Bii cercetate").concat(care).concat(adusa);
+          _this22.mersul = "".concat(pas.facute, " din ").concat(pas.total, " declara\u021Bii cercetate").concat(care).concat(adusa);
           return;
         }
 
@@ -4330,7 +4570,7 @@ __webpack_require__.r(__webpack_exports__);
       });
     },
     sterge: function sterge(declaratie) {
-      var _this22 = this;
+      var _this23 = this;
 
       this.$bvModal.msgBoxConfirm("\u0218terge\u021Bi declara\u021Bia ".concat(declaratie.tip, " pentru CUI ").concat(declaratie.cui, "?"), {
         okTitle: 'Șterge',
@@ -4339,12 +4579,12 @@ __webpack_require__.r(__webpack_exports__);
       }).then(function (confirmat) {
         if (!confirmat) return;
 
-        _this22.$http["delete"]("/declaratii/".concat(declaratie.id)).then(function () {
-          _this22.notifica('Declarația a fost ștearsă', 'success');
+        _this23.$http["delete"]("/declaratii/".concat(declaratie.id)).then(function () {
+          _this23.notifica('Declarația a fost ștearsă', 'success');
 
-          _this22.incarcaLista();
+          _this23.incarcaLista();
         })["catch"](function (err) {
-          _this22.eroare = _this22.mesajEroare(err, 'Ștergerea a eșuat');
+          _this23.eroare = _this23.mesajEroare(err, 'Ștergerea a eșuat');
         });
       });
     },
@@ -4403,7 +4643,7 @@ __webpack_require__.r(__webpack_exports__);
      * măsură ce vine.
      */
     explicaEroarea: function explicaEroarea(declaratie) {
-      var _this23 = this;
+      var _this24 = this;
 
       this.explicatie = {
         rezumat: '',
@@ -4414,13 +4654,13 @@ __webpack_require__.r(__webpack_exports__);
       this.explicatieVizibila = true;
       this.explicatieEroare = '';
       Object(_libs_flux__WEBPACK_IMPORTED_MODULE_24__["default"])("declaratii/".concat(declaratie.id, "/erori"), function (pas) {
-        return _this23.adaugaPas(pas);
+        return _this24.adaugaPas(pas);
       })["catch"](function (err) {
         // Eșecul se arată în fereastră, nu în spatele ei: altfel utilizatorul
         // vede doar o fereastră goală și nu știe ce s-a întâmplat.
-        _this23.explicatieEroare = "Explica\u021Bia nu a putut fi ob\u021Binut\u0103: ".concat(err.message, ".");
+        _this24.explicatieEroare = "Explica\u021Bia nu a putut fi ob\u021Binut\u0103: ".concat(err.message, ".");
       })["finally"](function () {
-        _this23.explicatieInCurs = false;
+        _this24.explicatieInCurs = false;
       });
     },
     adaugaPas: function adaugaPas(pas) {
@@ -9529,7 +9769,7 @@ module.exports = exports;
 var ___CSS_LOADER_API_IMPORT___ = __webpack_require__(/*! ../../../../../../node_modules/css-loader/dist/runtime/api.js */ "./node_modules/css-loader/dist/runtime/api.js");
 exports = ___CSS_LOADER_API_IMPORT___(false);
 // Module
-exports.push([module.i, "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n/* Lista de dosare: cat sa se vada cateva randuri, restul se deruleaza. */\n.lista-foldere[data-v-2163fac4] {\n  max-height: 15rem;\n  overflow-y: auto;\n}\n\n/*\n * Certificatul scos din uz: randul se stinge, ca sa se vada dintr-o privire ca\n * aplicatia nu lucreaza cu el, dar ramane citibil — datele lui se cauta si dupa\n * scoatere. Randurile le scrie b-table, adica alt component, de aceea ::v-deep.\n */\n[data-v-2163fac4] .rand-scos-din-uz {\n  opacity: 0.55;\n}\n\n/* Comenzile de verificare: de citit si de copiat asa cum sunt scrise. */\n.verificari-ajutor[data-v-2163fac4] {\n  font-size: 0.8rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n[dir] .verificari-ajutor[data-v-2163fac4] {\n  padding: 0.5rem 0.75rem;\n  background: rgba(115, 103, 240, 0.06);\n  border-radius: 0.2rem;\n}\n[dir=ltr] .verificari-ajutor[data-v-2163fac4] {\n  border-left: 3px solid rgba(115, 103, 240, 0.5);\n}\n[dir=rtl] .verificari-ajutor[data-v-2163fac4] {\n  border-right: 3px solid rgba(115, 103, 240, 0.5);\n}\n", ""]);
+exports.push([module.i, "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n/* Lista de dosare: cat sa se vada cateva randuri, restul se deruleaza. */\n.lista-foldere[data-v-2163fac4] {\n  max-height: 15rem;\n  overflow-y: auto;\n}\n\n/*\n * Certificatul scos din uz: randul se stinge, ca sa se vada dintr-o privire ca\n * aplicatia nu lucreaza cu el, dar ramane citibil — datele lui se cauta si dupa\n * scoatere. Randurile le scrie b-table, adica alt component, de aceea ::v-deep.\n */\n[data-v-2163fac4] .rand-scos-din-uz {\n  opacity: 0.55;\n}\n\n/* Comenzile de verificare: de citit si de copiat asa cum sunt scrise. */\n.verificari-ajutor[data-v-2163fac4] {\n  font-size: 0.8rem;\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n[dir] .verificari-ajutor[data-v-2163fac4] {\n  padding: 0.5rem 0.75rem;\n  background: rgba(115, 103, 240, 0.06);\n  border-radius: 0.2rem;\n}\n[dir=ltr] .verificari-ajutor[data-v-2163fac4] {\n  border-left: 3px solid rgba(115, 103, 240, 0.5);\n}\n[dir=rtl] .verificari-ajutor[data-v-2163fac4] {\n  border-right: 3px solid rgba(115, 103, 240, 0.5);\n}\n", ""]);
 // Exports
 module.exports = exports;
 
@@ -9547,7 +9787,7 @@ module.exports = exports;
 var ___CSS_LOADER_API_IMPORT___ = __webpack_require__(/*! ../../../../../../node_modules/css-loader/dist/runtime/api.js */ "./node_modules/css-loader/dist/runtime/api.js");
 exports = ___CSS_LOADER_API_IMPORT___(false);
 // Module
-exports.push([module.i, "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n/*\n * Eroarea ocupa un singur rand in tabel; sageata de alaturi arata ca textul\n * continua si il desfasoara pe loc. Textul se taie fara puncte de suspensie,\n * fiindca sageata spune deja ca urmeaza.\n */\n.coloana-eroare[data-v-fcac4d92] {\n  max-width: 280px;\n  min-width: 0;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: clip;\n  /* Se stinge spre capat, ca taietura sa nu para o litera lipsa */\n  mask-image: linear-gradient(to right, black 85%, transparent 100%);\n  -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);\n}\n\n/* Insigna care duce undeva se poarta ca un buton */\n[dir] .badge-apasabil[data-v-fcac4d92] {\n  cursor: pointer;\n}\n.coloana-eroare-desfasurata[data-v-fcac4d92] {\n  max-width: 280px;\n  min-width: 0;\n  white-space: normal;\n}\n\n/*\n * Randuri stranse: incap mai multe declaratii pe ecran, fara derulare.\n * Celulele sunt desenate de componenta de tabel, nu de sablonul acesta, deci\n * regulile trebuie sa treaca dincolo de limita ei (::v-deep).\n */\n.tabel-compact[data-v-fcac4d92]  th,\n.tabel-compact[data-v-fcac4d92]  td {\n  vertical-align: middle;\n  font-size: 0.85rem;\n}\n[dir] .tabel-compact[data-v-fcac4d92]  th, [dir] .tabel-compact[data-v-fcac4d92]  td {\n  padding: 0.3rem 0.4rem !important;\n}\n[dir] .tabel-compact[data-v-fcac4d92]  .badge {\n  padding: 0.25rem 0.4rem;\n}\n.tabel-compact[data-v-fcac4d92]  .btn {\n  font-size: 0.75rem;\n}\n[dir] .tabel-compact[data-v-fcac4d92]  .btn {\n  padding: 0.15rem 0.4rem;\n}\n\n/* Cate randuri pe pagina: cat sa incapa „100 / pagina\", nu mai mult. */\n.selector-pagina[data-v-fcac4d92] {\n  width: 8rem;\n  height: 1.7rem;\n  line-height: 1.2;\n}\n[dir=ltr] .selector-pagina[data-v-fcac4d92] {\n  padding: 0 1.2rem 0 0.4rem;\n  background-position: right 0.35rem center;\n}\n[dir=rtl] .selector-pagina[data-v-fcac4d92] {\n  padding: 0 0.4rem 0 1.2rem;\n  background-position: left 0.35rem center;\n}\n\n/* Campul de minute: doar cat sa incapa un numar de trei cifre, scrise la mijloc. */\n/* Lista de intervale: doar cat sa incapa „60 minute\", scunda ca sa nu ingroase randul. */\n.lista-minute[data-v-fcac4d92] {\n  width: 6.5rem;\n  height: 1.6rem;\n  line-height: 1.2;\n}\n[dir=ltr] .lista-minute[data-v-fcac4d92] {\n  padding: 0 1.2rem 0 0.4rem;\n  background-position: right 0.35rem center;\n}\n[dir=rtl] .lista-minute[data-v-fcac4d92] {\n  padding: 0 0.4rem 0 1.2rem;\n  background-position: left 0.35rem center;\n}\n\n/*\n * Comutatorul se face verde doar cand e pornit, ca si textul de langa el:\n * stins, ramane cenusiu. Bulina si sina lui sunt desenate de componenta, deci\n * regulile trebuie sa treaca dincolo de ea.\n */\n[dir] .comutator-verde[data-v-fcac4d92]  .custom-control-input:checked ~ .custom-control-label::before {\n  background-color: #28c76f;\n  border-color: #28c76f;\n}\n[dir] .comutator-verde[data-v-fcac4d92]  .custom-control-input:focus ~ .custom-control-label::before {\n  box-shadow: 0 0 0 0.15rem rgba(40, 199, 111, 0.35);\n}\n\n/* Comutatorul de langa butonul de prelucrare poarta culoarea lui. */\n[dir] .comutator-primar[data-v-fcac4d92]  .custom-control-input:checked ~ .custom-control-label::before {\n  background-color: #7367f0;\n  border-color: #7367f0;\n}\n[dir] .comutator-primar[data-v-fcac4d92]  .custom-control-input:focus ~ .custom-control-label::before {\n  box-shadow: 0 0 0 0.15rem rgba(115, 103, 240, 0.35);\n}\n\n/*\n * Comutatoarele stau langa butoane, fara chenar: sunt reglaje, nu actiuni, si\n * nu trebuie sa concureze cu butoanele. Textul e mic si sters cand e stins.\n */\n/*\n * Bifa incepe fix in dreptul coltului din stanga al butonului si sta lipita de\n * el: se citesc ca un singur lucru, reglajul si actiunea pe care o priveste.\n */\n.pentru-tiparire[data-v-fcac4d92] {\n  line-height: 1.1;\n}\n[dir] .pentru-tiparire[data-v-fcac4d92] {\n  padding: 0;\n  margin-bottom: 0.15rem;\n}\n\n/* Textul incepe imediat dupa bifa sau comutator, fara golul lasat de tema. */\n[dir=ltr] .pentru-tiparire[data-v-fcac4d92]  .custom-switch {\n  padding-left: 3rem;\n}\n[dir=rtl] .pentru-tiparire[data-v-fcac4d92]  .custom-switch {\n  padding-right: 3rem;\n}\n[dir=ltr] .pentru-tiparire[data-v-fcac4d92]  .custom-checkbox {\n  padding-left: 1.35rem;\n}\n[dir=rtl] .pentru-tiparire[data-v-fcac4d92]  .custom-checkbox {\n  padding-right: 1.35rem;\n}\n.pentru-tiparire small[data-v-fcac4d92],\n.automat-recipise small[data-v-fcac4d92] {\n  font-size: 0.72rem;\n}\n\n/* Textul incepe imediat dupa comutator: tema lasa 0,5rem in plus fata de el. */\n[dir=ltr] .pentru-tiparire[data-v-fcac4d92]  .custom-switch {\n  padding-left: 3rem;\n}\n[dir=rtl] .pentru-tiparire[data-v-fcac4d92]  .custom-switch {\n  padding-right: 3rem;\n}\n\n/*\n * Bara care desparte cele trei parti ale lucrului: incarcare, depunere si\n * recipise. Se intinde pe toata inaltimea randului, nu doar cat elementul,\n * iar continutul fiecarei parti sta la mijlocul spatiului ei.\n */\n\n/* Explicatia se rupe pe randuri, ca sa nu iasa din chenar. */\n.pentru-tiparire small[data-v-fcac4d92] {\n  white-space: normal;\n  overflow-wrap: anywhere;\n  word-break: break-word;\n}\n\n/* Reglajul descarcarii automate: fara chenar, doar strans sub buton. */\n[dir] .automat-recipise[data-v-fcac4d92] {\n  padding: 0.1rem 0.2rem;\n}\n\n/* Butonul cu optiuni pastreaza latimea intreaga, ca cel simplu de dinainte. */\n[dir=ltr] .flex-shrink-0[data-v-fcac4d92]  .dropdown-toggle-split {\n  padding-left: 0.5rem;\n  padding-right: 0.5rem;\n}\n[dir=rtl] .flex-shrink-0[data-v-fcac4d92]  .dropdown-toggle-split {\n  padding-right: 0.5rem;\n  padding-left: 0.5rem;\n}\n\n/* Acelasi lucru la comutatorul verde: fara gol intre el si text. */\n[dir=ltr] .automat-recipise[data-v-fcac4d92]  .custom-switch {\n  padding-left: 3rem;\n}\n[dir=rtl] .automat-recipise[data-v-fcac4d92]  .custom-switch {\n  padding-right: 3rem;\n}\n\n/* Cei trei pasi din buton stau stransi, ca butonul sa nu creasca peste masura. */\n.buton-pasi div[data-v-fcac4d92] {\n  line-height: 1.5;\n}\n\n/* Mesajul brut al validatorului: se deosebeste de explicatie, fara sa o acopere. */\n.mesaj-original[data-v-fcac4d92] {\n  overflow-x: auto;\n}\n[dir] .mesaj-original[data-v-fcac4d92] {\n  padding: 0.25rem 0.5rem;\n  background: rgba(130, 134, 139, 0.08);\n  border-radius: 0.2rem;\n}\n[dir=ltr] .mesaj-original[data-v-fcac4d92] {\n  border-left: 3px solid rgba(130, 134, 139, 0.4);\n}\n[dir=rtl] .mesaj-original[data-v-fcac4d92] {\n  border-right: 3px solid rgba(130, 134, 139, 0.4);\n}\n.mesaj-original code[data-v-fcac4d92] {\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n\n/* Randul din XML: se deruleaza pe orizontala, nu rupe fereastra. */\n.rand-xml[data-v-fcac4d92] {\n  overflow-x: auto;\n  white-space: pre;\n}\n[dir] .rand-xml[data-v-fcac4d92] {\n  padding: 0.25rem 0.5rem;\n  background: rgba(115, 103, 240, 0.06);\n  border-radius: 0.2rem;\n}\n[dir=ltr] .rand-xml[data-v-fcac4d92] {\n  border-left: 3px solid rgba(115, 103, 240, 0.5);\n}\n[dir=rtl] .rand-xml[data-v-fcac4d92] {\n  border-right: 3px solid rgba(115, 103, 240, 0.5);\n}\n\n/* Randul se scrie cu albastru, iar bucata gresita cu rosu, ca sa sara in ochi. */\n.xml-rand[data-v-fcac4d92] {\n  color: #1565c0;\n}\n.xml-gresit[data-v-fcac4d92] {\n  color: #d32f2f;\n  font-weight: 600;\n}\n[dir] .xml-gresit[data-v-fcac4d92] {\n  background: rgba(211, 47, 47, 0.1);\n  border-radius: 0.15rem;\n}\n\n/*\n * Indicatia de deschidere a fisierului: verde si mai mare decat textul din jur,\n * fiind lucrul pe care utilizatorul il cauta cu ochii cand vrea sa corecteze.\n */\n.indicatie-fisier[data-v-fcac4d92] {\n  color: #2e7d32;\n  font-size: 1rem;\n  font-weight: 500;\n  line-height: 1.4;\n}\n\n/* Combinatia de taste, pe fundal albastru: se vede ca e de apasat, nu de citit. */\n.indicatie-fisier kbd[data-v-fcac4d92] {\n  color: #fff;\n  font-weight: 600;\n}\n[dir] .indicatie-fisier kbd[data-v-fcac4d92] {\n  background: #1565c0;\n  padding: 0.1rem 0.35rem;\n  border-radius: 0.2rem;\n}\n", ""]);
+exports.push([module.i, "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n/*\n * Eroarea ocupa un singur rand in tabel; sageata de alaturi arata ca textul\n * continua si il desfasoara pe loc. Textul se taie fara puncte de suspensie,\n * fiindca sageata spune deja ca urmeaza.\n */\n.coloana-eroare[data-v-fcac4d92] {\n  max-width: 280px;\n  min-width: 0;\n  white-space: nowrap;\n  overflow: hidden;\n  text-overflow: clip;\n  /* Se stinge spre capat, ca taietura sa nu para o litera lipsa */\n  mask-image: linear-gradient(to right, black 85%, transparent 100%);\n  -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);\n}\n\n/* Insigna care duce undeva se poarta ca un buton */\n[dir] .badge-apasabil[data-v-fcac4d92] {\n  cursor: pointer;\n}\n.coloana-eroare-desfasurata[data-v-fcac4d92] {\n  max-width: 280px;\n  min-width: 0;\n  white-space: normal;\n}\n\n/*\n * Randuri stranse: incap mai multe declaratii pe ecran, fara derulare.\n * Celulele sunt desenate de componenta de tabel, nu de sablonul acesta, deci\n * regulile trebuie sa treaca dincolo de limita ei (::v-deep).\n */\n.tabel-compact[data-v-fcac4d92]  th,\n.tabel-compact[data-v-fcac4d92]  td {\n  vertical-align: middle;\n  font-size: 0.85rem;\n}\n[dir] .tabel-compact[data-v-fcac4d92]  th, [dir] .tabel-compact[data-v-fcac4d92]  td {\n  padding: 0.3rem 0.4rem !important;\n}\n[dir] .tabel-compact[data-v-fcac4d92]  .badge {\n  padding: 0.25rem 0.4rem;\n}\n.tabel-compact[data-v-fcac4d92]  .btn {\n  font-size: 0.75rem;\n}\n[dir] .tabel-compact[data-v-fcac4d92]  .btn {\n  padding: 0.15rem 0.4rem;\n}\n\n/* Cate randuri pe pagina: cat sa incapa „100 / pagina\", nu mai mult. */\n.selector-pagina[data-v-fcac4d92] {\n  width: 8rem;\n  height: 1.7rem;\n  line-height: 1.2;\n}\n[dir=ltr] .selector-pagina[data-v-fcac4d92] {\n  padding: 0 1.2rem 0 0.4rem;\n  background-position: right 0.35rem center;\n}\n[dir=rtl] .selector-pagina[data-v-fcac4d92] {\n  padding: 0 0.4rem 0 1.2rem;\n  background-position: left 0.35rem center;\n}\n\n/* Campul de minute: doar cat sa incapa un numar de trei cifre, scrise la mijloc. */\n/* Lista de intervale: doar cat sa incapa „60 minute\", scunda ca sa nu ingroase randul. */\n.lista-minute[data-v-fcac4d92] {\n  width: 6.5rem;\n  height: 1.6rem;\n  line-height: 1.2;\n}\n[dir=ltr] .lista-minute[data-v-fcac4d92] {\n  padding: 0 1.2rem 0 0.4rem;\n  background-position: right 0.35rem center;\n}\n[dir=rtl] .lista-minute[data-v-fcac4d92] {\n  padding: 0 0.4rem 0 1.2rem;\n  background-position: left 0.35rem center;\n}\n\n/*\n * Comutatorul se face verde doar cand e pornit, ca si textul de langa el:\n * stins, ramane cenusiu. Bulina si sina lui sunt desenate de componenta, deci\n * regulile trebuie sa treaca dincolo de ea.\n */\n[dir] .comutator-verde[data-v-fcac4d92]  .custom-control-input:checked ~ .custom-control-label::before {\n  background-color: #28c76f;\n  border-color: #28c76f;\n}\n[dir] .comutator-verde[data-v-fcac4d92]  .custom-control-input:focus ~ .custom-control-label::before {\n  box-shadow: 0 0 0 0.15rem rgba(40, 199, 111, 0.35);\n}\n\n/* Comutatorul de langa butonul de prelucrare poarta culoarea lui. */\n[dir] .comutator-primar[data-v-fcac4d92]  .custom-control-input:checked ~ .custom-control-label::before {\n  background-color: #7367f0;\n  border-color: #7367f0;\n}\n[dir] .comutator-primar[data-v-fcac4d92]  .custom-control-input:focus ~ .custom-control-label::before {\n  box-shadow: 0 0 0 0.15rem rgba(115, 103, 240, 0.35);\n}\n\n/*\n * Comutatoarele stau langa butoane, fara chenar: sunt reglaje, nu actiuni, si\n * nu trebuie sa concureze cu butoanele. Textul e mic si sters cand e stins.\n */\n/*\n * Bifa incepe fix in dreptul coltului din stanga al butonului si sta lipita de\n * el: se citesc ca un singur lucru, reglajul si actiunea pe care o priveste.\n */\n.pentru-tiparire[data-v-fcac4d92] {\n  line-height: 1.1;\n}\n[dir] .pentru-tiparire[data-v-fcac4d92] {\n  padding: 0;\n  margin-bottom: 0.15rem;\n}\n\n/* Textul incepe imediat dupa bifa sau comutator, fara golul lasat de tema. */\n[dir=ltr] .pentru-tiparire[data-v-fcac4d92]  .custom-switch {\n  padding-left: 3rem;\n}\n[dir=rtl] .pentru-tiparire[data-v-fcac4d92]  .custom-switch {\n  padding-right: 3rem;\n}\n[dir=ltr] .pentru-tiparire[data-v-fcac4d92]  .custom-checkbox {\n  padding-left: 1.35rem;\n}\n[dir=rtl] .pentru-tiparire[data-v-fcac4d92]  .custom-checkbox {\n  padding-right: 1.35rem;\n}\n.pentru-tiparire small[data-v-fcac4d92],\n.automat-recipise small[data-v-fcac4d92] {\n  font-size: 0.72rem;\n}\n\n/* Textul incepe imediat dupa comutator: tema lasa 0,5rem in plus fata de el. */\n[dir=ltr] .pentru-tiparire[data-v-fcac4d92]  .custom-switch {\n  padding-left: 3rem;\n}\n[dir=rtl] .pentru-tiparire[data-v-fcac4d92]  .custom-switch {\n  padding-right: 3rem;\n}\n\n/*\n * Bara care desparte cele trei parti ale lucrului: incarcare, depunere si\n * recipise. Se intinde pe toata inaltimea randului, nu doar cat elementul,\n * iar continutul fiecarei parti sta la mijlocul spatiului ei.\n */\n\n/* Explicatia se rupe pe randuri, ca sa nu iasa din chenar. */\n.pentru-tiparire small[data-v-fcac4d92] {\n  white-space: normal;\n  overflow-wrap: anywhere;\n  word-break: break-word;\n}\n\n/* Reglajul descarcarii automate: fara chenar, doar strans sub buton. */\n[dir] .automat-recipise[data-v-fcac4d92] {\n  padding: 0.1rem 0.2rem;\n}\n\n/* Butonul cu optiuni pastreaza latimea intreaga, ca cel simplu de dinainte. */\n[dir=ltr] .flex-shrink-0[data-v-fcac4d92]  .dropdown-toggle-split {\n  padding-left: 0.5rem;\n  padding-right: 0.5rem;\n}\n[dir=rtl] .flex-shrink-0[data-v-fcac4d92]  .dropdown-toggle-split {\n  padding-right: 0.5rem;\n  padding-left: 0.5rem;\n}\n\n/* Acelasi lucru la comutatorul verde: fara gol intre el si text. */\n[dir=ltr] .automat-recipise[data-v-fcac4d92]  .custom-switch {\n  padding-left: 3rem;\n}\n[dir=rtl] .automat-recipise[data-v-fcac4d92]  .custom-switch {\n  padding-right: 3rem;\n}\n\n/* Cei trei pasi din buton stau stransi, ca butonul sa nu creasca peste masura. */\n.buton-pasi div[data-v-fcac4d92] {\n  line-height: 1.5;\n}\n\n/* Mesajul brut al validatorului: se deosebeste de explicatie, fara sa o acopere. */\n.mesaj-original[data-v-fcac4d92] {\n  overflow-x: auto;\n}\n[dir] .mesaj-original[data-v-fcac4d92] {\n  padding: 0.25rem 0.5rem;\n  background: rgba(130, 134, 139, 0.08);\n  border-radius: 0.2rem;\n}\n[dir=ltr] .mesaj-original[data-v-fcac4d92] {\n  border-left: 3px solid rgba(130, 134, 139, 0.4);\n}\n[dir=rtl] .mesaj-original[data-v-fcac4d92] {\n  border-right: 3px solid rgba(130, 134, 139, 0.4);\n}\n.mesaj-original code[data-v-fcac4d92] {\n  white-space: pre-wrap;\n  word-break: break-word;\n}\n\n/* Randul din XML: se deruleaza pe orizontala, nu rupe fereastra. */\n.rand-xml[data-v-fcac4d92] {\n  overflow-x: auto;\n  white-space: pre;\n}\n[dir] .rand-xml[data-v-fcac4d92] {\n  padding: 0.25rem 0.5rem;\n  background: rgba(115, 103, 240, 0.06);\n  border-radius: 0.2rem;\n}\n[dir=ltr] .rand-xml[data-v-fcac4d92] {\n  border-left: 3px solid rgba(115, 103, 240, 0.5);\n}\n[dir=rtl] .rand-xml[data-v-fcac4d92] {\n  border-right: 3px solid rgba(115, 103, 240, 0.5);\n}\n\n/* Randul se scrie cu albastru, iar bucata gresita cu rosu, ca sa sara in ochi. */\n.xml-rand[data-v-fcac4d92] {\n  color: #1565c0;\n}\n.xml-gresit[data-v-fcac4d92] {\n  color: #d32f2f;\n  font-weight: 600;\n}\n[dir] .xml-gresit[data-v-fcac4d92] {\n  background: rgba(211, 47, 47, 0.1);\n  border-radius: 0.15rem;\n}\n\n/*\n * Indicatia de deschidere a fisierului: verde si mai mare decat textul din jur,\n * fiind lucrul pe care utilizatorul il cauta cu ochii cand vrea sa corecteze.\n */\n.indicatie-fisier[data-v-fcac4d92] {\n  color: #2e7d32;\n  font-size: 1rem;\n  font-weight: 500;\n  line-height: 1.4;\n}\n\n/* Combinatia de taste, pe fundal albastru: se vede ca e de apasat, nu de citit. */\n.indicatie-fisier kbd[data-v-fcac4d92] {\n  color: #fff;\n  font-weight: 600;\n}\n[dir] .indicatie-fisier kbd[data-v-fcac4d92] {\n  background: #1565c0;\n  padding: 0.1rem 0.35rem;\n  border-radius: 0.2rem;\n}\n", ""]);
 // Exports
 module.exports = exports;
 
@@ -9889,6 +10129,122 @@ var render = function () {
             : _vm._e(),
         ],
         1
+      ),
+      _vm._v(" "),
+      _c("cereri-de-pin"),
+    ],
+    1
+  )
+}
+var staticRenderFns = []
+render._withStripped = true
+
+
+
+/***/ }),
+
+/***/ "./node_modules/vue-loader/lib/loaders/templateLoader.js?!./node_modules/vue-loader/lib/index.js?!./resources/js/src/views/app_pages/spv/CereriDePin.vue?vue&type=template&id=6119d22f&":
+/*!***************************************************************************************************************************************************************************************************************************!*\
+  !*** ./node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!./node_modules/vue-loader/lib??vue-loader-options!./resources/js/src/views/app_pages/spv/CereriDePin.vue?vue&type=template&id=6119d22f& ***!
+  \***************************************************************************************************************************************************************************************************************************/
+/*! exports provided: render, staticRenderFns */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "render", function() { return render; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "staticRenderFns", function() { return staticRenderFns; });
+var render = function () {
+  var _vm = this
+  var _h = _vm.$createElement
+  var _c = _vm._self._c || _h
+  return _c(
+    "b-modal",
+    {
+      attrs: {
+        title: "Tokenul „" + (_vm.tokenul.cn || "") + "” își așteaptă PIN-ul",
+        "ok-title": "Trimite codul",
+        "cancel-title": "Îl scriu acolo",
+        "ok-variant": "primary",
+        "modal-class": "modul-spv",
+        "ok-disabled": !_vm.pin || _vm.inCurs,
+      },
+      on: {
+        ok: function ($event) {
+          $event.preventDefault()
+          return _vm.trimite.apply(null, arguments)
+        },
+        hidden: _vm.uita,
+      },
+      model: {
+        value: _vm.vizibil,
+        callback: function ($$v) {
+          _vm.vizibil = $$v
+        },
+        expression: "vizibil",
+      },
+    },
+    [
+      _c("p", { staticClass: "mb-2" }, [
+        _vm._v(
+          "\n    Pe calculatorul clientului stă deschisă o fereastră care cere PIN-ul\n    tokenului. Până nu e scris acolo, lucrarea nu poate merge mai departe.\n  "
+        ),
+      ]),
+      _vm._v(" "),
+      _vm.tokenul.fereastra
+        ? _c("p", { staticClass: "text-muted small mb-2" }, [
+            _vm._v("\n    Fereastra: "),
+            _c("code", [_vm._v(_vm._s(_vm.tokenul.fereastra))]),
+            _vm._v(" "),
+            _vm.tokenul.de_cand
+              ? _c("span", [_vm._v(" · " + _vm._s(_vm.tokenul.de_cand))])
+              : _vm._e(),
+          ])
+        : _vm._e(),
+      _vm._v(" "),
+      _c("label", [_vm._v("PIN-ul tokenului")]),
+      _vm._v(" "),
+      _c("b-form-input", {
+        ref: "camp",
+        attrs: {
+          type: "password",
+          autocomplete: "off",
+          disabled: _vm.inCurs,
+          placeholder: "codul se scrie o singură dată",
+        },
+        on: {
+          keyup: function ($event) {
+            if (
+              !$event.type.indexOf("key") &&
+              _vm._k($event.keyCode, "enter", 13, $event.key, "Enter")
+            ) {
+              return null
+            }
+            return _vm.trimite.apply(null, arguments)
+          },
+        },
+        model: {
+          value: _vm.pin,
+          callback: function ($$v) {
+            _vm.pin = $$v
+          },
+          expression: "pin",
+        },
+      }),
+      _vm._v(" "),
+      _c("small", { staticClass: "d-block text-muted mt-1" }, [
+        _vm._v(
+          "\n    Codul pleacă o singură dată, prin cererea aceasta, până la programul local\n    de pe calculatorul clientului, care îl scrie în fereastra deschisă. Nu se\n    păstrează nicăieri — nici aici, nici pe server — și nu intră în jurnal.\n  "
+        ),
+      ]),
+      _vm._v(" "),
+      _c(
+        "b-alert",
+        {
+          staticClass: "mt-2 mb-0 p-1 small",
+          attrs: { show: Boolean(_vm.eroare), variant: "danger" },
+        },
+        [_vm._v("\n    " + _vm._s(_vm.eroare) + "\n  ")]
       ),
     ],
     1
@@ -11127,6 +11483,38 @@ var render = function () {
                 ]
               )
             : _vm._e(),
+          _vm._v(" "),
+          _c("hr"),
+          _vm._v(" "),
+          _c(
+            "b-form-checkbox",
+            {
+              staticClass: "mb-1",
+              model: {
+                value: _vm.bridgeFormular.pin_de_la_distanta,
+                callback: function ($$v) {
+                  _vm.$set(_vm.bridgeFormular, "pin_de_la_distanta", $$v)
+                },
+                expression: "bridgeFormular.pin_de_la_distanta",
+              },
+            },
+            [
+              _vm._v(
+                "\n        Pot trimite PIN-ul acestui token din aplicație\n        "
+              ),
+              _c("small", { staticClass: "d-block text-muted" }, [
+                _vm._v(
+                  "\n          Când o lucrare se oprește fiindcă tokenul își cere PIN-ul, aplicația\n          îl cere aici și îl scrie în fereastra deschisă pe calculatorul\n          clientului. Codul trece o singură dată și nu se păstrează nicăieri —\n          nici în aplicație, nici pe server.\n        "
+                ),
+              ]),
+              _vm._v(" "),
+              _c("small", { staticClass: "d-block text-warning mt-25" }, [
+                _vm._v(
+                  "\n          Nebifat, aplicația doar vă spune care token așteaptă, iar codul se\n          scrie de mână, acolo. Bifați numai dacă tokenul e al dumneavoastră\n          sau aveți învoirea celui care răspunde de el: PIN-ul e dovada că\n          semnătura vă aparține.\n        "
+                ),
+              ]),
+            ]
+          ),
           _vm._v(" "),
           _vm.bridgeFormular.monitorizare_activa
             ? _c("small", { staticClass: "text-muted d-block mb-3" }, [
@@ -19384,21 +19772,26 @@ render._withStripped = true
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "default", function() { return citesteFluxul; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "areFlux", function() { return areFlux; });
-/* harmony import */ var core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! core-js/modules/es.regexp.exec.js */ "./node_modules/core-js/modules/es.regexp.exec.js");
-/* harmony import */ var core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! core-js/modules/es.string.replace.js */ "./node_modules/core-js/modules/es.string.replace.js");
-/* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_1__);
-/* harmony import */ var core_js_modules_es_array_concat_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! core-js/modules/es.array.concat.js */ "./node_modules/core-js/modules/es.array.concat.js");
-/* harmony import */ var core_js_modules_es_array_concat_js__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_array_concat_js__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var core_js_modules_es_object_to_string_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! core-js/modules/es.object.to-string.js */ "./node_modules/core-js/modules/es.object.to-string.js");
-/* harmony import */ var core_js_modules_es_object_to_string_js__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_object_to_string_js__WEBPACK_IMPORTED_MODULE_3__);
-/* harmony import */ var core_js_modules_es_string_split_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! core-js/modules/es.string.split.js */ "./node_modules/core-js/modules/es.string.split.js");
-/* harmony import */ var core_js_modules_es_string_split_js__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_string_split_js__WEBPACK_IMPORTED_MODULE_4__);
-/* harmony import */ var core_js_modules_web_dom_collections_for_each_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! core-js/modules/web.dom-collections.for-each.js */ "./node_modules/core-js/modules/web.dom-collections.for-each.js");
-/* harmony import */ var core_js_modules_web_dom_collections_for_each_js__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_web_dom_collections_for_each_js__WEBPACK_IMPORTED_MODULE_5__);
-/* harmony import */ var core_js_modules_es_string_trim_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! core-js/modules/es.string.trim.js */ "./node_modules/core-js/modules/es.string.trim.js");
-/* harmony import */ var core_js_modules_es_string_trim_js__WEBPACK_IMPORTED_MODULE_6___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_string_trim_js__WEBPACK_IMPORTED_MODULE_6__);
-/* harmony import */ var _axios__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! @axios */ "./resources/js/src/libs/axios.js");
+/* harmony import */ var C_dianasoft_serviciiweb_web_node_modules_babel_runtime_helpers_esm_objectSpread2_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./node_modules/@babel/runtime/helpers/esm/objectSpread2.js */ "./node_modules/@babel/runtime/helpers/esm/objectSpread2.js");
+/* harmony import */ var core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! core-js/modules/es.regexp.exec.js */ "./node_modules/core-js/modules/es.regexp.exec.js");
+/* harmony import */ var core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_regexp_exec_js__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! core-js/modules/es.string.replace.js */ "./node_modules/core-js/modules/es.string.replace.js");
+/* harmony import */ var core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_string_replace_js__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var core_js_modules_es_array_concat_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! core-js/modules/es.array.concat.js */ "./node_modules/core-js/modules/es.array.concat.js");
+/* harmony import */ var core_js_modules_es_array_concat_js__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_array_concat_js__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var core_js_modules_es_object_to_string_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! core-js/modules/es.object.to-string.js */ "./node_modules/core-js/modules/es.object.to-string.js");
+/* harmony import */ var core_js_modules_es_object_to_string_js__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_object_to_string_js__WEBPACK_IMPORTED_MODULE_4__);
+/* harmony import */ var core_js_modules_es_json_stringify_js__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! core-js/modules/es.json.stringify.js */ "./node_modules/core-js/modules/es.json.stringify.js");
+/* harmony import */ var core_js_modules_es_json_stringify_js__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_json_stringify_js__WEBPACK_IMPORTED_MODULE_5__);
+/* harmony import */ var core_js_modules_es_string_split_js__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! core-js/modules/es.string.split.js */ "./node_modules/core-js/modules/es.string.split.js");
+/* harmony import */ var core_js_modules_es_string_split_js__WEBPACK_IMPORTED_MODULE_6___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_string_split_js__WEBPACK_IMPORTED_MODULE_6__);
+/* harmony import */ var core_js_modules_web_dom_collections_for_each_js__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! core-js/modules/web.dom-collections.for-each.js */ "./node_modules/core-js/modules/web.dom-collections.for-each.js");
+/* harmony import */ var core_js_modules_web_dom_collections_for_each_js__WEBPACK_IMPORTED_MODULE_7___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_web_dom_collections_for_each_js__WEBPACK_IMPORTED_MODULE_7__);
+/* harmony import */ var core_js_modules_es_string_trim_js__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! core-js/modules/es.string.trim.js */ "./node_modules/core-js/modules/es.string.trim.js");
+/* harmony import */ var core_js_modules_es_string_trim_js__WEBPACK_IMPORTED_MODULE_8___default = /*#__PURE__*/__webpack_require__.n(core_js_modules_es_string_trim_js__WEBPACK_IMPORTED_MODULE_8__);
+/* harmony import */ var _axios__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! @axios */ "./resources/js/src/libs/axios.js");
+
+
 
 
 
@@ -19424,7 +19817,7 @@ __webpack_require__.r(__webpack_exports__);
 function adresa(cale) {
   // Adresa API vine din window.api_url (definit în pagină); instanța axios nu
   // are baseURL propriu, așa că nu se poate citi doar de acolo.
-  var baza = (window.api_url || _axios__WEBPACK_IMPORTED_MODULE_7__["default"].defaults.baseURL || '').replace(/\/+$/, '');
+  var baza = (window.api_url || _axios__WEBPACK_IMPORTED_MODULE_9__["default"].defaults.baseURL || '').replace(/\/+$/, '');
   return "".concat(baza, "/").concat(String(cale).replace(/^\/+/, ''));
 }
 /**
@@ -19456,21 +19849,30 @@ function eroareaLegaturii(status) {
  *
  * @param {string} cale ruta din API, fără adresa de bază
  * @param {function(object): void} laFiecarePas primește fiecare obiect citit
+ * @param {object} [optiuni] „corp" pleacă drept JSON, cu POST
  * @returns {Promise<void>} se împlinește când fluxul s-a încheiat
  */
 
 
 function citesteFluxul(cale, laFiecarePas) {
-  var antete = _axios__WEBPACK_IMPORTED_MODULE_7__["default"].defaults.headers.common;
+  var optiuni = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+  var antete = _axios__WEBPACK_IMPORTED_MODULE_9__["default"].defaults.headers.common;
+  var corp = optiuni.corp;
   return fetch(adresa(cale), {
-    headers: {
+    // Lucrările care primesc o listă — depunerea mai multor declarații, de
+    // pildă — nu încap într-o adresă, deci pleacă cu POST.
+    method: optiuni.metoda || (corp ? 'POST' : 'GET'),
+    headers: Object(C_dianasoft_serviciiweb_web_node_modules_babel_runtime_helpers_esm_objectSpread2_js__WEBPACK_IMPORTED_MODULE_0__["default"])({
       // „application/json" trebuie să apară: fără el, la o sesiune expirată
       // Laravel redirecționează spre login în loc să răspundă 401, iar fluxul
       // ar părea gol în loc de eșuat.
       Accept: 'application/json, application/x-ndjson',
       Authorization: antete.Authorization,
       AuthorizationHeader: antete.AuthorizationHeader
-    }
+    }, corp ? {
+      'Content-Type': 'application/json'
+    } : {}),
+    body: corp ? JSON.stringify(corp) : undefined
   }).then(function (raspuns) {
     if (!raspuns.ok) throw eroareaLegaturii(raspuns.status);
     var cititor = raspuns.body.getReader();
@@ -19611,6 +20013,75 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "render", function() { return _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_Spv_vue_vue_type_template_id_50cb4596_scoped_true___WEBPACK_IMPORTED_MODULE_0__["render"]; });
 
 /* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "staticRenderFns", function() { return _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_Spv_vue_vue_type_template_id_50cb4596_scoped_true___WEBPACK_IMPORTED_MODULE_0__["staticRenderFns"]; });
+
+
+
+/***/ }),
+
+/***/ "./resources/js/src/views/app_pages/spv/CereriDePin.vue":
+/*!**************************************************************!*\
+  !*** ./resources/js/src/views/app_pages/spv/CereriDePin.vue ***!
+  \**************************************************************/
+/*! exports provided: default */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony import */ var _CereriDePin_vue_vue_type_template_id_6119d22f___WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./CereriDePin.vue?vue&type=template&id=6119d22f& */ "./resources/js/src/views/app_pages/spv/CereriDePin.vue?vue&type=template&id=6119d22f&");
+/* harmony import */ var _CereriDePin_vue_vue_type_script_lang_js___WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./CereriDePin.vue?vue&type=script&lang=js& */ "./resources/js/src/views/app_pages/spv/CereriDePin.vue?vue&type=script&lang=js&");
+/* empty/unused harmony star reexport *//* harmony import */ var _node_modules_vue_loader_lib_runtime_componentNormalizer_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../../../../../../node_modules/vue-loader/lib/runtime/componentNormalizer.js */ "./node_modules/vue-loader/lib/runtime/componentNormalizer.js");
+
+
+
+
+
+/* normalize component */
+
+var component = Object(_node_modules_vue_loader_lib_runtime_componentNormalizer_js__WEBPACK_IMPORTED_MODULE_2__["default"])(
+  _CereriDePin_vue_vue_type_script_lang_js___WEBPACK_IMPORTED_MODULE_1__["default"],
+  _CereriDePin_vue_vue_type_template_id_6119d22f___WEBPACK_IMPORTED_MODULE_0__["render"],
+  _CereriDePin_vue_vue_type_template_id_6119d22f___WEBPACK_IMPORTED_MODULE_0__["staticRenderFns"],
+  false,
+  null,
+  null,
+  null
+  
+)
+
+/* hot reload */
+if (false) { var api; }
+component.options.__file = "resources/js/src/views/app_pages/spv/CereriDePin.vue"
+/* harmony default export */ __webpack_exports__["default"] = (component.exports);
+
+/***/ }),
+
+/***/ "./resources/js/src/views/app_pages/spv/CereriDePin.vue?vue&type=script&lang=js&":
+/*!***************************************************************************************!*\
+  !*** ./resources/js/src/views/app_pages/spv/CereriDePin.vue?vue&type=script&lang=js& ***!
+  \***************************************************************************************/
+/*! exports provided: default */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony import */ var _node_modules_babel_loader_lib_index_js_ref_4_0_node_modules_vue_loader_lib_index_js_vue_loader_options_CereriDePin_vue_vue_type_script_lang_js___WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! -!../../../../../../node_modules/babel-loader/lib??ref--4-0!../../../../../../node_modules/vue-loader/lib??vue-loader-options!./CereriDePin.vue?vue&type=script&lang=js& */ "./node_modules/babel-loader/lib/index.js?!./node_modules/vue-loader/lib/index.js?!./resources/js/src/views/app_pages/spv/CereriDePin.vue?vue&type=script&lang=js&");
+/* empty/unused harmony star reexport */ /* harmony default export */ __webpack_exports__["default"] = (_node_modules_babel_loader_lib_index_js_ref_4_0_node_modules_vue_loader_lib_index_js_vue_loader_options_CereriDePin_vue_vue_type_script_lang_js___WEBPACK_IMPORTED_MODULE_0__["default"]); 
+
+/***/ }),
+
+/***/ "./resources/js/src/views/app_pages/spv/CereriDePin.vue?vue&type=template&id=6119d22f&":
+/*!*********************************************************************************************!*\
+  !*** ./resources/js/src/views/app_pages/spv/CereriDePin.vue?vue&type=template&id=6119d22f& ***!
+  \*********************************************************************************************/
+/*! exports provided: render, staticRenderFns */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony import */ var _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_CereriDePin_vue_vue_type_template_id_6119d22f___WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! -!../../../../../../node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!../../../../../../node_modules/vue-loader/lib??vue-loader-options!./CereriDePin.vue?vue&type=template&id=6119d22f& */ "./node_modules/vue-loader/lib/loaders/templateLoader.js?!./node_modules/vue-loader/lib/index.js?!./resources/js/src/views/app_pages/spv/CereriDePin.vue?vue&type=template&id=6119d22f&");
+/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "render", function() { return _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_CereriDePin_vue_vue_type_template_id_6119d22f___WEBPACK_IMPORTED_MODULE_0__["render"]; });
+
+/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "staticRenderFns", function() { return _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_CereriDePin_vue_vue_type_template_id_6119d22f___WEBPACK_IMPORTED_MODULE_0__["staticRenderFns"]; });
 
 
 

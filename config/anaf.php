@@ -16,8 +16,32 @@ return [
             'token' => env('SPV_BRIDGE_TOKEN'),
         ],
 
+        /*
+         * Cat se asteapta ca omul sa scrie PIN-ul, cand programul local spune ca
+         * fereastra tokenului e deschisa.
+         *
+         * Apelul cazut se reia singur de indata ce fereastra s-a inchis, deci
+         * omul nu mai trebuie sa apese din nou butonul. Peste rabdarea asta se
+         * renunta si i se spune limpede la ce token sa se duca: o fereastra
+         * ramasa deschisa peste noapte n-are de ce sa tina cererea pe loc.
+         */
+        'pin_asteptare_secunde' => (int) env('SPV_PIN_ASTEPTARE', 90),
+        'pin_pas_secunde' => (int) env('SPV_PIN_PAS', 2),
+
         'zile_max' => 60,
         'throttle_ms' => 1200,
+
+        /*
+         * Pauza se tine pe fiecare certificat in parte, fiindca si ANAF numara
+         * apelurile pe certificatul care le face: doua tokene ale aceluiasi
+         * client n-au nicio treaba unul cu altul, iar asteptand pe amandoua
+         * laolalta lucrarile mari tineau de doua ori cat trebuia.
+         *
+         * Se poate pune pe „false" daca vreodata se dovedeste ca ANAF numara
+         * altfel — pe adresa, de pilda, si atunci doua tokene de pe acelasi
+         * calculator ar trebui sa astepte unul dupa altul.
+         */
+        'throttle_pe_certificat' => env('SPV_THROTTLE_PE_CERTIFICAT', true),
         'timeout' => 60,
 
         /*
@@ -36,6 +60,19 @@ return [
         // ANAF impune o pauza intre apeluri, asa ca numarul e limitat pe cerere;
         // mesajele ramase se preiau la urmatoarea citire.
         'descarcare_automata' => env('SPV_DESCARCARE_AUTOMATA', true),
+
+        /*
+         * Cate documente incap intr-o transa ceruta programului local.
+         *
+         * Pana acum fiecare document insemna un drum intreg pana la
+         * calculatorul clientului si inapoi. Pauza ceruta de ANAF nu dispare —
+         * o tine programul local —, dar drumurile se fac o data la atatea
+         * documente, nu la fiecare.
+         *
+         * Zece e o masura cuminte: destul cat sa se simta, putin cat mersul
+         * lucrarii sa se vada in fila din zece in zece documente, nu la sfarsit.
+         */
+        'documente_pe_transa' => (int) env('SPV_DOCUMENTE_PE_TRANSA', 10),
         'limita_descarcari' => (int) env('SPV_LIMITA_DESCARCARI', 20),
         'incercari_max' => 3,
 
@@ -305,6 +342,19 @@ return [
          */
         'url_stare' => env('ANAF_URL_STARE', 'https://stare.anaf.ro/StareD112/vizualizareStare.do'),
         'url_recipisa' => env('ANAF_URL_RECIPISA', 'https://stare.anaf.ro/StareD112/ObtineRecipisa?numefisier='),
+
+        /*
+         * Cate stari publice se intreaba deodata la verificarea recipiselor.
+         *
+         * StareD112 e o pagina publica, ceruta de pe serverul nostru: n-are
+         * nici certificat, nici bridge, nici pauza ceruta de ANAF pentru SPV,
+         * deci nimic nu cere ca intrebarile sa stea la rand. Pe rand, ele
+         * adaugau o secunda de fiecare declaratie fara recipisa.
+         *
+         * Opt e o masura cuminte: destul cat sa se simta, putin cat sa nu para
+         * navala pentru o pagina care nu e facuta pentru asa ceva.
+         */
+        'stari_deodata' => (int) env('ANAF_STARI_DEODATA', 8),
 
         'storage_path' => 'declaratii',
         'timeout' => 120,

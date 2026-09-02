@@ -52,12 +52,17 @@ function eroareaLegaturii(status) {
  *
  * @param {string} cale ruta din API, fără adresa de bază
  * @param {function(object): void} laFiecarePas primește fiecare obiect citit
+ * @param {object} [optiuni] „corp" pleacă drept JSON, cu POST
  * @returns {Promise<void>} se împlinește când fluxul s-a încheiat
  */
-export default function citesteFluxul(cale, laFiecarePas) {
+export default function citesteFluxul(cale, laFiecarePas, optiuni = {}) {
   const antete = axios.defaults.headers.common
+  const { corp } = optiuni
 
   return fetch(adresa(cale), {
+    // Lucrările care primesc o listă — depunerea mai multor declarații, de
+    // pildă — nu încap într-o adresă, deci pleacă cu POST.
+    method: optiuni.metoda || (corp ? 'POST' : 'GET'),
     headers: {
       // „application/json" trebuie să apară: fără el, la o sesiune expirată
       // Laravel redirecționează spre login în loc să răspundă 401, iar fluxul
@@ -65,7 +70,9 @@ export default function citesteFluxul(cale, laFiecarePas) {
       Accept: 'application/json, application/x-ndjson',
       Authorization: antete.Authorization,
       AuthorizationHeader: antete.AuthorizationHeader,
+      ...(corp ? { 'Content-Type': 'application/json' } : {}),
     },
+    body: corp ? JSON.stringify(corp) : undefined,
   })
     .then(raspuns => {
       if (!raspuns.ok) throw eroareaLegaturii(raspuns.status)

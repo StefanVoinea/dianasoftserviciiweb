@@ -106,15 +106,22 @@ class EntitateScoasaDinUzTest extends TestCase
         $this->assertFalse($scoasa->fresh()->esteInLucru());
     }
 
-    /** Sursa care sincronizeaza nu atinge deloc coloana omului. */
+    /**
+     * Sursa care sincronizeaza nu atinge deloc coloana omului.
+     *
+     * Scrierea listei venite de la ANAF sta acum in `scrieCifurile()` — mai
+     * inainte era o bucla in `sincronizeaza()`. Paza e aceeasi: orice ar scrie
+     * acolo, „scos_din_uz" nu e treaba lui.
+     */
     public function test_sincronizarea_nu_scrie_in_coloana_omului(): void
     {
         $sursa = file_get_contents(app_path('Services/Anaf/Spv/SocietatiService.php'));
 
-        $inceput = strpos($sursa, 'foreach ($cifuri as $cif)');
-        $sfarsit = strpos($sursa, '$dezactivate = AnafSocietate::');
+        $inceput = strpos($sursa, 'protected function scrieCifurile');
+        $sfarsit = strpos($sursa, 'Lista de CIF-uri din raspunsul ANAF', $inceput ?: 0);
 
-        $this->assertNotFalse($inceput);
+        $this->assertNotFalse($inceput, 'scrierea listei si-a schimbat numele');
+        $this->assertNotFalse($sfarsit);
         $this->assertStringNotContainsString(
             'scos_din_uz',
             substr($sursa, $inceput, $sfarsit - $inceput),

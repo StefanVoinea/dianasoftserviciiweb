@@ -168,6 +168,8 @@ Route::middleware(['auth:api', 'companie.anaf', 'modul:spv'])->group(function ()
     Route::post('/declaratii/{declaratie}/decont/formular', 'Api\DeclaratiiController@decontFormular');
     Route::post('/declaratii/{declaratie}/semneaza', 'Api\DeclaratiiController@semneaza');
     Route::post('/declaratii/{declaratie}/depune', 'Api\DeclaratiiController@depune');
+    // Mai multe declaratii dintr-o singura cerere, spuse pas cu pas
+    Route::post('/declaratii/depune/flux', 'Api\DeclaratiiController@depuneFlux');
     Route::get('/declaratii/{declaratie}/fisier/{tip}', 'Api\DeclaratiiController@fisier');
     // Erorile validatorului ANAF, explicate pe intelesul oricui
     Route::get('/declaratii/{declaratie}/erori', 'Api\DeclaratiiController@explicaErori');
@@ -196,6 +198,11 @@ Route::middleware(['auth:api', 'companie.anaf', 'modul:spv'])->group(function ()
     Route::post('/anaf-certificate/{certificat}/activare', 'Api\CertificateController@comutaActiv');
     // Proba PIN-ului: afla daca tokenul e deblocat si, daca nu, deschide fereastra
     Route::post('/anaf-certificate/verifica-pin', 'Api\CertificateController@verificaPin');
+    // Tokenurile care isi asteapta acum PIN-ul, pentru cererea de cod din fila
+    Route::get('/anaf-certificate/pin/asteptare', 'Api\CertificateController@pinInAsteptare');
+    // Fereastra de PIN de pe calculatorul clientului: daca e deschisa, si codul pentru ea
+    Route::get('/anaf-certificate/{certificat}/pin/fereastra', 'Api\CertificateController@fereastraPin');
+    Route::post('/anaf-certificate/{certificat}/pin', 'Api\CertificateController@trimitePin');
     Route::put('/anaf-certificate/{certificat}', 'Api\CertificateController@update');
     Route::post('/anaf-certificate/abonare', 'Api\CertificateController@abonare');
     Route::delete('/anaf-certificate/abonare/{abonat}', 'Api\CertificateController@dezabonare');

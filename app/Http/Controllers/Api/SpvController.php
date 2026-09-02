@@ -14,6 +14,7 @@ use App\Services\Anaf\Spv\SolicitareService;
 use App\Services\Anaf\Spv\SpvException;
 use App\Services\Anaf\Spv\SpvStorage;
 use App\Support\ContextUtilizator;
+use App\Support\PeRand;
 use App\Support\Flux;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -294,35 +295,34 @@ class SpvController extends Controller
              */
             $cazuteLaRand = 0;
             $oprit = null;
+            $facute = 0;
 
-            foreach ($deDescarcat as $i => $mesaj) {
+            /*
+             * Documentele se cer in transe: pana acum, fiecare insemna un drum
+             * intreg pana la calculatorul clientului si inapoi. Pauza ceruta de
+             * ANAF nu dispare — o tine programul local, unde e si apelul —, dar
+             * drumurile se fac o data la zece documente, nu la fiecare.
+             */
+            foreach ($storage->aduceLotul($deDescarcat, (int) config('anaf.spv.documente_pe_transa', 10)) as $pas) {
                 // Fiecare document isi cere ragazul lui, socotit de la capat.
                 ragaz(120);
 
-                $reusit = true;
-                $deCe = null;
+                $mesaj = $pas['mesaj'];
+                $reusit = $pas['reusit'];
+                $deCe = $pas['eroare'];
+                $facute++;
 
-                try {
-                    // Documentul merge de la ANAF drept in dosarul firmei, la client.
-                    $storage->aduce($mesaj);
-
+                if ($reusit) {
                     $descarcate++;
                     $cazuteLaRand = 0;
-                } catch (SpvException $e) {
-                    $mesaj->update([
-                        'incercari' => $mesaj->incercari + 1,
-                        'ultima_eroare' => $e->getMessage(),
-                    ]);
-
-                    $erori[] = $mesaj->mesaj_id . ': ' . $e->getMessage();
-                    $reusit = false;
-                    $deCe = $e->getMessage();
+                } else {
+                    $erori[] = $mesaj->mesaj_id . ': ' . $deCe;
                     $cazuteLaRand++;
                 }
 
                 yield [
                     'tip' => 'pas',
-                    'facute' => $i + 1,
+                    'facute' => $facute,
                     'total' => $total,
                     'reusit' => $reusit,
                     'ce' => trim(($mesaj->tip ?: 'Document') . ' ' . $mesaj->cif),
@@ -343,7 +343,7 @@ class SpvController extends Controller
 
                     yield [
                         'tip' => 'oprit',
-                        'facute' => $i + 1,
+                        'facute' => $facute,
                         'total' => $total,
                         'la_rand' => $cazuteLaRand,
                         'de_ce' => $deCe,
@@ -502,7 +502,7 @@ class SpvController extends Controller
     {
         $incercariMax = (int) config('anaf.spv.incercari_max');
 
-        return array_values(array_filter($mesaje, function (SpvMesaj $mesaj) use ($incercariMax) {
+        $deAdus = array_filter($mesaje, function (SpvMesaj $mesaj) use ($incercariMax) {
             // Recipisele si raspunsurile la solicitari se aduc din filele lor,
             // unde se si leaga de documentul la care raspund. Cerute si de aici,
             // ar consuma de doua ori din limita de apeluri catre ANAF.
@@ -511,7 +511,17 @@ class SpvController extends Controller
             }
 
             return $this->lipsesteFisierul($mesaj) && $mesaj->incercari < $incercariMax;
-        }));
+        });
+
+        /*
+         * Documentele se iau pe rand de la fiecare token: pauza ceruta de ANAF
+         * se tine pe fiecare certificat, deci cat asteapta unul, celalalt poate
+         * lucra. In bloc — toate ale unuia, apoi toate ale celuilalt — nu s-ar
+         * castiga nimic.
+         */
+        return PeRand::intercalat($deAdus, function (SpvMesaj $mesaj) {
+            return $mesaj->certificat_id ?: 0;
+        });
     }
 
     /**

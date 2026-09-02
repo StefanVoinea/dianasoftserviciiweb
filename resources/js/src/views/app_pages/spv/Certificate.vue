@@ -623,6 +623,29 @@
         </small>
       </b-form-checkbox>
 
+      <!-- PIN-ul trimis de la distanță: alegerea celui care ține tokenul.
+           Nebifată, aplicația spune doar că fereastra e deschisă, și atât. -->
+      <hr>
+
+      <b-form-checkbox
+        v-model="bridgeFormular.pin_de_la_distanta"
+        class="mb-1"
+      >
+        Pot trimite PIN-ul acestui token din aplicație
+        <small class="d-block text-muted">
+          Când o lucrare se oprește fiindcă tokenul își cere PIN-ul, aplicația
+          îl cere aici și îl scrie în fereastra deschisă pe calculatorul
+          clientului. Codul trece o singură dată și nu se păstrează nicăieri —
+          nici în aplicație, nici pe server.
+        </small>
+        <small class="d-block text-warning mt-25">
+          Nebifat, aplicația doar vă spune care token așteaptă, iar codul se
+          scrie de mână, acolo. Bifați numai dacă tokenul e al dumneavoastră
+          sau aveți învoirea celui care răspunde de el: PIN-ul e dovada că
+          semnătura vă aparține.
+        </small>
+      </b-form-checkbox>
+
       <small
         v-if="bridgeFormular.monitorizare_activa"
         class="text-muted d-block mb-3"
@@ -1121,6 +1144,7 @@ export default {
         monitorizare_cadenta: certificat.monitorizare_cadenta || 5,
         monitorizare_semneaza: certificat.monitorizare_semneaza !== false,
         monitorizare_depune: Boolean(certificat.monitorizare_depune),
+        pin_de_la_distanta: Boolean(certificat.pin_de_la_distanta),
         monitorizare_la: certificat.monitorizare_la,
         mod_legatura: certificat.mod_legatura || 'direct',
         implicit: certificat.implicit,
@@ -1178,6 +1202,7 @@ export default {
         monitorizare_cadenta: this.bridgeFormular.monitorizare_cadenta,
         monitorizare_semneaza: this.bridgeFormular.monitorizare_semneaza,
         monitorizare_depune: this.bridgeFormular.monitorizare_depune,
+        pin_de_la_distanta: this.bridgeFormular.pin_de_la_distanta,
         mod_legatura: this.bridgeFormular.mod_legatura,
         implicit: this.bridgeFormular.implicit,
       })
