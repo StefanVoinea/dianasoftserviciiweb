@@ -175,4 +175,87 @@ class AgentPandaTest extends TestCase
             );
         }
     }
+
+    /**
+     * Lucrarea care atarna se vede dupa ceas, nu dupa un esec.
+     *
+     * Apelul prins intr-o fereastra de PIN nu pica: el asteapta strangerea de
+     * mana, care asteapta cheia privata, care asteapta codul — si asa poate sta
+     * ceasuri. Cat ne uitam numai la esecuri, vestea venea, cand venea, de la
+     * cu totul alta cerere care se nimerea peste instanta infundata.
+     */
+    public function test_lucrarea_care_atarna_se_vede_dupa_ceas()
+    {
+        $dosar = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'proba-agent-' . bin2hex(random_bytes(6));
+        mkdir($dosar);
+
+        $config = array('dosar' => $dosar);
+
+        try {
+            $this->assertFalse(
+                agent_lucrari_intarziate($config, 15),
+                'Fara nicio lucrare pornita nu are ce sa intarzie.'
+            );
+
+            $semn = $dosar . DIRECTORY_SEPARATOR . 'agent_lucru_7.tmp';
+            file_put_contents($semn, 'http://127.0.0.1:8099');
+
+            $this->assertFalse(
+                agent_lucrari_intarziate($config, 15),
+                'O lucrare abia pornita e o lucrare, nu o pana.'
+            );
+
+            // Aceeasi lucrare, imbatranita cu o jumatate de minut.
+            touch($semn, time() - 30);
+            clearstatcache();
+
+            $this->assertTrue(
+                agent_lucrari_intarziate($config, 15),
+                'Peste prag, lucrarea merita o privire pe ecran.'
+            );
+
+            $this->assertFalse(
+                agent_lucrari_intarziate($config, 300),
+                'Pragul e al celui care intreaba: sub el, nimic nu intarzie.'
+            );
+        } finally {
+            array_map('unlink', (array) glob($dosar . DIRECTORY_SEPARATOR . '*'));
+            rmdir($dosar);
+        }
+    }
+
+    /**
+     * Semnele ramase de la lucrari cazute nu se sterg cand ne uitam la ceas.
+     *
+     * Curatenia lor e treaba pandei, care stie si ce adresa elibereaza. Facuta
+     * aici, ea ar fi dat drumul instantei tocmai cand lucrarea de pe ea atarna.
+     */
+    public function test_privirea_la_ceas_nu_sterge_semnele()
+    {
+        $dosar = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'proba-agent-' . bin2hex(random_bytes(6));
+        mkdir($dosar);
+
+        $semn = $dosar . DIRECTORY_SEPARATOR . 'agent_lucru_9.tmp';
+        file_put_contents($semn, 'http://127.0.0.1:8100');
+        touch($semn, time() - 3600);
+        clearstatcache();
+
+        try {
+            agent_lucrari_intarziate(array('dosar' => $dosar), 15);
+
+            $this->assertFileExists($semn, 'Semnul ramane: nu noi il curatam.');
+        } finally {
+            array_map('unlink', (array) glob($dosar . DIRECTORY_SEPARATOR . '*'));
+            rmdir($dosar);
+        }
+    }
+
+    /** Panda se uita la ceas inainte de orice altceva. */
+    public function test_panda_se_uita_dupa_ferestrele_de_pin()
+    {
+        $panda = file_get_contents(base_path('spv-bridge/agent.php'));
+
+        $this->assertStringContainsString('agent_lucrari_intarziate($config,', $panda);
+        $this->assertStringContainsString('agent_spune_de_pin($config,', $panda);
+    }
 }

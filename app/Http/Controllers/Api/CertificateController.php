@@ -674,6 +674,7 @@ class CertificateController extends Controller
             array_flip([
                 'bridge_url', 'bridge_token', 'arhiva_cale', 'monitorizare_cale', 'monitorizare_activa',
                 'monitorizare_cadenta', 'monitorizare_semneaza', 'monitorizare_depune', 'activ', 'mod_legatura',
+                'pin_de_la_distanta',
             ])
         ));
 
@@ -699,8 +700,16 @@ class CertificateController extends Controller
          * Calculatorul tocmai configurat primește licența acum, nu la noapte:
          * altfel omul salvează, încearcă o operație și primește „fără licență".
          * Eșecul nu oprește salvarea — poate fi închis în clipa asta.
+         *
+         * Se cere insa numai cand s-a schimbat ceva din legatura cu el.
+         * Reinnoirea vorbeste cu programul local, iar el serveste o cerere pe
+         * rand: prins intr-o fereastra de PIN, tace minute intregi. Pana acum,
+         * orice bifa — pana si cea prin care omul deschide tocmai trimiterea
+         * PIN-ului — astepta dupa el, si salvarea parea ca nu se mai face.
          */
-        $licenta = app(LicentiereBridge::class)->reinnoieste($certificat->fresh());
+        $licenta = $certificat->wasChanged(['bridge_url', 'bridge_token', 'mod_legatura', 'activ'])
+            ? app(LicentiereBridge::class)->reinnoieste($certificat->fresh())
+            : ['emisa' => false, 'expira' => null, 'motiv' => 'legătura nu s-a schimbat'];
 
         return response()->json([
             'success' => true,

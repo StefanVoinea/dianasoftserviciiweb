@@ -97,6 +97,23 @@ agent_scrie($config, 'Lucrez pe ' . count($config['locale']) . ' instanță(e) a
 
 while (true) {
     /*
+     * Întâi: nu cumva o lucrare atârnă după o fereastră de PIN?
+     *
+     * Până acum ne uitam abia după ce un apel pica. Dar el nu pică: atârnă.
+     * Curl așteaptă strângerea de mână, care așteaptă cheia privată, care
+     * așteaptă PIN-ul — și așa poate sta ceasuri. Vestea venea, când venea,
+     * de la cu totul altă cerere care se nimerea peste instanța înfundată.
+     *
+     * Așa că nu mai așteptăm un eșec, ci ne uităm la ceas: o lucrare care ține
+     * de mai bine de un sfert de minut e destul de rar întâlnită cât să merite
+     * o privire pe ecran. Proba nu atinge nimic și nu deschide nicio fereastră,
+     * deci o alarmă falsă nu costă nimic — pe când tăcerea costă ceasuri.
+     */
+    if (agent_lucrari_intarziate($config, 15)) {
+        agent_spune_de_pin($config, 25);
+    }
+
+    /*
      * Nu se ia comanda decât când e cine s-o ducă la capăt.
      *
      * Fiecare instanță a programului local servește o singură cerere pe rând,

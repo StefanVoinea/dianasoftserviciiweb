@@ -126,6 +126,28 @@ function agent_lucrari_active($config, $rabdare = 420)
 /**
  * Prima instanta locala fara lucrare. Null cand toate sunt ocupate.
  */
+/**
+ * Tine vreo lucrare de mai mult decat ar fi firesc?
+ *
+ * Se numara de la semnul pus inainte de pornirea ei. Nu se sterge nimic aici:
+ * curatenia semnelor ramase de la un proces cazut e treaba lui
+ * agent_lucrari_active, iar o lucrare intarziata nu e o lucrare pierduta.
+ *
+ * @param int $prag de cate secunde incolo o socotim intarziata
+ */
+function agent_lucrari_intarziate($config, $prag)
+{
+    foreach ((array) glob($config['dosar'] . '/agent_lucru_*.tmp') as $semn) {
+        $facut = @filemtime($semn);
+
+        if ($facut !== false && (time() - $facut) >= $prag) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function agent_adresa_libera($config)
 {
     $active = agent_lucrari_active($config);
@@ -634,14 +656,16 @@ function agent_pare_prinsa($raspuns)
  * Se spune o data la cateva minute, nu la fiecare incercare: o fereastra
  * deschisa peste noapte n-are de ce sa umple jurnalul.
  */
-function agent_spune_de_pin($config)
+function agent_spune_de_pin($config, $ragazProba = 300)
 {
     $semn = __DIR__ . DIRECTORY_SEPARATOR . 'pin-spus.json';
-    $ragaz = 300;
+    // Aceeasi fereastra nu se spune mai des de atat, oricat de des ne-am uita.
+    $ragazVeste = 300;
 
     $stiut = is_file($semn) ? json_decode((string) @file_get_contents($semn), true) : null;
+    $stiut = is_array($stiut) ? $stiut : array();
 
-    if (is_array($stiut) && isset($stiut['la']) && (time() - (int) $stiut['la']) < $ragaz) {
+    if (isset($stiut['la']) && (time() - (int) $stiut['la']) < $ragazProba) {
         return;
     }
 
@@ -656,7 +680,8 @@ function agent_spune_de_pin($config)
      * nu e nicio fereastra, PowerShell-ul ar fi pornit la fiecare instanta care
      * tace — iar el nu e ieftin.
      */
-    @file_put_contents($semn, json_encode(array('la' => time())));
+    $stiut['la'] = time();
+    @file_put_contents($semn, json_encode($stiut));
 
     $iesire = @shell_exec('powershell -NoProfile -ExecutionPolicy Bypass -File '
         . escapeshellarg($script) . ' 2>&1');
@@ -666,6 +691,18 @@ function agent_spune_de_pin($config)
     if (!is_array($fereastra) || empty($fereastra['deschisa'])) {
         return;
     }
+
+    /*
+     * Gasita, dar poate nu pentru intaia oara: cat sta fereastra deschisa, ne
+     * uitam des, insa vestea o spunem rar. Altfel jurnalul s-ar umple cu acelasi
+     * rand din jumatate in jumatate de minut.
+     */
+    if (isset($stiut['spus']) && (time() - (int) $stiut['spus']) < $ragazVeste) {
+        return;
+    }
+
+    $stiut['spus'] = time();
+    @file_put_contents($semn, json_encode($stiut));
 
     agent_scrie($config, 'Tokenul își așteaptă PIN-ul: „'
         . (isset($fereastra['titlu']) ? $fereastra['titlu'] : '') . '". Spun aplicației.');
