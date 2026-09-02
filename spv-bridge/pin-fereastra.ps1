@@ -12,37 +12,69 @@
 # Proba nu deschide nicio fereastra, spre deosebire de pin-test.ps1, care o
 # forteaza dinadins ca sa afle daca PIN-ul e dat. Aici se cauta doar ce e deja
 # acolo, deci se poate chema oricand, si dupa fiecare pana.
+#
+# Cu „-Toate" se spun toate ferestrele vazute, potrivite sau nu: asa se afla,
+# cand un furnizor nou nu e recunoscut, ce scrie pe fereastra lui si cine a
+# deschis-o.
+param(
+    [switch]$Toate
+)
 
 $ErrorActionPreference = 'Stop'
 
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
 
 function Raspunde($date) {
-    ($date | ConvertTo-Json -Compress)
+    ($date | ConvertTo-Json -Compress -Depth 4)
     exit 0
 }
 
-function EDialog($clasa) {
-    <#
-        „#32770" e clasa dialogurilor Win32 — acolo stau cele mai multe cereri
-        de PIN. Programele de token scrise mai nou, in WinForms sau WPF, au insa
-        alta clasa, si ar fi trecut nevazute.
-    #>
-    return ($clasa -eq '#32770') -or ($clasa -like 'WindowsForms*') -or ($clasa -like 'HwndWrapper*')
-}
+<#
+    Programele care cer PIN-ul tokenului.
 
-
-# Programele care cer PIN-ul tokenului. Numele difera de la un furnizor la
-# altul, si de aceea se cauta si dupa ce scrie pe fereastra, nu doar dupa ele.
+    Numele difera de la un furnizor la altul, si de multe ori fereastra nici nu
+    e a lor: driverul o deschide chiar in programul care a cerut cheia — curl,
+    php, oricare. De aceea lista aceasta e doar una dintre cai; a doua, si cea
+    care prinde furnizorii necunoscuti, e ce scrie pe fereastra.
+#>
 $Programe = @(
-    'SACSrv', 'SafeNetAuthenticationClient', 'eToken', 'eTSrv', 'eTBase',
+    'SACSrv', 'SACUI', 'SACMonitor', 'SafeNetAuthenticationClient',
+    'eToken', 'eTSrv', 'eTBase', 'eTMonitor',
     'iDProtect', 'bit4id', 'bit4xpki', 'AWP', 'certSIGN', 'DigiSign',
     'TokenAdmin', 'CryptoIdeMngr', 'ClassicClient', 'Gclib', 'SmartCardService',
     'dkck', 'CardOS', 'SecureStoreCSP'
 )
 
-# Ce scrie pe fereastra unei cereri de PIN, in romana si in engleza.
-$Vorbe = 'PIN|Token|Smart ?Card|Autentificare|Authentication|Log ?[Oo]n|Introduce|Enter'
+<#
+    Ce scrie pe fereastra unei cereri de PIN, in romana si in engleza.
+
+    „Token Logon" e chiar titlul ferestrei SafeNet Authentication Client, cea
+    prin care trec certificatele certSIGN.
+#>
+$Vorbe = 'PIN|Token Logon|Token Password|Parola token|Smart ?Card|Autentificare|Authentication|Log ?[Oo]n|Introduce[tț]i'
+
+<#
+    Ferestrele mari de aplicatie, care nu sunt niciodata cereri de PIN.
+
+    Fara ele, un titlu de browser cu „Authentication" in el ar fi luat drept
+    fereastra tokenului — iar in cazul scrierii codului asta chiar ar strica.
+    Se merge deci pe incredere in titlu, dar nu si pentru ferestrele astea.
+#>
+$Straine = @(
+    'Chrome_WidgetWin_*', 'MozillaWindowClass', 'CabinetWClass',
+    'ApplicationFrameWindow', 'Windows.UI.Core.*', 'Shell_TrayWnd',
+    'Progman', 'WorkerW', 'ConsoleWindowClass', 'CASCADIA_HOSTING_WINDOW_CLASS'
+)
+
+function EStraina($clasa) {
+    foreach ($tipar in $Straine) {
+        if ($clasa -like $tipar) {
+            return $true
+        }
+    }
+
+    return $false
+}
 
 try {
     if (-not ('DianaSoft.Ferestre' -as [type])) {
@@ -67,6 +99,7 @@ public static extern int GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProce
     }
 
     $gasite = New-Object System.Collections.ArrayList
+    $vazute = New-Object System.Collections.ArrayList
 
     $culegatorul = [DianaSoft.Ferestre+EnumWindowsProc] {
         param($fereastra, $nefolosit)
@@ -98,18 +131,20 @@ public static extern int GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProce
             $proces = ''
         }
 
+        [void]$vazute.Add([ordered]@{ titlu = $titlu; proces = $proces; clasa = $clasa })
+
         # Ori programul e unul cunoscut, ori pe fereastra scrie despre PIN. A
         # doua cale prinde furnizorii pe care nu-i știm încă pe nume.
         $alNostru = $Programe -contains $proces
-        $spuneDePin = $titlu -match $Vorbe
+        $spuneDePin = ($titlu -match $Vorbe) -and -not (EStraina $clasa)
 
-        $eDialog = EDialog $clasa
-
-        if ($alNostru -or ($eDialog -and $spuneDePin)) {
+        if ($alNostru -or $spuneDePin) {
             [void]$gasite.Add([ordered]@{
                 titlu  = $titlu
                 proces = $proces
                 clasa  = $clasa
+                # Ferestrele programelor cunoscute nu lasa loc de indoiala.
+                sigura = $alNostru
             })
         }
 
@@ -117,6 +152,14 @@ public static extern int GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProce
     }
 
     [void][DianaSoft.Ferestre]::EnumWindows($culegatorul, [IntPtr]::Zero)
+
+    if ($Toate) {
+        Raspunde ([ordered]@{
+            deschisa = ($gasite.Count -gt 0)
+            gasite   = @($gasite)
+            vazute   = @($vazute)
+        })
+    }
 
     if ($gasite.Count -eq 0) {
         Raspunde ([ordered]@{
@@ -126,7 +169,8 @@ public static extern int GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProce
         })
     }
 
-    $cea = $gasite[0]
+    # Intai cele ale programelor cunoscute, apoi cele gasite dupa titlu.
+    $cea = @($gasite | Sort-Object -Property @{ Expression = { -not $_.sigura } })[0]
 
     Raspunde ([ordered]@{
         deschisa = $true

@@ -54,6 +54,8 @@ Route::post('/punte/agent/inrolare', 'Api\PunteController@inrolare');
 Route::post('/punte/agent/asteapta', 'Api\PunteController@asteapta');
 Route::get('/punte/agent/corp/{comanda}', 'Api\PunteController@corp');
 Route::post('/punte/agent/rezultat/{comanda}', 'Api\PunteController@rezultat');
+// Agentul a gasit o fereastra de PIN deschisa pe calculatorul clientului
+Route::post('/punte/agent/pin-asteapta', 'Api\PunteController@pinAsteapta');
 // Innoirea programului de la client: pachet semnat, verificat acolo
 Route::get('/punte/agent/actualizare', 'Api\PunteController@actualizare');
 // Licenta ceruta de programul de la client, indata dupa instalare

@@ -12,6 +12,7 @@ use App\Services\Anaf\Bridge\Licente;
 use App\Services\Anaf\Bridge\Punte;
 use App\Services\Anaf\Jurnal;
 use App\Services\Anaf\Spv\CertificatService;
+use App\Support\Aplicatia;
 use App\Support\ContextCompanie;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -124,6 +125,70 @@ class PunteController extends Controller
      * Ține linia deschisă câteva zeci de secunde. Așa comanda pleacă în clipa în
      * care apare, fără să întrebe agentul din secundă în secundă.
      */
+    /**
+     * Agentul spune ca pe calculatorul lui e deschisa o fereastra de PIN.
+     *
+     * Verificarea de la noi pornea numai dupa ce un apel catre ANAF esua. Dar
+     * el nu esueaza: atarna. Curl asteapta strangerea de mana, care asteapta
+     * cheia privata, care asteapta PIN-ul — si asa poate sta ore. Instanta
+     * prinsa nu mai raspunde nici macar la intrebarea daca e prinsa.
+     *
+     * Agentul e insa alt proces si vede ca instanta tace. El se uita pe ecran
+     * si aduce vestea aici.
+     *
+     * Se insemneaza tokenul a carui comanda e chiar acum in lucru: el a cerut
+     * cheia, deci el a deschis fereastra. Cand nu se stie care, se insemneaza
+     * toate ale agentului — mai bine intrebat de doua ori decat lasat sa astepte.
+     */
+    public function pinAsteapta(Request $request)
+    {
+        $certificate = $this->punte->certificateleAgentului($request);
+
+        if ($certificate->isEmpty()) {
+            return response()->json(['eroare' => 'Cod de acces invalid.'], 401);
+        }
+
+        $titlu = trim((string) base64_decode((string) $request->header('X-Pin-Titlu'), true));
+        $proces = trim((string) $request->header('X-Pin-Proces'));
+
+        // Comenzile luate si neincheiate: printre ele e cea care a cerut cheia.
+        $inLucru = BridgeComanda::query()
+            ->whereIn('certificat_id', $certificate->pluck('id'))
+            ->where('stare', 'luata')
+            ->pluck('certificat_id')
+            ->unique()
+            ->values();
+
+        $alese = $inLucru->isNotEmpty() ? $inLucru : $certificate->pluck('id');
+
+        AnafCertificat::query()->toateCompaniile()
+            ->whereIn('id', $alese)
+            ->update([
+                'pin_stare' => 'asteapta',
+                'pin_motiv' => mb_substr($titlu, 0, 190),
+                'pin_verificat_la' => now(),
+                /*
+                 * Nu se stie cine a pornit lucrarea — agentul duce comenzi ale
+                 * mai multora —, deci se arata oriunde: oricine e prin preajma
+                 * o poate dezlega.
+                 */
+                'pin_cerut_de' => null,
+                'pin_cerut_din' => Aplicatia::FUNDAL,
+            ]);
+
+        Jurnal::scrie(
+            'pin_asteptare',
+            'Programul local a găsit o fereastră de PIN deschisă'
+                . ($titlu !== '' ? ' („' . $titlu . '”)' : '')
+                . ($proces !== '' ? ', deschisă de ' . $proces : ''),
+            ['certificate' => $alese->all()],
+            null,
+            true
+        );
+
+        return response()->json(['success' => true, 'insemnate' => $alese->count()]);
+    }
+
     public function asteapta(Request $request)
     {
         $certificate = $this->punte->certificateleAgentului($request);

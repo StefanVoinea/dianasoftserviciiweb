@@ -603,9 +603,86 @@ function agent_intreaba_local($config, $cale, $optiuni = array())
 
         agent_scrie($config, 'Instanța ' . $adresa . ' nu a răspuns la ' . $cale . ': '
             . agent_talcul_local($raspuns) . '. Încerc pe alta.');
+
+        /*
+         * O instanta care asculta dar nu raspunde e, de cele mai multe ori,
+         * prinsa intr-o fereastra de PIN. Pana acum atat se si spunea — o
+         * banuiala in jurnal. Acum se si uita cineva pe ecran.
+         */
+        if (agent_pare_prinsa($raspuns)) {
+            agent_spune_de_pin($config);
+        }
     }
 
     return $raspuns;
+}
+
+/** Instanta asculta, dar n-a raspuns in ragazul dat: e prinsa in altceva. */
+function agent_pare_prinsa($raspuns)
+{
+    return (int) $raspuns['cod'] === 28
+        || ((int) $raspuns['cod'] !== 0 && (int) $raspuns['status'] === 0 && (int) $raspuns['cod'] !== 7);
+}
+
+/**
+ * Se uita daca e deschisa o fereastra de PIN si, daca da, spune serverului.
+ *
+ * Proba nu atinge nimic si nu deschide nimic: numai numara ferestrele. Ea merge
+ * chiar aici, in agent, fiindca instanta prinsa nu mai raspunde la nimic — nici
+ * la intrebarea daca e prinsa.
+ *
+ * Se spune o data la cateva minute, nu la fiecare incercare: o fereastra
+ * deschisa peste noapte n-are de ce sa umple jurnalul.
+ */
+function agent_spune_de_pin($config)
+{
+    $semn = __DIR__ . DIRECTORY_SEPARATOR . 'pin-spus.json';
+    $ragaz = 300;
+
+    $stiut = is_file($semn) ? json_decode((string) @file_get_contents($semn), true) : null;
+
+    if (is_array($stiut) && isset($stiut['la']) && (time() - (int) $stiut['la']) < $ragaz) {
+        return;
+    }
+
+    $script = __DIR__ . DIRECTORY_SEPARATOR . 'pin-fereastra.ps1';
+
+    if (!is_file($script)) {
+        return;
+    }
+
+    /*
+     * Semnul se pune inainte de proba, nu dupa ce ea gaseste ceva: altfel, cand
+     * nu e nicio fereastra, PowerShell-ul ar fi pornit la fiecare instanta care
+     * tace — iar el nu e ieftin.
+     */
+    @file_put_contents($semn, json_encode(array('la' => time())));
+
+    $iesire = @shell_exec('powershell -NoProfile -ExecutionPolicy Bypass -File '
+        . escapeshellarg($script) . ' 2>&1');
+
+    $fereastra = json_decode((string) $iesire, true);
+
+    if (!is_array($fereastra) || empty($fereastra['deschisa'])) {
+        return;
+    }
+
+    agent_scrie($config, 'Tokenul își așteaptă PIN-ul: „'
+        . (isset($fereastra['titlu']) ? $fereastra['titlu'] : '') . '". Spun aplicației.');
+
+    /*
+     * Vestea pleaca pe antete, ca si celelalte ale agentului. Titlul se codeaza:
+     * el poate purta diacritice, iar un antet nu are ce face cu ele.
+     */
+    agent_curl($config, array(
+        'metoda' => 'POST',
+        'url' => $config['server'] . '/api/punte/agent/pin-asteapta',
+        'antete' => array(
+            'Authorization: Bearer ' . $config['token'],
+            'X-Pin-Titlu: ' . base64_encode(isset($fereastra['titlu']) ? $fereastra['titlu'] : ''),
+            'X-Pin-Proces: ' . preg_replace('/[^A-Za-z0-9_.-]/', '', isset($fereastra['proces']) ? $fereastra['proces'] : ''),
+        ),
+    ));
 }
 
 /**
