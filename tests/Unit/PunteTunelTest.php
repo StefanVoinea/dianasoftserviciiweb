@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Http\Controllers\Api\PunteController;
 use App\Models\AnafCertificat;
 use App\Models\BridgeComanda;
 use App\Services\Anaf\Bridge\Licente;
@@ -232,6 +233,41 @@ class PunteTunelTest extends TestCase
         $this->assertNotNull($terminata);
         $this->assertSame(200, $terminata->status);
         $this->assertSame('{"cn":"POPESCU ION"}', $terminata->rezultatul());
+    }
+
+    /**
+     * O comandă dusă la capăt stinge vestea că tokenul își așteaptă codul.
+     *
+     * E cea mai bună dovadă că fereastra s-a închis: cheia a fost dată, fie că
+     * omul a scris codul de la distanță, fie că s-a dus până la calculator.
+     * Fără asta, vestea rămânea agățată în baza de date, iar fila din browser și
+     * telefonul cereau codul ceasuri după ce fereastra nu mai era pe niciun
+     * ecran.
+     */
+    public function test_comanda_dusa_la_capat_stinge_vestea_pinului(): void
+    {
+        $this->certificat->update([
+            'pin_stare' => 'asteapta',
+            'pin_motiv' => 'Token Logon',
+            'pin_verificat_la' => now(),
+        ]);
+
+        $comanda = $this->punte()->pune(
+            $this->certificat,
+            Request::create('/api/punte/1/certificate', 'GET'),
+            '/certificate'
+        );
+
+        $raspuns = Request::create('/api/punte/agent/rezultat/' . $comanda->id, 'POST', [], [], [], [], '{"cn":"POPESCU ION"}');
+        $raspuns->headers->set('Authorization', 'Bearer cod-de-instalare');
+        $raspuns->headers->set('X-Status', '200');
+
+        (new PunteController($this->punte()))->rezultat($raspuns, $comanda);
+
+        $this->assertNull(
+            $this->certificat->fresh()->pin_stare,
+            'Programul local a răspuns, deci nu-l mai ține nicio fereastră.'
+        );
     }
 
     /** Calculatorul închis: aplicația nu așteaptă la nesfârșit. */

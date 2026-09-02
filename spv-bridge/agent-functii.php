@@ -659,8 +659,15 @@ function agent_pare_prinsa($raspuns)
 function agent_spune_de_pin($config, $ragazProba = 300)
 {
     $semn = __DIR__ . DIRECTORY_SEPARATOR . 'pin-spus.json';
-    // Aceeasi fereastra nu se spune mai des de atat, oricat de des ne-am uita.
-    $ragazVeste = 300;
+    /*
+     * Aceeasi fereastra nu se spune mai des de atat, oricat de des ne-am uita.
+     *
+     * Vestea are insa termen la server: nemaispusa, ea se stinge singura, ca sa
+     * nu se ceara codul pentru o fereastra inchisa intre timp. Se repeta deci
+     * mai des decat tine acolo — altfel s-ar stinge tocmai cat fereastra e inca
+     * deschisa, iar omul ar ramane cu ea pe ecran si fara unde sa scrie codul.
+     */
+    $ragazVeste = 120;
 
     $stiut = is_file($semn) ? json_decode((string) @file_get_contents($semn), true) : null;
     $stiut = is_array($stiut) ? $stiut : array();

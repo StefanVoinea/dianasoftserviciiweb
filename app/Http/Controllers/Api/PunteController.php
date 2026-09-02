@@ -486,6 +486,19 @@ class PunteController extends Controller
             'terminata_la' => now(),
         ]);
 
+        /*
+         * O comanda dusa la capat e cea mai buna dovada ca tokenul nu mai
+         * asteapta nimic: cheia a fost data, deci fereastra s-a inchis — fie ca
+         * omul a scris codul de la distanta, fie ca s-a dus pana la calculator.
+         *
+         * Fara randul acesta, vestea ramanea agatata: aplicatia si telefonul
+         * cereau codul ceasuri intregi dupa ce fereastra se inchisese.
+         */
+        AnafCertificat::query()->toateCompaniile()
+            ->where('id', $comanda->certificat_id)
+            ->where('pin_stare', 'asteapta')
+            ->update(['pin_stare' => null, 'pin_motiv' => null, 'pin_verificat_la' => now()]);
+
         return response()->json(['primit' => true]);
     }
 }

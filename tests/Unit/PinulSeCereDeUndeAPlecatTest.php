@@ -166,4 +166,39 @@ class PinulSeCereDeUndeAPlecatTest extends TestCase
         $this->assertSame([], $this->ceVede(Aplicatia::WEB));
         $this->assertSame([], $this->ceVede(Aplicatia::MOBIL));
     }
+
+    /**
+     * Vestea veche nu mai cere nimic.
+     *
+     * Fereastra se poate închide și fără știrea noastră: omul se duce până la
+     * calculator și scrie codul acolo, ori o închide de tot. Atunci nimeni nu ne
+     * mai spune nimic, iar însemnarea rămâne în baza de date așa cum a fost
+     * pusă. Fără termen, o veste de dimineață cerea codul și după-amiaza —
+     * pentru o fereastră care nu mai era pe niciun ecran.
+     */
+    public function test_vestea_veche_nu_mai_cere_codul(): void
+    {
+        $tokenul = $this->tokenCareAsteapta(null, Aplicatia::FUNDAL);
+
+        $this->assertCount(1, $this->ceVede(Aplicatia::WEB), 'Proaspătă, vestea se arată.');
+
+        $tokenul->update(['pin_verificat_la' => now()->subMinutes(30)]);
+
+        $this->assertSame([], $this->ceVede(Aplicatia::WEB));
+        $this->assertSame([], $this->ceVede(Aplicatia::MOBIL));
+    }
+
+    /** Cât fereastra stă deschisă, programul local o tot spune — și ea ține. */
+    public function test_vestea_repetata_tine_cat_sta_fereastra(): void
+    {
+        $tokenul = $this->tokenCareAsteapta(null, Aplicatia::FUNDAL);
+
+        $tokenul->update(['pin_verificat_la' => now()->subMinutes(30)]);
+        $this->assertSame([], $this->ceVede(Aplicatia::WEB));
+
+        // Programul local a spus-o din nou: fereastra e tot acolo.
+        $tokenul->update(['pin_verificat_la' => now()]);
+
+        $this->assertCount(1, $this->ceVede(Aplicatia::WEB));
+    }
 }
