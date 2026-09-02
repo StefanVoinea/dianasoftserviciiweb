@@ -21,4 +21,17 @@ return [
 
     'publica' => env('MOBIL_PUBLICA', ''),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Unde sta arhiva care merge o data cu codul
+    |--------------------------------------------------------------------------
+    |
+    | Fata de radacina aplicatiei. Nu se schimba in viata de zi cu zi: sta aici
+    | ca probele sa-si poata muta dosarul lor, fara sa dea peste arhiva
+    | adevarata din depozit.
+    |
+    */
+
+    'dosar_din_cod' => 'resources/mobil',
+
 ];

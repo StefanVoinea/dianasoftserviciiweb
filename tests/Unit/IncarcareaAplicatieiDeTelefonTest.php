@@ -36,6 +36,9 @@ class IncarcareaAplicatieiDeTelefonTest extends TestCase
         Storage::fake(config('filesystems.default'));
         ContextCompanie::fixeaza(self::COMPANIE);
 
+        // Un dosar gol pentru „ce vine cu codul": aici se probează doar urcarea.
+        config(['mobil.dosar_din_cod' => 'tests/fixturi/mobil-gol']);
+
         $this->omul = User::create([
             'name' => 'cel care publică',
             'email' => 'publica@example.com',

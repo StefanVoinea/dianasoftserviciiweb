@@ -18,13 +18,40 @@ class ProgrameleDeTelefonTest extends TestCase
 {
     protected $programele;
 
+    /** Dosarul de probă pentru arhiva care vine o dată cu codul. */
+    protected $dinCod;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         Storage::fake(config('filesystems.default'));
 
+        /*
+         * Arhiva care merge cu codul stă într-un dosar adevărat din depozit, pe
+         * care Storage::fake nu-l poate lua deoparte. Fără dosarul acesta al
+         * nostru, probele ar da peste versiunea adevărată pusă acolo — și ar
+         * cădea sau ar trece după cum se nimerește ea.
+         */
+        $this->dinCod = 'tests/fixturi/mobil-' . bin2hex(random_bytes(4));
+        @mkdir(base_path($this->dinCod), 0777, true);
+        config(['mobil.dosar_din_cod' => $this->dinCod]);
+
         $this->programele = new ProgrameleDeTelefon();
+    }
+
+    protected function tearDown(): void
+    {
+        array_map('unlink', (array) glob(base_path($this->dinCod) . '/*'));
+        @rmdir(base_path($this->dinCod));
+
+        parent::tearDown();
+    }
+
+    /** O arhivă venită o dată cu codul aplicației web. */
+    protected function puneInCod(string $fisier): void
+    {
+        file_put_contents(base_path($this->dinCod) . '/' . $fisier, 'venită cu codul');
     }
 
     protected function pune(string $fisier): void
@@ -89,6 +116,40 @@ class ProgrameleDeTelefonTest extends TestCase
         $this->pune('altceva-1.0.0+1.apk');
 
         $this->assertNull($this->programele->ceaMaiNoua('altceva'));
+    }
+
+    /**
+     * Arhiva din depozit și cea urcată din filă se cântăresc laolaltă.
+     *
+     * Una vine o dată cu codul, la publicarea aplicației web; cealaltă se urcă
+     * între două publicări, când o îndreptare nu poate aștepta. Amândouă sunt
+     * bune, iar cea care se dă e cea cu codul mai mare — nu cea din locul pe
+     * care l-am privilegia noi.
+     */
+    public function test_se_cantareste_si_ce_vine_cu_codul_si_ce_s_a_urcat(): void
+    {
+        $this->puneInCod('spv_curier-9.9.9+99.apk');
+
+        // Urcată din filă, dar mai veche: nu ea se dă.
+        $this->pune('spv_curier-1.0.0+3.apk');
+
+        $this->assertSame(99, $this->programele->ceaMaiNoua('spv_curier')['cod']);
+
+        // Iar când cea urcată e mai nouă, ea trece înaintea celei din depozit.
+        $this->pune('spv_curier-9.9.10+100.apk');
+
+        $this->assertSame(100, $this->programele->ceaMaiNoua('spv_curier')['cod']);
+    }
+
+    /** Numai cea din depozit, când nu s-a urcat nimic: aceea se dă. */
+    public function test_arhiva_din_depozit_e_de_ajuns(): void
+    {
+        $this->puneInCod('spv_curier-2.0.0+30.apk');
+
+        $noua = $this->programele->ceaMaiNoua('spv_curier');
+
+        $this->assertSame(30, $noua['cod']);
+        $this->assertStringEndsWith('spv_curier-2.0.0+30.apk', $noua['cale']);
     }
 
     /** Numele de descărcare se citește de om, deci fără codul din coadă. */

@@ -7,7 +7,6 @@ use App\Services\Anaf\Jurnal;
 use App\Services\Mobil\ProgrameleDeTelefon;
 use App\Support\ContextUtilizator;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 
 /**
@@ -93,7 +92,7 @@ class ProgrameMobilController extends Controller
          * de ce sa aduca inapoi un program depasit.
          */
         return response()->download(
-            Storage::path($noua['cale']),
+            $noua['cale'],
             $this->programele->numeDeDescarcare($aplicatia, $noua['versiune']),
             ['Content-Type' => 'application/vnd.android.package-archive']
         );
@@ -123,7 +122,7 @@ class ProgrameMobilController extends Controller
         );
 
         return response()->download(
-            Storage::path($noua['cale']),
+            $noua['cale'],
             $this->programele->numeDeDescarcare($aplicatia, $noua['versiune']),
             ['Content-Type' => 'application/vnd.android.package-archive']
         );

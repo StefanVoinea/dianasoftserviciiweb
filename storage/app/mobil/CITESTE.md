@@ -40,9 +40,21 @@ nimeni, și e bine să ai la ce te întoarce.
 
 ## Cum ajunge pe serverul adevărat
 
-Din fila „Certificate digitale", cu unealta de sub butonul de descărcare. Prin
-git arhiva nu poate merge — e mare și se schimbă la fiecare compilare —, iar la
-desfășurare nimeni nu se atinge de dosarul acesta.
+**Odată cu codul.** `publica.ps1` așază arhiva în `resources/mobil/` din
+depozitul aplicației web, de unde ea pleacă la următoarea publicare, ca orice
+alt fișier. Nu mai urcă nimeni nimic: comiți și publici.
+
+Arhiva are 17 MB, iar istoria git nu se micșorează niciodată — de aceea se ține
+una singură pe aplicație, cea de dinainte fiind ștearsă la fiecare publicare.
+Prețul acesta se plătește cu ochii deschiși: fără el, „automat" s-ar opri pe
+calculatorul celui care compilează.
+
+**Între două publicări**, când o îndreptare nu poate aștepta: din fila
+„Certificate digitale", cu unealta de sub butonul de descărcare. Arhiva urcată
+astfel ajunge în dosarul acesta.
+
+Se cântăresc laolaltă: se dă cea cu codul mai mare, oricare dintre cele două
+locuri ar fi.
 
 Dreptul de a pune o versiune nu e unul de administrator de firmă: arhiva de aici
 ajunge singură pe telefoanele tuturor clienților. El se ține într-o listă de
