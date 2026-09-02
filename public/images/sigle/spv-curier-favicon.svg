@@ -1,6 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="SPV Curier">
-  <title>SPV Curier</title>
-  <rect width="32" height="32" rx="4" fill="#22406f"></rect>
-  <rect x="7" y="7" width="9" height="9" fill="#f6f5f1"></rect>
-  <rect x="16" y="16" width="9" height="9" fill="#f6f5f1"></rect>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="72" height="72" role="img" aria-label="SPV Curier">
+<title>SPV Curier</title>
+<!-- Favicon: semnul in culoarea hartiei, pe patratul albastru al modulului.
+     La 16 px sagetile s-ar pierde, deci sunt putin mai groase decat pe simbol. -->
+<rect width="72" height="72" rx="9" fill="#22406f"/>
+<g fill="none" stroke="#f6f5f1" stroke-linecap="round" stroke-linejoin="round" stroke-width="3.20">
+ <path d="M 14.80 28.60 A 22.00 22.00 0 0 1 57.20 28.60"/>
+ <path d="M 52.28 24.99 L 57.20 28.60 L 58.65 22.67"/>
+ <path d="M 57.20 43.40 A 22.00 22.00 0 0 1 14.80 43.40"/>
+ <path d="M 19.72 47.01 L 14.80 43.40 L 13.35 49.33"/>
+</g>
+<rect x="24" y="24" width="12" height="12" fill="#f6f5f1"/>
+<rect x="36" y="36" width="12" height="12" fill="#f6f5f1"/>
 </svg>

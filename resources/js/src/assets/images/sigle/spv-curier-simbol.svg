@@ -1,6 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="SPV Curier">
-  <title>SPV Curier</title>
-  <rect x="1.25" y="1.25" width="29.5" height="29.5" rx="3" fill="none" stroke="#22406f" stroke-width="2.5"></rect>
-  <rect x="6" y="6" width="10" height="10" fill="#22406f"></rect>
-  <rect x="16" y="16" width="10" height="10" fill="#22406f"></rect>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="72" height="72" role="img" aria-label="SPV Curier">
+<title>SPV Curier</title>
+<!-- Cele doua sageti rotunde, aceeasi geometrie ca la Grefier alert (raza 26,
+     centru 36,36); culoarea ramane albastrul SPV Curier. Chenarul dreptunghiular
+     de dinainte spunea "cutie"; sagetile spun "du-te si adu", care e chiar ce face
+     modulul: duce declaratiile la ANAF si aduce raspunsul inapoi. -->
+<g fill="none" stroke="#22406f" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.50">
+ <path d="M 11.60 27.10 A 26.00 26.00 0 0 1 60.40 27.10"/>
+ <path d="M 54.59 22.83 L 60.40 27.10 L 62.11 20.09"/>
+ <path d="M 60.40 44.90 A 26.00 26.00 0 0 1 11.60 44.90"/>
+ <path d="M 17.41 49.17 L 11.60 44.90 L 9.89 51.91"/>
+</g>
+<!-- Cele doua patratele, neschimbate ca idee: asezate pe diagonala, incadrate
+     acum de sageti. Raza libera pana la arc e 26; coltul cel mai departat al
+     perechii e la 19.8 de centru, deci raman cu spatiu in jur. -->
+<rect x="22" y="22" width="14" height="14" fill="#22406f"/>
+<rect x="36" y="36" width="14" height="14" fill="#22406f"/>
 </svg>

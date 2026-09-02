@@ -1,9 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 140" width="220" height="140" role="img" aria-label="SPV Curier — Automatizare declarații, solicitări și mesaje ANAF">
   <title>SPV Curier — Automatizare declarații, solicitări și mesaje ANAF</title>
-  <g transform="translate(82, 8)">
-    <rect x="2.2" y="2.2" width="51.6" height="51.6" rx="5.25" fill="none" stroke="#22406f" stroke-width="4.375"></rect>
-    <rect x="10.5" y="10.5" width="17.5" height="17.5" fill="#22406f"></rect>
-    <rect x="28" y="28" width="17.5" height="17.5" fill="#22406f"></rect>
+  <!-- semnul, la scara: sagetile si patratelele din spv-curier-simbol.svg -->
+  <g transform="translate(80, 6) scale(0.83333)">
+    <g fill="none" stroke="#22406f" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.50">
+      <path d="M 11.60 27.10 A 26.00 26.00 0 0 1 60.40 27.10"/>
+      <path d="M 54.59 22.83 L 60.40 27.10 L 62.11 20.09"/>
+      <path d="M 60.40 44.90 A 26.00 26.00 0 0 1 11.60 44.90"/>
+      <path d="M 17.41 49.17 L 11.60 44.90 L 9.89 51.91"/>
+    </g>
+    <rect x="22" y="22" width="14" height="14" fill="#22406f"/>
+    <rect x="36" y="36" width="14" height="14" fill="#22406f"/>
   </g>
   <text x="110" y="98" text-anchor="middle" font-family="&#39;IBM Plex Sans&#39;,&#39;Segoe UI&#39;,system-ui,sans-serif" font-size="21" font-weight="700" letter-spacing="-0.3" fill="#22406f">SPV Curier</text>
   <text x="110" y="120" text-anchor="middle" font-family="&#39;IBM Plex Sans&#39;,&#39;Segoe UI&#39;,system-ui,sans-serif" font-size="9" font-weight="500" letter-spacing="0.3" fill="#22406f">Automatizare declarații, solicitări și mesaje ANAF</text>
