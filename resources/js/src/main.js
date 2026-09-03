@@ -22,6 +22,7 @@ import '@/libs/toastification'
 import '@/libs/sweet-alerts'
 import '@/libs/vue-select'
 import '@/libs/tour'
+import { pornesteSkinul } from '@/libs/ds-skinuri'
 
 // Axios Mock Adapter
 import '@/@fake-db/db'
@@ -83,6 +84,12 @@ Vue.config.productionTip = false
 import VueClipboard from 'vue-clipboard2'
 VueClipboard.config.autoSetContainer = true
 Vue.use(VueClipboard)
+
+/*
+ * Skinul ales data trecuta se pune inainte de a se desena ceva: pus dupa, omul
+ * ar vedea o clipa interfata standard, apoi sarind in skinul lui.
+ */
+pornesteSkinul()
 
 new Vue({
   router,

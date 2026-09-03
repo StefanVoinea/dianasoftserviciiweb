@@ -1,0 +1,408 @@
+/* Skinurile DianaSoft, aceleasi ca in aplicatia DV Auto.
+ *
+ * Acolo interfata e Vue 3 cu Vuetify, aici e Vue 2 cu Bootstrap: culorile,
+ * fonturile si formele trec neschimbate, dar selectorii sunt altii. Skinul se
+ * pune ca o clasa pe <html> (vezi store/app-config), iar cele intunecate se
+ * asaza peste tema intunecata pe care Vuexy o are deja — altfel ar fi trebuit
+ * refacuta de la zero fiecare componenta, pentru fiecare skin.
+ *
+ * „Standard" nu e scris aici: el e chiar interfata de pana acum, cu light si
+ * dark-ul ei.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Public+Sans:wght@400;500;600;700&family=Libre+Caslon+Display&family=Archivo:wght@400;500;600;700&family=Michroma&family=Sora:wght@400;500;600;700&display=swap");
+
+/* ==========================================================================
+   1. DS GARAGE — crem cald, teracota, forme pill
+   ========================================================================== */
+
+.skin-dsgarage {
+  --ds-titlu: "Caprasimo", "Figtree", cursive;
+  --ds-text: "Figtree", "Public Sans", sans-serif;
+  --ds-accent: #c67139;
+  --ds-accent-inchis: #b2622d;
+  --ds-hartie: #f5ead8;
+  --ds-suprafata: #ebddc5;
+  --ds-cerneala: #201e1d;
+
+  body {
+    background-color: var(--ds-hartie);
+    color: var(--ds-cerneala);
+    font-family: var(--ds-text);
+  }
+
+  h1, h2, h3, h4, h5, h6,
+  .card-title,
+  .brand-text {
+    color: var(--ds-cerneala);
+    font-family: var(--ds-titlu);
+    font-weight: 400;
+    letter-spacing: -0.015em;
+    line-height: 1.12;
+  }
+
+  /* Forme: pill pe tot ce se apasa si se scrie */
+  .btn:not(.btn-icon) {
+    border-radius: 999px;
+  }
+
+  .form-control,
+  .custom-select,
+  .vs__dropdown-toggle,
+  .input-group-text {
+    border-radius: 999px;
+  }
+
+  textarea.form-control {
+    border-radius: 16px;
+  }
+
+  .card {
+    background-color: #fffaf1;
+    border: 1px solid rgb(198 113 57 / 12%);
+    border-radius: 28px;
+    box-shadow: 0 4px 18px rgb(46 43 37 / 6%);
+  }
+
+  .alert {
+    border-radius: 16px;
+  }
+
+  .badge {
+    border-radius: 999px;
+  }
+
+  .btn-primary {
+    background-color: var(--ds-accent) !important;
+    border-color: var(--ds-accent) !important;
+    color: #fff2eb !important;
+  }
+
+  .btn-primary:hover,
+  .btn-primary:focus {
+    background-color: var(--ds-accent-inchis) !important;
+    border-color: var(--ds-accent-inchis) !important;
+  }
+
+  .text-primary { color: var(--ds-accent) !important; }
+
+  .table thead th {
+    background-color: var(--ds-suprafata);
+    color: var(--ds-cerneala);
+    font-family: var(--ds-text);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .table tbody tr:hover {
+    background-color: rgb(198 113 57 / 6%);
+  }
+
+  /* Navigatia laterala, inchisa si calda */
+  .main-menu.menu-light {
+    background-color: #2e2b25;
+  }
+
+  .main-menu.menu-light .navigation {
+    background-color: #2e2b25;
+  }
+
+  .main-menu.menu-light .navigation > li > a,
+  .main-menu.menu-light .navigation li a {
+    border-radius: 999px;
+    color: #e8dcc8;
+  }
+
+  .main-menu.menu-light .navigation > li.active > a {
+    background: linear-gradient(118deg, var(--ds-accent), rgb(198 113 57 / 70%));
+    box-shadow: 0 0 10px 1px rgb(198 113 57 / 70%);
+    color: #fff2eb;
+  }
+
+  .main-menu .brand-text { color: #ffc6a5; }
+
+  .header-navbar {
+    background-color: #fffaf1 !important;
+  }
+}
+
+/* ==========================================================================
+   2. INDUSTRIAL — brutalist inchis, colturi drepte, portocaliu de siguranta
+   ========================================================================== */
+
+.skin-industrial {
+  --dsi-accent: #ff5a1f;
+  --dsi-fundal: #121212;
+  --dsi-suprafata: #171614;
+  --dsi-cerneala: #eae6df;
+  --dsi-fir: #2b2824;
+
+  body {
+    background-color: var(--dsi-fundal);
+    color: var(--dsi-cerneala);
+    font-family: "Public Sans", sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6,
+  .card-title,
+  .brand-text {
+    color: var(--dsi-cerneala);
+    font-family: "Bricolage Grotesque", sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+
+  /* Colturi drepte peste tot */
+  .btn,
+  .card,
+  .form-control,
+  .custom-select,
+  .badge,
+  .alert,
+  .modal-content,
+  .dropdown-menu,
+  .input-group-text {
+    border-radius: 0 !important;
+  }
+
+  /* Fir de bordura in loc de umbra */
+  .card {
+    background-color: var(--dsi-suprafata);
+    border: 1.5px solid var(--dsi-fir);
+    box-shadow: none;
+  }
+
+  .badge {
+    background: transparent !important;
+    border: 1px solid currentcolor;
+  }
+
+  .btn-primary {
+    background-color: var(--dsi-accent) !important;
+    border-color: var(--dsi-accent) !important;
+    color: #121212 !important;
+    font-weight: 700;
+  }
+
+  .text-primary { color: var(--dsi-accent) !important; }
+
+  .table thead th {
+    background-color: #1c1a17;
+    color: #b8b2a6;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .main-menu.menu-light,
+  .main-menu.menu-light .navigation {
+    background-color: #0e0d0c;
+    border-right: 1.5px solid var(--dsi-fir);
+  }
+
+  .main-menu.menu-light .navigation li a {
+    border-radius: 0;
+    color: #b8b2a6;
+  }
+
+  .main-menu.menu-light .navigation > li.active > a {
+    background: var(--dsi-accent);
+    box-shadow: none;
+    color: #121212;
+  }
+
+  .header-navbar {
+    background-color: var(--dsi-suprafata) !important;
+    border-bottom: 1.5px solid var(--dsi-fir);
+    box-shadow: none !important;
+  }
+}
+
+/* ==========================================================================
+   3. PASTEL EDITORIAL — roz prafuit, serif, carduri moi
+   ========================================================================== */
+
+.skin-pastel {
+  --dsp-rail: #efe0e2;
+  --dsp-accent: #c98a93;
+  --dsp-fundal: #f7f2f0;
+  --dsp-cerneala: #3a2f30;
+
+  body {
+    background-color: var(--dsp-fundal);
+    color: var(--dsp-cerneala);
+    font-family: "Archivo", sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6,
+  .card-title,
+  .brand-text {
+    color: var(--dsp-cerneala);
+    font-family: "Libre Caslon Display", serif;
+    font-weight: 400;
+    letter-spacing: 0;
+  }
+
+  /* Carduri moi: se despart prin fundal, nu prin borduri */
+  .card {
+    background-color: #fff;
+    border: none;
+    border-radius: 24px;
+    box-shadow: none;
+  }
+
+  .btn:not(.btn-icon) { border-radius: 20px; }
+
+  .form-control,
+  .custom-select,
+  .vs__dropdown-toggle,
+  .input-group-text { border-radius: 20px; }
+
+  .badge { border-radius: 12px; }
+
+  .alert { border-radius: 20px; }
+
+  .btn-primary {
+    background-color: var(--dsp-accent) !important;
+    border-color: var(--dsp-accent) !important;
+    color: #fff !important;
+  }
+
+  .text-primary { color: var(--dsp-accent) !important; }
+
+  .table thead th {
+    background-color: transparent;
+    border-bottom: 1px solid #eadedf;
+    color: #7a6d6e;
+    font-family: "Archivo", sans-serif;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  /* Rail-ul roz, cu itemi pill */
+  .main-menu.menu-light,
+  .main-menu.menu-light .navigation {
+    background-color: var(--dsp-rail);
+  }
+
+  .main-menu.menu-light .navigation li a {
+    border-radius: 20px;
+    color: #7a6d6e;
+    font-weight: 500;
+  }
+
+  .main-menu.menu-light .navigation > li.active > a {
+    background: var(--dsp-accent);
+    box-shadow: none;
+    color: #fff;
+  }
+
+  .main-menu .brand-text { color: var(--dsp-cerneala); }
+
+  .header-navbar {
+    background-color: var(--dsp-fundal) !important;
+    box-shadow: none !important;
+  }
+}
+
+/* ==========================================================================
+   4. FUTURIST — HUD inchis, panouri de sticla, glow teal
+   ========================================================================== */
+
+.skin-futurist {
+  --dsf-teal: #00e5c7;
+  --dsf-mov: #8a5cff;
+  --dsf-fundal: #05070d;
+  --dsf-suprafata: #0d1420;
+  --dsf-cerneala: #dfe6f0;
+
+  body {
+    background-color: var(--dsf-fundal);
+    color: var(--dsf-cerneala);
+    font-family: "Sora", sans-serif;
+  }
+
+  /* Glow-ul radial din mockup, peste continut */
+  .app-content {
+    background: radial-gradient(circle at 50% 20%, rgb(0 229 199 / 8%), transparent 60%);
+  }
+
+  h1, h2, h3, h4, h5, h6,
+  .card-title,
+  .brand-text {
+    color: var(--dsf-cerneala);
+    font-family: "Michroma", sans-serif;
+    font-weight: 400;
+    letter-spacing: 0.05em;
+  }
+
+  /* Panouri de sticla */
+  .card {
+    backdrop-filter: blur(6px);
+    background: rgb(13 20 32 / 80%);
+    border: 1px solid rgb(0 229 199 / 18%);
+    border-radius: 16px;
+    box-shadow: none;
+  }
+
+  .card:nth-of-type(even) {
+    border-color: rgb(138 92 255 / 18%);
+  }
+
+  .btn:not(.btn-icon),
+  .badge {
+    border-radius: 10px;
+  }
+
+  .form-control,
+  .custom-select,
+  .vs__dropdown-toggle,
+  .input-group-text {
+    background-color: rgb(13 20 32 / 70%);
+    border-color: rgb(0 229 199 / 22%);
+    border-radius: 10px;
+    color: var(--dsf-cerneala);
+  }
+
+  .btn-primary {
+    background-color: var(--dsf-teal) !important;
+    border-color: var(--dsf-teal) !important;
+    color: #05070d !important;
+    font-weight: 600;
+  }
+
+  .text-primary { color: var(--dsf-teal) !important; }
+
+  .table thead th {
+    background-color: rgb(0 229 199 / 6%);
+    color: var(--dsf-teal);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .main-menu.menu-light,
+  .main-menu.menu-light .navigation {
+    background-color: rgb(5 7 13 / 92%);
+    border-right: 1px solid rgb(0 229 199 / 14%);
+  }
+
+  .main-menu.menu-light .navigation li a {
+    border-radius: 10px;
+    color: #9fb0c6;
+  }
+
+  .main-menu.menu-light .navigation > li.active > a {
+    background: linear-gradient(118deg, var(--dsf-teal), var(--dsf-mov));
+    box-shadow: 0 0 12px 1px rgb(0 229 199 / 45%);
+    color: #05070d;
+  }
+
+  .main-menu .brand-text { color: var(--dsf-teal); }
+
+  .header-navbar {
+    backdrop-filter: blur(6px);
+    background-color: rgb(13 20 32 / 80%) !important;
+    border-bottom: 1px solid rgb(0 229 199 / 14%);
+    box-shadow: none !important;
+  }
+}

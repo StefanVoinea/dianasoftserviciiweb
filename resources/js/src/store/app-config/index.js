@@ -1,4 +1,5 @@
 import { $themeConfig } from '@themeConfig'
+import { skinuri, aplicaSkinul } from '@/libs/ds-skinuri'
 
 export default {
   namespaced: true,
@@ -6,6 +7,12 @@ export default {
     layout: {
       isRTL: $themeConfig.layout.isRTL,
       skin: localStorage.getItem('vuexy-skin') || $themeConfig.layout.skin,
+      /*
+       * Skinul DianaSoft, acelasi ca in DV Auto: „standard" inseamna interfata
+       * de pana acum, cu light/dark-ul ei. Celelalte sunt directii vizuale
+       * intregi — fonturi, culori, forme — puse cu o clasa pe <html>.
+       */
+      dsSkin: localStorage.getItem('ds_skin') || 'standard',
       routerTransition: $themeConfig.layout.routerTransition,
       type: $themeConfig.layout.type,
       contentWidth: $themeConfig.layout.contentWidth,
@@ -36,6 +43,14 @@ export default {
       // Update DOM for dark-layout
       if (skin === 'dark') document.body.classList.add('dark-layout')
       else if (document.body.className.match('dark-layout')) document.body.classList.remove('dark-layout')
+    },
+    UPDATE_DS_SKIN(state, id) {
+      const skin = skinuri.find(s => s.id === id) || skinuri[0]
+
+      state.layout.dsSkin = skin.id
+      localStorage.setItem('ds_skin', skin.id)
+
+      aplicaSkinul(skin.id)
     },
     UPDATE_ROUTER_TRANSITION(state, val) {
       state.layout.routerTransition = val

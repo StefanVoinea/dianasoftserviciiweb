@@ -1,1 +1,5 @@
 @import "../js/src/@core/scss/core.scss";
+
+// Skinurile DianaSoft, aceleasi ca in DV Auto. Se pun ca o clasa pe <html>;
+// fara clasa, nimic din ele nu se aplica si interfata ramane cea de pana acum.
+@import "ds-skinuri";
