@@ -384,6 +384,14 @@
           </b-table>
         </b-card>
       </b-tab>
+
+      <!-- Firmele carora li se poate scrie despre aplicatiile noastre -->
+      <b-tab
+        title="Marketing"
+        lazy
+      >
+        <marketing />
+      </b-tab>
     </b-tabs>
 
     <!--
@@ -1054,8 +1062,13 @@
  * config('app.super_admin'); serverul refuză oricum rutele pentru altcineva,
  * dar și meniul se ascunde, ca să nu apară butoane fără rost.
  */
+import Marketing from './administrare/Marketing.vue'
+
 export default {
   name: 'Administrare',
+  components: {
+    Marketing,
+  },
   data() {
     return {
       clienti: [],

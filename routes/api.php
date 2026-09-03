@@ -89,6 +89,16 @@ Route::any('/punte/{certificat}/{cale?}', 'Api\PunteController@proxy')
 Route::middleware(['auth:api', 'administrator.serviciu'])->group(function () {
     Route::get('/administrare/clienti', 'Api\AdministrareController@index');
     Route::get('/administrare/statistici', 'Api\AdministrareController@statistici');
+
+    /*
+     * Lista firmelor carora li se poate scrie despre aplicatiile noastre.
+     * Tot aici, sub aceeasi paza: e lista noastra, nu a vreunui client.
+     */
+    Route::get('/marketing/contacte', 'Api\MarketingController@index');
+    Route::post('/marketing/import', 'Api\MarketingController@importa');
+    Route::post('/marketing/trimite', 'Api\MarketingController@trimite');
+    Route::post('/marketing/previzualizare', 'Api\MarketingController@previzualizare');
+    Route::post('/marketing/sterge', 'Api\MarketingController@sterge');
     Route::post('/administrare/clienti', 'Api\AdministrareController@creeazaClient');
     Route::post('/administrare/clienti/{client}/utilizatori', 'Api\AdministrareController@creeazaUtilizator');
     Route::post('/administrare/utilizatori/{utilizator}/impersoneaza', 'Api\AdministrareController@impersoneaza');
