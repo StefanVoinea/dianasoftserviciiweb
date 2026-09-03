@@ -23,7 +23,7 @@ export const skinuri = [
   },
   {
     id: 'dsgarage',
-    nume: 'DS Garage',
+    nume: 'Cald',
     descriere: 'Crem cald, teracotă, forme rotunjite',
     clasa: 'skin-dsgarage',
     intunecat: false,
@@ -69,13 +69,25 @@ export function gasesteSkinul(id) {
  */
 export function aplicaSkinul(id) {
   const skin = gasesteSkinul(id)
-  const radacina = document.documentElement
+
+  /*
+   * Clasa se pune pe <body>, nu pe <html>.
+   *
+   * Stilurile trec prin RTL la compilare, iar el înfășoară tot ce ține de
+   * direcție — fundaluri, borduri, colțuri, umbre — în „[dir] …". Regula devine
+   * astfel „[dir] .skin-x .card", adică cere ca skinul să fie *înăuntrul* unui
+   * element cu „dir". Pus pe <html>, skinul e chiar acel element, iar deasupra
+   * lui nu mai e nimic: selectorul nu se potrivea cu nimic, și se aplicau numai
+   * culoarea textului și fontul — singurele care nu trec prin RTL. Adică tocmai
+   * culorile lipseau.
+   */
+  const purtatorul = document.body
 
   skinuri.forEach(s => {
-    if (s.clasa) radacina.classList.remove(s.clasa)
+    if (s.clasa) purtatorul.classList.remove(s.clasa)
   })
 
-  if (skin.clasa) radacina.classList.add(skin.clasa)
+  if (skin.clasa) purtatorul.classList.add(skin.clasa)
 
   /*
    * Temelia întunecată: o dă Vuexy, prin „dark-layout". Când se pleacă de pe un

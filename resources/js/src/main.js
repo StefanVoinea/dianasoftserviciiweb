@@ -43,6 +43,16 @@ require('@core/scss/core.scss')
 
 // import assets styles
 require('@/assets/scss/style.scss')
+
+/*
+ * Skinurile DianaSoft, ultimele.
+ *
+ * Stilurile Vuexy nu vin din fisierul de CSS al paginii, ci sunt puse in <head>
+ * de JavaScript, dupa el. Skinurile scrise acolo ajungeau deci sub ele si nu se
+ * vedeau decat schimbarea de light/dark. Aduse aici, intra pe acelasi drum si
+ * dupa ele — la specificitate egala, ale noastre sunt cele care raman.
+ */
+require('@/assets/scss/ds-skinuri.scss')
 import permisiuni from './plugins/userpermitt'
 Vue.use(permisiuni);
 import {  localize } from 'vee-validate'

@@ -25,11 +25,9 @@
   --ds-suprafata: #ebddc5;
   --ds-cerneala: #201e1d;
 
-  body {
-    background-color: var(--ds-hartie);
-    color: var(--ds-cerneala);
-    font-family: var(--ds-text);
-  }
+  background-color: var(--ds-hartie);
+  color: var(--ds-cerneala);
+  font-family: var(--ds-text);
 
   h1, h2, h3, h4, h5, h6,
   .card-title,
@@ -61,7 +59,7 @@
     background-color: #fffaf1;
     border: 1px solid rgb(198 113 57 / 12%);
     border-radius: 28px;
-    box-shadow: 0 4px 18px rgb(46 43 37 / 6%);
+    box-shadow: 0 4px 18px rgb(46 43 37 / 6%) !important;
   }
 
   .alert {
@@ -124,6 +122,24 @@
   .header-navbar {
     background-color: #fffaf1 !important;
   }
+
+  /* Meniul orizontal, cel folosit in aplicatia aceasta */
+  .horizontal-menu-wrapper .header-navbar {
+    background-color: #2e2b25 !important;
+  }
+
+  .horizontal-menu-wrapper .header-navbar .nav-link,
+  .horizontal-menu-wrapper .header-navbar .dropdown-toggle {
+    border-radius: 999px;
+    color: #e8dcc8 !important;
+  }
+
+  .horizontal-menu-wrapper .header-navbar .nav-item.active > .nav-link,
+  .horizontal-menu-wrapper .header-navbar .active > .dropdown-toggle {
+    background: linear-gradient(118deg, var(--ds-accent), rgb(198 113 57 / 70%)) !important;
+    color: #fff2eb !important;
+  }
+
 }
 
 /* ==========================================================================
@@ -137,11 +153,9 @@
   --dsi-cerneala: #eae6df;
   --dsi-fir: #2b2824;
 
-  body {
-    background-color: var(--dsi-fundal);
-    color: var(--dsi-cerneala);
-    font-family: "Public Sans", sans-serif;
-  }
+  background-color: var(--dsi-fundal);
+  color: var(--dsi-cerneala);
+  font-family: "Public Sans", sans-serif;
 
   h1, h2, h3, h4, h5, h6,
   .card-title,
@@ -216,6 +230,26 @@
     border-bottom: 1.5px solid var(--dsi-fir);
     box-shadow: none !important;
   }
+
+  /* Meniul orizontal */
+  .horizontal-menu-wrapper .header-navbar {
+    background-color: #0e0d0c !important;
+    border-bottom: 1.5px solid var(--dsi-fir);
+    box-shadow: none !important;
+  }
+
+  .horizontal-menu-wrapper .header-navbar .nav-link,
+  .horizontal-menu-wrapper .header-navbar .dropdown-toggle {
+    border-radius: 0;
+    color: #b8b2a6 !important;
+  }
+
+  .horizontal-menu-wrapper .header-navbar .nav-item.active > .nav-link,
+  .horizontal-menu-wrapper .header-navbar .active > .dropdown-toggle {
+    background: var(--dsi-accent) !important;
+    color: #121212 !important;
+  }
+
 }
 
 /* ==========================================================================
@@ -228,11 +262,9 @@
   --dsp-fundal: #f7f2f0;
   --dsp-cerneala: #3a2f30;
 
-  body {
-    background-color: var(--dsp-fundal);
-    color: var(--dsp-cerneala);
-    font-family: "Archivo", sans-serif;
-  }
+  background-color: var(--dsp-fundal);
+  color: var(--dsp-cerneala);
+  font-family: "Archivo", sans-serif;
 
   h1, h2, h3, h4, h5, h6,
   .card-title,
@@ -303,6 +335,26 @@
     background-color: var(--dsp-fundal) !important;
     box-shadow: none !important;
   }
+
+  /* Meniul orizontal */
+  .horizontal-menu-wrapper .header-navbar {
+    background-color: var(--dsp-rail) !important;
+    box-shadow: none !important;
+  }
+
+  .horizontal-menu-wrapper .header-navbar .nav-link,
+  .horizontal-menu-wrapper .header-navbar .dropdown-toggle {
+    border-radius: 20px;
+    color: #7a6d6e !important;
+    font-weight: 500;
+  }
+
+  .horizontal-menu-wrapper .header-navbar .nav-item.active > .nav-link,
+  .horizontal-menu-wrapper .header-navbar .active > .dropdown-toggle {
+    background: var(--dsp-accent) !important;
+    color: #fff !important;
+  }
+
 }
 
 /* ==========================================================================
@@ -316,11 +368,9 @@
   --dsf-suprafata: #0d1420;
   --dsf-cerneala: #dfe6f0;
 
-  body {
-    background-color: var(--dsf-fundal);
-    color: var(--dsf-cerneala);
-    font-family: "Sora", sans-serif;
-  }
+  background-color: var(--dsf-fundal);
+  color: var(--dsf-cerneala);
+  font-family: "Sora", sans-serif;
 
   /* Glow-ul radial din mockup, peste continut */
   .app-content {
@@ -405,4 +455,25 @@
     border-bottom: 1px solid rgb(0 229 199 / 14%);
     box-shadow: none !important;
   }
+
+  /* Meniul orizontal */
+  .horizontal-menu-wrapper .header-navbar {
+    backdrop-filter: blur(6px);
+    background-color: rgb(5 7 13 / 92%) !important;
+    border-bottom: 1px solid rgb(0 229 199 / 14%);
+    box-shadow: none !important;
+  }
+
+  .horizontal-menu-wrapper .header-navbar .nav-link,
+  .horizontal-menu-wrapper .header-navbar .dropdown-toggle {
+    border-radius: 10px;
+    color: #9fb0c6 !important;
+  }
+
+  .horizontal-menu-wrapper .header-navbar .nav-item.active > .nav-link,
+  .horizontal-menu-wrapper .header-navbar .active > .dropdown-toggle {
+    background: linear-gradient(118deg, var(--dsf-teal), var(--dsf-mov)) !important;
+    color: #05070d !important;
+  }
+
 }

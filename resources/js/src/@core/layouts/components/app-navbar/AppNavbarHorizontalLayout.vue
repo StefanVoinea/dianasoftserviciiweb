@@ -26,6 +26,7 @@
     <!-- Lângă utilizator au rămas doar notificările: sarcinile, calendarul și
          schimbarea temei erau lucruri care nu se folosesc aici. -->
     <b-navbar-nav class="nav align-items-center ml-auto">
+      <skin-dropdown />
       <notification-dropdown />
       <user-dropdown />
     </b-navbar-nav>
@@ -37,6 +38,7 @@ import {
   BLink, BNavbarNav,
 } from 'bootstrap-vue'
 import NotificationDropdown from './components/NotificationDropdown.vue'
+import SkinDropdown from './components/SkinDropdown.vue'
 import UserDropdown from './components/UserDropdown.vue'
 import Module from './components/Module.vue'
 
@@ -47,6 +49,7 @@ export default {
     // Navbar Components
     BNavbarNav,
     NotificationDropdown,
+    SkinDropdown,
     UserDropdown,
     Module,
   },

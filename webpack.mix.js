@@ -61,6 +61,25 @@ mix
   })
 mix.copy('resources/scss/loader.css', 'public/css')
 
+/*
+ * Amprenta de versiune pe fisierele compilate.
+ *
+ * Fara ea, „app.js" si „app.css" se cheama la fel dupa fiecare compilare, iar
+ * browserul isi tine linistit copia veche: omul publica o indreptare si n-o vede
+ * — nici el, nici clientii. Se pierde astfel timp cautand in cod ceva ce era de
+ * mult bun.
+ *
+ * Cu ea, „mix()" din sablon scrie „/js/app.js?id=<amprenta>", iar amprenta se
+ * schimba la fiecare compilare in care s-a schimbat ceva. Bucatile („chunks")
+ * isi poarta deja amprenta in nume.
+ *
+ * Numai la compilarea de productie: in dezvoltare, fisierele se rescriu oricum
+ * la fiecare salvare.
+ */
+if (mix.inProduction()) {
+  mix.version()
+}
+
 // ------------------------------------------------
 // If you are deploying on subdomain/subfolder. Uncomment below code before running 'yarn prod' or 'npm run production' command.
 // Please Change below 'publicPath' and 'setResourceRoot' options as per your sub-directory path. We have kept our current live demo options which is deployed in sub-folder.
