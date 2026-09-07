@@ -30,7 +30,11 @@ foreach (File::allFiles(__DIR__ . '/api_routes') as $route_file) {
  * inseamna de oriunde) si se verifica si la autentificare, si la fiecare cerere
  * de mai departe — vezi App\Services\AccesIp.
  */
-Route::post('/login','Api\AuthController@login')->name('login')->middleware(['throttle:60,1']);
+// [2026-09-04] Numele `login` e acum al paginii din browser (routes/web.php): acolo
+// trebuie sa duca middleware-ul `auth` cand cineva cere o pagina fara sesiune —
+// pasul de autorizare OAuth al conectorului MCP. Ruta asta ramane neschimbata
+// pentru SPA, care o cheama dupa adresa, nu dupa nume.
+Route::post('/login','Api\AuthController@login')->middleware(['throttle:60,1']);
 Route::post('/registerAPI','Api\AuthController@register');
 // Reinnoirea tokenului pentru aplicatiile care nu pot pastra datele clientului OAuth (cea mobila)
 Route::post('/refresh','Api\AuthController@refresh')->middleware('throttle:60,1');

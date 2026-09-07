@@ -43,6 +43,16 @@ class RouteServiceProvider extends ServiceProvider
                 ->namespace($this->namespace)
                 ->group(base_path('routes/api.php'));
 
+            // [2026-09-04] Endpointul MCP remote si documentele lui de descoperire
+            // stau la RADACINA (nu sub /api), pentru ca asa le cauta conectorul.
+            // Se inregistreaza INAINTEA lui web.php, care are pe ultima linie un
+            // catch-all GET ce serveste SPA-ul pentru orice adresa necunoscuta.
+            // Grupul e `api`, nu `web`: fara sesiune si fara CSRF, altfel un POST
+            // venit din exterior ar primi 419.
+            Route::middleware('api')
+                ->namespace($this->namespace)
+                ->group(base_path('routes/mcp.php'));
+
             Route::middleware('web')
                 ->namespace($this->namespace)
                 ->group(base_path('routes/web.php'));

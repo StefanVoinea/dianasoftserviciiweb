@@ -78,6 +78,7 @@ Routes entry point: `routes/api.php` includes all per-entity files from `routes/
 - **Email:** Zoho SMTP (`smtppro.zoho.eu`).
 - **Queue:** Database driver (`QUEUE_CONNECTION=database`). Run `php artisan queue:work` for background jobs.
 - **Broadcasting:** Redis (`BROADCAST_DRIVER=redis`). Laravel Echo + Socket.io configured but not enabled by default.
+- **MCP (Claude connector):** `POST /mcp` (remote, OAuth via Passport + `GET /login`) and `api/mcp/*` (stdio process in `mcp-dianasoft/`). What can be read/written is defined in `config/mcp.php`; execution lives in `McpController`. No delete, ever. Token for the stdio variant: `php artisan mcp:token <email>`.
 
 ## Environment
 

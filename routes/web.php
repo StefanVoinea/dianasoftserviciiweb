@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ApplicationController;
+use App\Http\Controllers\AutentificareWebController;
 
 /*
 |--------------------------------------------------------------------------
@@ -38,6 +39,21 @@ Route::match(['get', 'post'], '/dezabonare/{jeton}', [App\Http\Controllers\Dezab
  */
 Route::get('/demo/{jeton}', [App\Http\Controllers\DemoController::class, 'arata'])->name('demo');
 Route::post('/demo/{jeton}', [App\Http\Controllers\DemoController::class, 'primeste']);
+
+/*
+ * [2026-09-04] Autentificare in browser, cu sesiune. Exista pentru pasul de
+ * autorizare OAuth al conectorului MCP (`/oauth/authorize` are middleware
+ * `web,auth`), pe care SPA-ul nu-l poate acoperi: el se autentifica prin API si
+ * primeste token, nu sesiune. Tot inaintea rutei care prinde tot.
+ *
+ * POST-ul sta pe o cale proprie, nu pe `/login`: SPA-ul isi trimite
+ * autentificarea la baseURL + '/login', si daca baseURL ar iesi vreodata '/',
+ * cele doua autentificari nu trebuie sa se poata calca una pe alta.
+ */
+Route::get('/login', [AutentificareWebController::class, 'formular'])->name('login');
+Route::post('/autentificare', [AutentificareWebController::class, 'intra'])
+    ->middleware('throttle:10,1')->name('autentificare.intra');
+Route::post('/autentificare/iesire', [AutentificareWebController::class, 'iesi']);
 
 Route::get('/{any}', [ApplicationController::class, 'index'])->where('any', '.*');
 

@@ -1,0 +1,20 @@
+{
+  "name": "mcp-dianasoft",
+  "version": "1.0.0",
+  "description": "Acces MCP la DianaSoft servicii web: citeste declaratii, mesaje SPV si firme; modifica in masa nomenclatoarele. Fara stergere.",
+  "type": "module",
+  "bin": {
+    "mcp-dianasoft": "bin.cjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "verifica": "node _test-handshake.mjs"
+  },
+  "dependencies": {
+    "@cfworker/json-schema": "^4.1.1",
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "main": "bin.cjs"
+}

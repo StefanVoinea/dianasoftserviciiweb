@@ -81,6 +81,8 @@ class Kernel extends HttpKernel
      * @var array
      */
     protected $routeMiddleware = [
+        // [2026-09-04] Contextul (utilizator + firma) pentru cererile venite prin MCP
+        'mcp.context' => \App\Http\Middleware\ContextMcp::class,
         'auth' => \App\Http\Middleware\Authenticate::class,
         'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
         'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
