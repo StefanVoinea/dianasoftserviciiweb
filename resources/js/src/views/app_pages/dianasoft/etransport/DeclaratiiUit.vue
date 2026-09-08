@@ -1548,6 +1548,17 @@ export default {
         })
     },
     aplicaImportul(rezultat) {
+      const antet = rezultat.antet || {}
+
+      // Fisierul spune ce fel de operatiune e (lista de retur = livrare
+      // intracomunitara): declaratia trece pe ea, cu traseul si scopurile ei.
+      let operatiuneSchimbata = false
+      if (antet.tip_operatiune && Number(antet.tip_operatiune) !== Number(this.declaratia.tip_operatiune)) {
+        this.declaratia.tip_operatiune = Number(antet.tip_operatiune)
+        this.tipOperatiuneSchimbat()
+        operatiuneSchimbata = true
+      }
+
       const permise = (this.nomenclatoare.scopuri_pe_operatiune || {})[this.declaratia.tip_operatiune] || []
       const scop = permise[0] || 9999
 
@@ -1560,7 +1571,6 @@ export default {
       this.declaratia.linii = this.declaratia.linii.concat(linii)
       this.declaratia.fisiere_importate = (this.declaratia.fisiere_importate || []).concat(rezultat.fisiere || [])
 
-      const antet = rezultat.antet || {}
       if (antet.valuta) this.declaratia.valuta = antet.valuta
       if (antet.partener_denumire && !this.declaratia.partener_denumire) {
         this.declaratia.partener_denumire = antet.partener_denumire
@@ -1583,7 +1593,11 @@ export default {
       this.recalculeazaLeii()
 
       const avertismente = rezultat.avertismente || []
-      this.info = `${linii.length} linii importate.${avertismente.length ? ` ${avertismente.join(' ')}` : ''}`
+      const operatiune = (this.nomenclatoare.tipuri_operatiune || {})[this.declaratia.tip_operatiune]
+      const schimbare = operatiuneSchimbata
+        ? ` Fișierul e de retur: declarația a trecut pe „${operatiune || this.declaratia.tip_operatiune}"; verificați traseul.`
+        : ''
+      this.info = `${linii.length} linii importate.${schimbare}${avertismente.length ? ` ${avertismente.join(' ')}` : ''}`
     },
     cautaCodVamal(termen) {
       if (!termen || termen.length < 2) return

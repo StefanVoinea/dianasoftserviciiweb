@@ -39,7 +39,9 @@ class ImportRaportArticole extends ImportRaportText
         $continut = file_get_contents($cale);
 
         $linii = [];
-        $antet = ['valuta' => null];
+        // Lista pe articole vine doar la retururi, iar returul se declara ca
+        // livrare intracomunitara (20): formularul trece singur pe ea.
+        $antet = ['valuta' => null, 'tip_operatiune' => 20];
         $brutTotal = null;
 
         foreach (preg_split('/\r\n|\r|\n/', $continut) as $rand) {

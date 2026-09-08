@@ -113,6 +113,8 @@ class EtransportImportTest extends TestCase
         $this->assertSame('10074615', $rezultat['antet']['document_numar']);
         $this->assertSame('2026-09-02', $rezultat['antet']['document_data']);
         $this->assertSame('EUR', $rezultat['antet']['valuta']);
+        // Lista de retur duce declaratia pe livrare intracomunitara.
+        $this->assertSame(20, $rezultat['antet']['tip_operatiune']);
     }
 
     /** Fisierul T01 se recunoaste dupa continut, nu dupa nume, si iese grupat pe cod vamal. */
@@ -138,6 +140,8 @@ class EtransportImportTest extends TestCase
         unlink($cale);
 
         $this->assertSame('10038435', $rezultat['antet']['document_numar']);
+        // Recapitulatia de livrare nu schimba felul operatiunii.
+        $this->assertArrayNotHasKey('tip_operatiune', $rezultat['antet']);
     }
 
     /** Liniile cu acelasi cod vamal se aduna, iar denumirea vine din nomenclator. */
