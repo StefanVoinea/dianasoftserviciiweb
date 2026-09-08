@@ -673,20 +673,23 @@
         </b-row>
       </b-card>
 
-      <!-- Magazinul (destinatia finala), din arhiva importata; ramane editabil -->
+      <!--
+        Magazinul, din arhiva importata; ramane editabil. La livrari e
+        destinatia finala, la retururi (livrare intracomunitara) e plecarea.
+      -->
       <b-card
         v-if="importPermis"
         class="border mb-2"
         body-class="p-2"
       >
         <h6 class="mb-1">
-          Magazin (destinația finală)
+          Magazin ({{ magazinLaPlecare ? 'plecarea' : 'destinația finală' }})
         </h6>
         <b-row>
           <b-col md="5">
             <label class="small mb-0">Gestiunea</label>
             <b-form-select
-              :value="(declaratia.loc_final && declaratia.loc_final.magazin_cod) || ''"
+              :value="(locMagazin && locMagazin.magazin_cod) || ''"
               :options="optiuniGestiuni"
               size="sm"
               :disabled="!editabila"
@@ -696,19 +699,19 @@
           <b-col md="3">
             <label class="small mb-0">Cod magazin</label>
             <b-form-input
-              :value="declaratia.loc_final && declaratia.loc_final.magazin_cod"
+              :value="locMagazin && locMagazin.magazin_cod"
               size="sm"
               :disabled="!editabila"
-              @input="$set(declaratia.loc_final, 'magazin_cod', $event)"
+              @input="$set(locMagazin, 'magazin_cod', $event)"
             />
           </b-col>
           <b-col md="4">
             <label class="small mb-0">Denumire magazin</label>
             <b-form-input
-              :value="declaratia.loc_final && declaratia.loc_final.magazin_denumire"
+              :value="locMagazin && locMagazin.magazin_denumire"
               size="sm"
               :disabled="!editabila"
-              @input="$set(declaratia.loc_final, 'magazin_denumire', $event)"
+              @input="$set(locMagazin, 'magazin_denumire', $event)"
             />
           </b-col>
         </b-row>
@@ -887,9 +890,10 @@
     </div>
 
     <!--
-      Arhiva zilnica a furnizorului (ZIP): T02 cu liniile pe coduri vamale si
-      D01 cu destinatia finala. Din ea se fac cate o ciorna pe fiecare factura,
-      cu magazinul si adresa de descarcare gata puse.
+      Arhiva zilnica a furnizorului (ZIP): T02 cu liniile pe coduri vamale (sau
+      T01, lista pe articole, la retururi) si D01 cu destinatia finala. Din ea
+      se fac cate o ciorna pe fiecare factura, cu magazinul si adresa de
+      descarcare gata puse.
     -->
     <b-modal
       v-model="arhivaVizibila"
@@ -900,11 +904,12 @@
       @ok.prevent="importaArhiva"
     >
       <p class="text-muted small">
-        Alegeți arhiva ZIP primită de la furnizor pentru o zi de livrare.
-        Pentru fiecare factură se face câte o ciornă de declarație, cu liniile,
-        partenerul, valoarea în lei la cursul zilei facturii și locul de
-        descărcare (magazinul) din distinta D01. Rămân de completat vehiculul,
-        transportatorul și data transportului.
+        Alegeți arhiva ZIP primită de la furnizor pentru o zi de livrare sau
+        de retur. Pentru fiecare factură se face câte o ciornă de declarație,
+        cu liniile, partenerul, valoarea în lei la cursul zilei facturii și
+        magazinul din distinta D01: locul de descărcare la livrări, locul de
+        plecare la retururi (declarate ca livrare intracomunitară). Rămân de
+        completat vehiculul, transportatorul și data transportului.
       </p>
 
       <b-form-file
@@ -1367,6 +1372,28 @@ export default {
 
       return (this.nomenclatoare.traseu_pe_operatiune || {})[tip] || { start: 'adresa', final: 'adresa' }
     },
+    /**
+     * La operatiunile prin care marfa pleaca din tara (livrare intracomunitara —
+     * retururile —, lohn si stocuri la iesire, export, iesire dupa depozitare)
+     * magazinul sta la plecare, nu la destinatie. Aceeasi lista ca in model.
+     */
+    magazinLaPlecare() {
+      const tip = this.declaratia ? Number(this.declaratia.tip_operatiune) : null
+
+      return [20, 22, 24, 50, 70].includes(tip)
+    },
+    /** Locul din traseu care poarta magazinul; se creeaza daca lipseste. */
+    locMagazin() {
+      if (!this.declaratia) return null
+
+      const camp = this.magazinLaPlecare ? 'loc_start' : 'loc_final'
+
+      if (!this.declaratia[camp]) {
+        this.$set(this.declaratia, camp, { tip: 'adresa' })
+      }
+
+      return this.declaratia[camp]
+    },
   },
   created() {
     this.incarcaNomenclatoarele()
@@ -1738,10 +1765,10 @@ export default {
     alegeGestiunea(codFurnizor) {
       const gestiune = this.gestiuni.find(g => g.cod_furnizor === codFurnizor)
 
-      this.$set(this.declaratia.loc_final, 'magazin_cod', codFurnizor || null)
+      this.$set(this.locMagazin, 'magazin_cod', codFurnizor || null)
 
       if (gestiune) {
-        this.$set(this.declaratia.loc_final, 'magazin_denumire', gestiune.denumire)
+        this.$set(this.locMagazin, 'magazin_denumire', gestiune.denumire)
       }
     },
     /** Scoate din coada urmatorul cod nou de gestiune si deschide fereastra lui. */

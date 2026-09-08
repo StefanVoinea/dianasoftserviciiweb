@@ -61,7 +61,17 @@ class ImportFisiere
         }
 
         if (in_array($extensie, ['txt', 'text', 'prn'], true)) {
-            return new ImportRaportText();
+            /*
+             * Doua rapoarte text de la acelasi furnizor, cu acelasi antet: T02,
+             * recapitulatia pe coduri vamale, si T01, lista pe articole care
+             * insoteste nota de credit la retururi. Se deosebesc dupa antetul
+             * de coloane, nu dupa nume — omul incarca fisierul cum l-a primit.
+             */
+            $inceput = (string) file_get_contents($fisier['cale'], false, null, 0, 4096);
+
+            return ImportRaportArticole::recunoaste($inceput)
+                ? new ImportRaportArticole()
+                : new ImportRaportText();
         }
 
         throw new EtransportException(

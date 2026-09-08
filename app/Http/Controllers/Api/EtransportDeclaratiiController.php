@@ -40,9 +40,10 @@ class EtransportDeclaratiiController extends Controller
                     'tip_operatiune' => $d->tip_operatiune,
                     'operatiune' => Nomenclatoare::TIPURI_OPERATIUNE[$d->tip_operatiune] ?? null,
                     'partener' => $d->partener_denumire,
-                    // Magazinul (destinatia finala), pentru clientii cu retea de magazine
-                    'magazin' => $d->loc_final['magazin_denumire'] ?? null,
-                    'magazin_cod' => $d->loc_final['magazin_cod'] ?? null,
+                    // Magazinul, pentru clientii cu retea de magazine: destinatia la
+                    // livrari, plecarea la retururi (livrare intracomunitara).
+                    'magazin' => $d->loc_magazin['magazin_denumire'] ?? null,
+                    'magazin_cod' => $d->loc_magazin['magazin_cod'] ?? null,
                     'vehicul' => trim(implode(' + ', array_filter([$d->nr_vehicul, $d->nr_remorca1, $d->nr_remorca2]))),
                     'data_transport' => Format::data($d->data_transport),
                     'nr_linii' => count($d->linii ?: []),
@@ -322,13 +323,18 @@ class EtransportDeclaratiiController extends Controller
             $gestiune = EtransportGestiune::create($date);
         }
 
+        // Magazinul sta la destinatie la livrari si la plecare la retururi.
         $ciorne = EtransportDeclaratie::where('stare', 'ciorna')
-            ->where('loc_final->magazin_cod', $date['cod_furnizor'])
+            ->where(function ($q) use ($date) {
+                $q->where('loc_final->magazin_cod', $date['cod_furnizor'])
+                    ->orWhere('loc_start->magazin_cod', $date['cod_furnizor']);
+            })
             ->get();
 
         foreach ($ciorne as $ciorna) {
+            $camp = $ciorna->campul_magazinului;
             $ciorna->update([
-                'loc_final' => ['magazin_denumire' => $gestiune->denumire] + $ciorna->loc_final,
+                $camp => ['magazin_denumire' => $gestiune->denumire] + (array) $ciorna->{$camp},
             ]);
         }
 

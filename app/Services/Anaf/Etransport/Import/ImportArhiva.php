@@ -14,6 +14,13 @@ use App\Services\Anaf\Etransport\EtransportException;
  * declarației), D01_* — distinta cu destinația finală (magazinul, codul lui și
  * adresa), FT1_* — detaliul de articole, care nu ne trebuie.
  *
+ * La retururi (nota de credit, arhiva „RESO") recapitulația lipsește; în locul
+ * ei vine T01_* — lista pe articole, din care liniile ies grupate pe cod vamal.
+ * Numele fișierelor nu poartă atunci numărul documentului; el se ia dinăuntru.
+ * Returul se declară ca livrare intracomunitară: traseul e întors, de la
+ * magazin (codul lui e pe rândul „From" al distinctei) la punctul de frontieră.
+ * Adresa magazinului se ia din ultima declarație a aceluiași magazin.
+ *
  * Dintr-o arhivă ies gata completate: partenerul, liniile cu denumirile din
  * nomenclator, valoarea în lei la cursul zilei facturii, factura la documente
  * și locul de descărcare — cu județul dedus din oraș. Rămân de completat doar
@@ -50,6 +57,9 @@ class ImportArhiva
     /** Gestiunile companiei, pe codul furnizorului; se încarcă la primul import. */
     protected $gestiuni;
 
+    /** Ce e de spus despre ciorna în lucru (adresă lipsă etc.); iese ca avertisment. */
+    protected $note = [];
+
     /**
      * Citește arhiva și face câte o ciornă pe fiecare factură din ea.
      *
@@ -63,24 +73,36 @@ class ImportArhiva
             throw new EtransportException('Arhiva nu a putut fi deschisă (se așteaptă un ZIP).');
         }
 
-        $facturi = [];
+        /*
+         * Fisierele aceleiasi facturi au acelasi nume dupa prefix:
+         * T02_2_TEDDY_..._10053419.TXT si D01_2_TEDDY_..._10053419.TXT. Dupa el
+         * se aduna; numarul facturii se afla abia dupa, din nume sau dinauntru.
+         */
+        $grupuri = [];
 
         for ($i = 0; $i < $arhiva->numFiles; $i++) {
             $nume = basename($arhiva->getNameIndex($i));
 
-            if (!preg_match('/^(T02|D01)_.*_(\d+)\.txt$/i', $nume, $gasit)) {
+            if (!preg_match('/^(T01|T02|D01)_(.+)\.txt$/i', $nume, $gasit)) {
                 continue;
             }
 
-            $facturi[$gasit[2]][strtoupper($gasit[1])] = $arhiva->getFromIndex($i);
+            $grupuri[$gasit[2]][strtoupper($gasit[1])] = $arhiva->getFromIndex($i);
         }
 
-        if ($facturi === []) {
+        if ($grupuri === []) {
             $arhiva->close();
 
             throw new EtransportException(
-                'Arhiva nu are fișiere T02_* (recapitulația pe coduri vamale). Este arhiva zilnică a furnizorului?'
+                'Arhiva nu are fișiere T02_* (recapitulația pe coduri vamale) sau T01_* (lista pe articole).'
+                . ' Este arhiva zilnică a furnizorului?'
             );
+        }
+
+        $facturi = [];
+
+        foreach ($grupuri as $stem => $bucati) {
+            $facturi[$this->numarulFacturii($stem, $bucati)] = $bucati;
         }
 
         ksort($facturi);
@@ -89,17 +111,19 @@ class ImportArhiva
 
         foreach ($facturi as $factura => $bucati) {
             // Arhiva importata a doua oara nu dubleaza ciornele.
-            if (EtransportDeclaratie::where('referinta_interna', 'Factura ' . $factura)->exists()) {
+            if (EtransportDeclaratie::whereIn('referinta_interna', ['Factura ' . $factura, 'Retur ' . $factura])->exists()) {
                 $rezultat['avertismente'][] = 'Factura ' . $factura . ' era deja adusă; sărită.';
 
                 continue;
             }
 
-            if (!isset($bucati['T02'])) {
+            if (!isset($bucati['T02']) && !isset($bucati['T01'])) {
                 $rezultat['avertismente'][] = 'Factura ' . $factura
-                    . ': arhiva nu are recapitulația T02 — ciorna s-a făcut fără linii;'
+                    . ': arhiva nu are recapitulația T02 (nici lista T01) — ciorna s-a făcut fără linii;'
                     . ' completați-le manual sau importați-le din fișier.';
             }
+
+            $this->note = [];
 
             try {
                 $declaratie = $this->ciorna((string) $factura, $bucati, $cifDeclarant, $userId);
@@ -109,21 +133,27 @@ class ImportArhiva
                 continue;
             }
 
+            foreach ($this->note as $nota) {
+                $rezultat['avertismente'][] = 'Factura ' . $factura . ': ' . $nota;
+            }
+
+            $locMagazin = $declaratie->loc_magazin;
+
             $rezultat['ciorne'][] = [
                 'id' => $declaratie->id,
                 'factura' => (string) $factura,
-                'magazin' => $declaratie->loc_final['magazin_denumire'] ?? null,
+                'magazin' => $locMagazin['magazin_denumire'] ?? null,
             ];
 
             // Un cod de magazin nestiut inca: utilizatorul e intrebat cum se numeste gestiunea.
-            $codMagazin = mb_strtoupper((string) ($declaratie->loc_final['magazin_cod'] ?? ''));
+            $codMagazin = mb_strtoupper((string) ($locMagazin['magazin_cod'] ?? ''));
 
             if ($codMagazin !== ''
                 && !isset($this->gestiunile()[$codMagazin])
                 && !isset($rezultat['gestiuni_noi'][$codMagazin])) {
                 $rezultat['gestiuni_noi'][$codMagazin] = [
                     'cod_furnizor' => $codMagazin,
-                    'denumire_furnizor' => $declaratie->loc_final['magazin_denumire'] ?? null,
+                    'denumire_furnizor' => $locMagazin['magazin_denumire'] ?? null,
                 ];
             }
         }
@@ -136,7 +166,33 @@ class ImportArhiva
     }
 
     /**
-     * O ciornă dintr-o factură: liniile din T02, destinația din D01.
+     * Numărul facturii: din coada numelui („..._10053419.TXT"), cum vine la
+     * livrări; la retururi numele nu-l poartă și se citește din antetul
+     * fișierelor — „Documents: 10074615 of ...", „Doc number: ..." sau, în
+     * distinta D01, „Number ......: 10074615 del ...".
+     */
+    protected function numarulFacturii(string $stem, array $bucati): string
+    {
+        if (preg_match('/_(\d+)$/', $stem, $gasit)) {
+            return $gasit[1];
+        }
+
+        foreach (['T02', 'T01', 'D01'] as $tip) {
+            if (!isset($bucati[$tip])) {
+                continue;
+            }
+
+            if (preg_match('/^\s*(?:Doc number|Documents|Numero documento|Number)\s*\.*\s*:\s*(\d+)\s+(?:of|del)\b/im', $bucati[$tip], $gasit)) {
+                return $gasit[1];
+            }
+        }
+
+        return $stem;
+    }
+
+    /**
+     * O ciornă dintr-o factură: liniile din T02 (sau din T01, la retururi),
+     * destinația din D01.
      *
      * Unele arhive vin fără T02 la anumite facturi: ciorna se face atunci
      * doar cu destinația și factura, iar liniile le pune omul.
@@ -144,33 +200,45 @@ class ImportArhiva
     protected function ciorna(string $factura, array $bucati, ?string $cifDeclarant, ?int $userId): EtransportDeclaratie
     {
         $citit = ['linii' => [], 'antet' => []];
+        $tipLinii = isset($bucati['T02']) ? 'T02' : (isset($bucati['T01']) ? 'T01' : null);
 
-        if (isset($bucati['T02'])) {
-            // T02 se citeste cu parserul lui obisnuit, dintr-un fisier trecator.
+        if ($tipLinii !== null) {
+            // Raportul se citeste cu parserul lui obisnuit, dintr-un fisier trecator.
             $cale = tempnam(sys_get_temp_dir(), 'etr');
-            file_put_contents($cale, $bucati['T02']);
+            file_put_contents($cale, $bucati[$tipLinii]);
 
             try {
-                $citit = $this->fisiere->importa([['nume' => 'T02_' . $factura . '.txt', 'cale' => $cale]]);
+                $citit = $this->fisiere->importa([['nume' => $tipLinii . '_' . $factura . '.txt', 'cale' => $cale]]);
             } finally {
                 @unlink($cale);
             }
 
             if ($citit['linii'] === []) {
-                throw new EtransportException('recapitulația T02 nu are nicio linie de citit.');
+                throw new EtransportException(
+                    ($tipLinii === 'T02' ? 'recapitulația T02' : 'lista pe articole T01') . ' nu are nicio linie de citit.'
+                );
             }
         }
 
         $antet = $citit['antet'];
-        $destinatie = isset($bucati['D01']) ? $this->destinatia($bucati['D01']) : [];
+        $retur = $this->esteRetur($bucati);
+
+        /*
+         * Magazinul: la livrari e destinatia din blocul „Destinazione" al
+         * distinctei; la retururi e expeditorul, cu codul pe randul „From", iar
+         * adresa lui se ia din ultima declaratie a aceluiasi magazin.
+         */
+        $magazin = $retur
+            ? $this->adresaMagazinului($this->magazinulDinD01($bucati['D01'] ?? ''))
+            : (isset($bucati['D01']) ? $this->destinatia($bucati['D01']) : []);
 
         // Cand gestiunea e stiuta, denumirea magazinului se ia din ea, nu de la furnizor.
-        $gestiune = isset($destinatie['magazin_cod'])
-            ? ($this->gestiunile()[mb_strtoupper($destinatie['magazin_cod'])] ?? null)
+        $gestiune = isset($magazin['magazin_cod'])
+            ? ($this->gestiunile()[mb_strtoupper($magazin['magazin_cod'])] ?? null)
             : null;
 
         if ($gestiune !== null) {
-            $destinatie['magazin_denumire'] = $gestiune->denumire;
+            $magazin['magazin_denumire'] = $gestiune->denumire;
         }
 
         $dataFacturii = $antet['document_data']
@@ -188,17 +256,21 @@ class ImportArhiva
             $linii[] = $linie;
         }
 
+        // Livrare: de la frontiera la magazin (AIC). Retur: de la magazin la frontiera (LIC).
+        $ptf = ['tip' => 'ptf', 'cod_ptf' => self::PTF_IMPLICIT];
+        $adresaMagazin = ['tip' => 'adresa'] + $magazin;
+
         return EtransportDeclaratie::create([
             'stare' => 'ciorna',
             'cif_declarant' => $cifDeclarant,
-            'referinta_interna' => 'Factura ' . $factura,
-            'tip_operatiune' => 10,
+            'referinta_interna' => ($retur ? 'Retur ' : 'Factura ') . $factura,
+            'tip_operatiune' => $retur ? 20 : 10,
             'partener_tara' => $antet['partener_tara'] ?? 'IT',
             'partener_cod' => $antet['partener_cod'] ?? null,
             'partener_denumire' => $antet['partener_denumire'] ?? null,
             'transportator_tara' => 'RO',
-            'loc_start' => ['tip' => 'ptf', 'cod_ptf' => self::PTF_IMPLICIT],
-            'loc_final' => ['tip' => 'adresa'] + $destinatie,
+            'loc_start' => $retur ? $adresaMagazin : $ptf,
+            'loc_final' => $retur ? $ptf : $adresaMagazin,
             'documente' => [[
                 'tip' => 20,
                 'numar' => $factura,
@@ -211,6 +283,64 @@ class ImportArhiva
             'fisiere_importate' => ['arhiva: factura ' . $factura],
             'user_id' => $userId,
         ]);
+    }
+
+    /**
+     * Retur, nu livrare: distinta e o notă de credit, sau liniile vin din
+     * lista T01 în lipsa recapitulației T02 (așa vin arhivele „RESO").
+     */
+    protected function esteRetur(array $bucati): bool
+    {
+        if (isset($bucati['D01']) && preg_match('/CREDIT\s+NOTE/i', $bucati['D01'])) {
+            return true;
+        }
+
+        return isset($bucati['T01']) && !isset($bucati['T02']);
+    }
+
+    /**
+     * Codul magazinului care trimite returul, de pe rândul distinctei:
+     * „From  S.C. EMPORIO COM SRL                     NEG0001474".
+     */
+    protected function magazinulDinD01(string $continut): ?string
+    {
+        if (preg_match('/^\s*From\s+.+?\s{2,}(NEG\w+)/im', $continut, $gasit)) {
+            return mb_strtoupper($gasit[1]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Adresa magazinului, din ultima declarație care l-a avut ca destinație
+     * (sau ca plecare, la un retur anterior). Fără una, ciorna pornește doar
+     * cu codul și denumirea, iar adresa o pune omul.
+     *
+     * @return array<string, mixed>
+     */
+    protected function adresaMagazinului(?string $cod): array
+    {
+        if ($cod === null) {
+            $this->note[] = 'distinta nu spune de la ce magazin pleacă returul; completați adresa de plecare.';
+
+            return [];
+        }
+
+        $anterioara = EtransportDeclaratie::where(function ($q) use ($cod) {
+            $q->where('loc_final->magazin_cod', $cod)->orWhere('loc_start->magazin_cod', $cod);
+        })->orderByDesc('id')->first();
+
+        if ($anterioara === null) {
+            $this->note[] = 'magazinul ' . $cod . ' nu are nicio declarație anterioară din care să-i iau adresa;'
+                . ' completați adresa de plecare.';
+
+            return ['magazin_cod' => $cod];
+        }
+
+        $adresa = $anterioara->loc_magazin;
+        unset($adresa['tip']);
+
+        return ['magazin_cod' => $cod] + $adresa;
     }
 
     /** Gestiunile companiei curente, pe codul furnizorului (NEG*). */

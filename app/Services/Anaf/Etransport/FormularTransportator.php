@@ -65,22 +65,24 @@ class FormularTransportator
 
     protected function foaia(Spreadsheet $registru, EtransportDeclaratie $d, array &$numeFolosite): void
     {
-        $magazin = $d->loc_final['magazin_denumire'] ?? null;
+        // Magazinul: destinatia la livrari, plecarea la retururi.
+        $locMagazin = $d->loc_magazin;
+        $magazin = $locMagazin['magazin_denumire'] ?? null;
 
         // Titlul foii, ca in fisierul facut de mana: prescurtarea gestiunii.
         if ($this->gestiuni === null) {
             $this->gestiuni = EtransportGestiune::peCodFurnizor();
         }
 
-        $gestiune = isset($d->loc_final['magazin_cod'])
-            ? ($this->gestiuni[mb_strtoupper($d->loc_final['magazin_cod'])] ?? null)
+        $gestiune = isset($locMagazin['magazin_cod'])
+            ? ($this->gestiuni[mb_strtoupper($locMagazin['magazin_cod'])] ?? null)
             : null;
 
         if ($gestiune !== null) {
             $magazin = $gestiune->prescurtare ?: $gestiune->denumire;
         }
 
-        $titlu = $magazin ?: ($d->loc_final['localitate'] ?? ('Factura ' . ($d->documente[0]['numar'] ?? $d->id)));
+        $titlu = $magazin ?: ($locMagazin['localitate'] ?? ('Factura ' . ($d->documente[0]['numar'] ?? $d->id)));
 
         // Numele foii: fara caracterele oprite de Excel, cel mult 31, unic.
         $nume = mb_substr(trim(str_replace(['\\', '/', ':', '*', '?', '[', ']', "'"], ' ', $titlu)), 0, 28) ?: 'Foaie';
@@ -104,8 +106,8 @@ class FormularTransportator
         $foaie->getStyle('B2')->getFont()->setBold(true)->setSize(14);
 
         $descarcare = trim(implode(', ', array_filter([
-            $d->loc_final['strada'] ?? null,
-            $d->loc_final['localitate'] ?? null,
+            $locMagazin['strada'] ?? null,
+            $locMagazin['localitate'] ?? null,
         ])));
 
         $randuri = [
