@@ -114,11 +114,21 @@
           <b-badge :variant="culoareStare(rand.item.stare)">
             {{ rand.item.stare_eticheta }}
           </b-badge>
+          <!-- Codul e ingrosat doar cand e confirmat; altfel e doar propus. -->
           <div
             v-if="rand.item.uit"
-            class="small font-weight-bold mt-25"
+            class="small mt-25"
+            :class="rand.item.stare === 'validata' ? 'font-weight-bold' : 'text-muted'"
           >
             {{ rand.item.uit }}
+          </div>
+          <!-- Motivul respingerii, ca sa nu fie nevoie de deschis declaratia -->
+          <div
+            v-for="(mesaj, index) in rand.item.erori || []"
+            :key="index"
+            class="small text-danger mt-25"
+          >
+            {{ mesaj }}
           </div>
         </template>
 
@@ -155,7 +165,7 @@
             <feather-icon :icon="rand.item.poate_fi_modificata ? 'Edit2Icon' : 'EyeIcon'" />
           </b-button>
           <b-button
-            v-if="rand.item.index_incarcare && !rand.item.uit"
+            v-if="rand.item.index_incarcare && rand.item.stare === 'depusa'"
             v-b-tooltip.hover.top.window.v-light
             size="sm"
             variant="outline-secondary"
@@ -165,8 +175,9 @@
           >
             <feather-icon icon="RefreshCwIcon" />
           </b-button>
+          <!-- UIT-ul pleaca la sofer doar dupa ce ANAF l-a confirmat. -->
           <b-button
-            v-if="rand.item.uit"
+            v-if="rand.item.uit && rand.item.stare === 'validata'"
             v-b-tooltip.hover.top.window.v-light
             size="sm"
             variant="outline-secondary"
@@ -213,14 +224,27 @@
           {{ declaratia.stare_eticheta || 'Ciornă nouă' }}
         </b-badge>
 
+        <!--
+          Codul UIT se arata ca al declaratiei doar dupa ce ANAF l-a confirmat.
+          Pana atunci e propus: ANAF il da la incarcare si unei declaratii pe
+          care o respinge dupa aceea.
+        -->
         <h5
-          v-if="declaratia.uit"
+          v-if="declaratia.uit && declaratia.stare === 'validata'"
           class="mb-0 ml-2"
         >
           UIT: <span class="text-success font-weight-bolder">{{ declaratia.uit }}</span>
         </h5>
+        <span
+          v-else-if="declaratia.uit"
+          class="ml-2 small text-muted"
+        >
+          UIT propus: {{ declaratia.uit }}
+          <span v-if="declaratia.stare === 'depusa'">(neconfirmat încă de ANAF)</span>
+          <span v-else>(nevalabil — declarația a fost respinsă)</span>
+        </span>
         <b-button
-          v-if="declaratia.uit"
+          v-if="declaratia.uit && declaratia.stare === 'validata'"
           variant="outline-primary"
           size="sm"
           class="ml-2"
@@ -233,6 +257,23 @@
           Trimite pe email
         </b-button>
       </div>
+
+      <!-- Motivul respingerii, cum l-a scris ANAF -->
+      <b-alert
+        :show="(declaratia.erori || []).length > 0"
+        variant="danger"
+        class="mb-2"
+      >
+        <div class="alert-body">
+          <strong>ANAF a respins declarația:</strong>
+          <div
+            v-for="(mesaj, index) in declaratia.erori || []"
+            :key="index"
+          >
+            {{ mesaj }}
+          </div>
+        </div>
+      </b-alert>
 
       <!-- Import fisiere: doar pentru utilizatorii cu formate de fisiere cunoscute -->
       <b-card
@@ -853,8 +894,13 @@
         </b-button>
       </div>
 
+      <!--
+        Butonul apare cat timp verdictul nu e dat, nu doar cat lipseste UIT-ul:
+        codul vine de la incarcare, deci prezenta lui nu inseamna ca s-a lamurit
+        ceva.
+      -->
       <div
-        v-else-if="declaratia.index_incarcare && !declaratia.uit"
+        v-else-if="declaratia.index_incarcare && declaratia.stare === 'depusa'"
         class="mb-2"
       >
         <b-button
@@ -867,6 +913,9 @@
           />
           Verifică starea la ANAF
         </b-button>
+        <small class="text-muted ml-1">
+          ANAF prelucrează declarația; starea se verifică și singură, din cinci în cinci minute.
+        </small>
       </div>
 
       <!-- Raspunsul depunerii, chiar sub butoane: aici se uita omul dupa apasare -->
@@ -1213,6 +1262,8 @@ const declaratieGoala = () => ({
   stare: 'ciorna',
   stare_eticheta: 'Ciornă',
   poate_fi_modificata: true,
+  // Motivele respingerii, cand ANAF respinge; goale cat timp nu e depusa.
+  erori: [],
   cif_declarant: '',
   referinta_interna: '',
   tip_operatiune: 10,
@@ -1711,9 +1762,10 @@ export default {
         return this.$http.post(`/anaf-etransport/declaratii/${this.declaratia.id}/depune`)
           .then(raspuns => {
             this.declaratia = raspuns.data.data
-            this.info = this.declaratia.uit
-              ? `Declarația a fost validată. UIT: ${this.declaratia.uit}`
-              : `Declarația a fost depusă, index de încărcare ${this.declaratia.index_incarcare}. Verificați starea pentru UIT.`
+            // Codul UIT vine de la incarcare, dar ANAF il confirma abia dupa
+            // prelucrare; pana atunci declaratia nu e validata.
+            this.info = `Declarația a fost depusă, index de încărcare ${this.declaratia.index_incarcare}.`
+              + ' ANAF o prelucrează; starea se verifică singură în câteva minute.'
           })
           .catch(err => {
             const date = err.response && err.response.data
@@ -1736,9 +1788,17 @@ export default {
       this.$http.post(`/anaf-etransport/declaratii/${this.declaratia.id}/verifica`)
         .then(raspuns => {
           this.declaratia = raspuns.data.data
-          this.info = this.declaratia.uit
-            ? `Declarația are UIT: ${this.declaratia.uit}`
-            : 'Declarația e încă în prelucrare la ANAF.'
+          this.info = ''
+          this.eroare = ''
+
+          if (this.declaratia.stare === 'validata') {
+            this.info = `ANAF a validat declarația. UIT: ${this.declaratia.uit}`
+          } else if (this.declaratia.stare === 'respinsa') {
+            // Motivul se vede oricum in caseta rosie de sus; aici doar verdictul.
+            this.eroare = 'ANAF a respins declarația.'
+          } else {
+            this.info = 'Declarația e încă în prelucrare la ANAF.'
+          }
         })
         .catch(err => {
           this.eroare = this.mesajEroare(err, 'Starea nu s-a putut verifica')

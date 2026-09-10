@@ -60,6 +60,17 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping();
 
         /*
+         * Soarta declarațiilor e-Transport depuse. ANAF dă codul UIT la
+         * încărcare, dar verdictul vine după prelucrare, în câteva minute — și
+         * poate fi o respingere. Fără verificarea asta, o declarație refuzată
+         * rămânea „depusă" până se gândea cineva s-o întrebe, iar șoferul putea
+         * pleca la drum cu un cod pe care ANAF nu-l recunoaște.
+         */
+        $schedule->command('anaf:etransport-stari')
+            ->everyFiveMinutes()
+            ->withoutOverlapping();
+
+        /*
          * Licențele programelor locale. Se reînnoiesc cu zece zile înainte de
          * expirare, cât timp clientul are abonamentul în regulă; când nu-l mai
          * are, licența nu se mai emite, iar programul de la el se oprește singur

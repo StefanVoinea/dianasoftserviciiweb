@@ -12,20 +12,27 @@ use Carbon\Carbon;
  * ANAF întoarce doar stările finale ale notificărilor valide, plus toate
  * notificările care au avut erori, deci lista se poate reinteroga oricând fără
  * să se dubleze înregistrările.
+ *
+ * [2026-09-10] Notificarea e verdictul ANAF asupra unei depuneri, așa că
+ * îndreaptă și declarația din care a plecat: altfel fila „Declarații UIT" putea
+ * arăta „Validată — are UIT" tocmai la o declarație pe care fila „Notificări"
+ * o dădea cu eroare.
  */
 class EtransportSincronizare
 {
     protected $client;
     protected $certificate;
+    protected $stari;
 
-    public function __construct(EtransportClient $client, CertificatService $certificate)
+    public function __construct(EtransportClient $client, CertificatService $certificate, StareDeclaratie $stari)
     {
         $this->client = $client;
         $this->certificate = $certificate;
+        $this->stari = $stari;
     }
 
     /**
-     * @return array{preluate: int, noi: int, cu_erori: int}
+     * @return array{preluate: int, noi: int, cu_erori: int, declaratii_indreptate: int}
      */
     public function preia(int $zile, string $cif, ?int $userId = null): array
     {
@@ -53,6 +60,7 @@ class EtransportSincronizare
 
         $noi = 0;
         $cuErori = 0;
+        $indreptate = 0;
 
         foreach ($mesaje as $mesaj) {
             $notificare = EtransportNotificare::firstOrNew([
@@ -68,9 +76,19 @@ class EtransportSincronizare
             if (($mesaj['stare'] ?? null) === 'ERR') {
                 $cuErori++;
             }
+
+            // Verdictul se pune si pe declaratia din care a plecat notificarea.
+            if ($this->stari->dupaNotificare($notificare)) {
+                $indreptate++;
+            }
         }
 
-        return ['preluate' => count($mesaje), 'noi' => $noi, 'cu_erori' => $cuErori];
+        return [
+            'preluate' => count($mesaje),
+            'noi' => $noi,
+            'cu_erori' => $cuErori,
+            'declaratii_indreptate' => $indreptate,
+        ];
     }
 
     protected function campuri(array $mesaj, ?int $userId): array

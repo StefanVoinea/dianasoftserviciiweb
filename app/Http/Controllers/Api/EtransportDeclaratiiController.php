@@ -11,6 +11,7 @@ use App\Services\Anaf\Etransport\EtransportClient;
 use App\Services\Anaf\Etransport\EtransportException;
 use App\Services\Anaf\Etransport\Import\ImportFisiere;
 use App\Services\Anaf\Etransport\Nomenclatoare;
+use App\Services\Anaf\Etransport\StareDeclaratie;
 use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
 use Illuminate\Http\Request;
@@ -29,7 +30,7 @@ class EtransportDeclaratiiController extends Controller
             $query->where('stare', $request->query('stare'));
         }
 
-        $declaratii = $query->limit((int) $request->query('limita', 200))->get()
+        $declaratii = $query->with('notificare')->limit((int) $request->query('limita', 200))->get()
             ->map(function (EtransportDeclaratie $d) {
                 return [
                     'id' => $d->id,
@@ -50,6 +51,8 @@ class EtransportDeclaratiiController extends Controller
                     'valoare_lei' => round(array_sum(array_column($d->linii ?: [], 'valoare_lei')), 2),
                     'uit' => $d->uit,
                     'index_incarcare' => $d->index_incarcare,
+                    // Motivul respingerii se vede pe rând, fara sa mai fie deschisa declaratia.
+                    'erori' => $d->erori_anaf,
                     'creata_la' => Format::dataOra($d->created_at),
                 ];
             });
@@ -218,8 +221,21 @@ class EtransportDeclaratiiController extends Controller
         $uit = $raspuns['UIT'] ?? ($raspuns['uit'] ?? null);
         $erori = $raspuns['Errors'] ?? ($raspuns['errors'] ?? []);
 
+        /*
+         * [2026-09-10] Codul UIT venit acum NU inseamna ca declaratia a fost
+         * primita: ANAF il da la fiecare incarcare si scrie alaturi, in acelasi
+         * raspuns, ca „este valabil din momentul in care apare ca valid dupa
+         * apelul de stare". Prelucrarea se face dupa aceea si poate respinge
+         * declaratia — asa au ajuns sase retururi sa arate „Validata — are UIT"
+         * desi ANAF le refuzase pentru data transportului.
+         *
+         * Declaratia ramane deci „depusa" pana cand ANAF spune `ok`. Codul UIT
+         * se pastreaza, ca e cel care va deveni valabil, dar nu tine loc de
+         * verdict. Verdictul il aduce `verifica`, comanda `anaf:etransport-stari`
+         * sau notificarea preluata in fila Notificari.
+         */
         $declaratie->update([
-            'stare' => $index ? ($uit ? 'validata' : 'depusa') : 'respinsa',
+            'stare' => $index ? 'depusa' : 'respinsa',
             'index_incarcare' => $index,
             'uit' => $uit,
             'raspuns_anaf' => $raspuns,
@@ -230,7 +246,7 @@ class EtransportDeclaratiiController extends Controller
             'etransport_declaratie',
             $index
                 ? 'A depus declarația e-Transport #' . $declaratie->id . ' pentru ' . $declaratie->cif_declarant
-                    . ($uit ? ', UIT ' . $uit : ', index de încărcare ' . $index)
+                    . ', index de încărcare ' . $index . ($uit ? ', UIT propus ' . $uit : '')
                 : 'ANAF a respins declarația e-Transport #' . $declaratie->id . ' pentru ' . $declaratie->cif_declarant,
             $raspuns,
             $declaratie->cif_declarant,
@@ -244,8 +260,15 @@ class EtransportDeclaratiiController extends Controller
         ], $index ? 200 : 422);
     }
 
-    /** Întreabă ANAF de soarta declarației depuse și reține UIT-ul când apare. */
-    public function verifica(EtransportDeclaratie $declaratie, EtransportClient $client)
+    /**
+     * Întreabă ANAF de soarta declarației depuse.
+     *
+     * Verdictul se citește din `stare`, nu din prezența codului UIT: UIT-ul e
+     * dat la încărcare și unei declarații pe care ANAF o respinge mai târziu.
+     * Socoteala e în StareDeclaratie, ca să fie aceeași și aici, și la comanda
+     * programată, și la preluarea notificărilor.
+     */
+    public function verifica(EtransportDeclaratie $declaratie, StareDeclaratie $stari)
     {
         if (!$declaratie->index_incarcare) {
             return response()->json([
@@ -255,28 +278,25 @@ class EtransportDeclaratiiController extends Controller
         }
 
         try {
-            $raspuns = $client->stareMesaj($declaratie->index_incarcare, $declaratie->cif_declarant);
+            $rezultat = $stari->verifica($declaratie);
         } catch (EtransportException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
 
-        $stare = mb_strtolower((string) ($raspuns['stare'] ?? ''));
-        $uit = $raspuns['UIT'] ?? ($raspuns['uit'] ?? null);
-
-        if ($uit || $stare === 'ok') {
-            $declaratie->update([
-                'stare' => 'validata',
-                'uit' => $uit ?: $declaratie->uit,
-                'raspuns_anaf' => $raspuns,
-            ]);
-        } elseif ($stare !== '' && strpos($stare, 'erori') !== false) {
-            $declaratie->update(['stare' => 'respinsa', 'raspuns_anaf' => $raspuns]);
+        if ($rezultat['schimbata'] && $rezultat['stare'] === 'respinsa') {
+            Jurnal::esec(
+                'etransport_declaratie',
+                'ANAF a respins declarația e-Transport #' . $declaratie->id . ': '
+                    . implode(' | ', $rezultat['erori']),
+                $rezultat['raspuns'],
+                $declaratie->cif_declarant
+            );
         }
 
         return response()->json([
             'success' => true,
             'data' => $this->detalii($declaratie->fresh()),
-            'raspuns' => $raspuns,
+            'raspuns' => $rezultat['raspuns'],
         ]);
     }
 
@@ -500,10 +520,17 @@ class EtransportDeclaratiiController extends Controller
     /** Trimite codul UIT pe email, șoferului sau partenerului. */
     public function trimiteEmail(Request $request, EtransportDeclaratie $declaratie)
     {
-        if (!$declaratie->uit) {
+        /*
+         * Doar dintr-o declaratie validata pleaca UIT-ul mai departe. Codul dat
+         * la incarcare exista si pe una respinsa, iar trimis soferului l-ar
+         * purta la drum cu un cod pe care ANAF nu-l recunoaste.
+         */
+        if ($declaratie->stare !== 'validata' || !$declaratie->uit) {
             return response()->json([
                 'success' => false,
-                'message' => 'Declarația nu are încă un cod UIT de trimis.',
+                'message' => $declaratie->stare === 'respinsa'
+                    ? 'Declarația a fost respinsă de ANAF; codul ei UIT nu e valabil.'
+                    : 'Declarația nu are încă un cod UIT confirmat de ANAF.',
             ], 422);
         }
 
@@ -628,6 +655,7 @@ class EtransportDeclaratiiController extends Controller
             'index_incarcare' => $d->index_incarcare,
             'uit' => $d->uit,
             'raspuns_anaf' => $d->raspuns_anaf,
+            'erori' => $d->erori_anaf,
             'depusa_la' => Format::dataOra($d->depusa_la),
         ];
     }

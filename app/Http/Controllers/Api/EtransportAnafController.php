@@ -140,11 +140,12 @@ class EtransportAnafController extends Controller
         Jurnal::scrie(
             'etransport_sincronizare',
             sprintf(
-                'A preluat notificările e-Transport pentru %s: %d primite, %d noi, %d cu erori',
+                'A preluat notificările e-Transport pentru %s: %d primite, %d noi, %d cu erori, %d declarații îndreptate',
                 $date['cif'],
                 $rezultat['preluate'],
                 $rezultat['noi'],
-                $rezultat['cu_erori']
+                $rezultat['cu_erori'],
+                $rezultat['declaratii_indreptate'] ?? 0
             ),
             $rezultat,
             $date['cif']
