@@ -66,13 +66,29 @@
             max="2100"
           />
         </b-col>
+        <!--
+          „NeconcordanteD394" se cere pe un interval de luni, nu pe una singura:
+          atunci campul de aici e inceputul, iar cel de alaturi sfarsitul.
+        -->
         <b-col
           v-if="cere('luna')"
           md="2"
         >
-          <label>Luna</label>
+          <label>{{ cere('luna_sfarsit') ? 'Luna de la' : 'Luna' }}</label>
           <b-form-input
             v-model.number="luna"
+            type="number"
+            min="1"
+            max="12"
+          />
+        </b-col>
+        <b-col
+          v-if="cere('luna_sfarsit')"
+          md="2"
+        >
+          <label>Luna până la</label>
+          <b-form-input
+            v-model.number="lunaSfarsit"
             type="number"
             min="1"
             max="12"
@@ -454,6 +470,8 @@ export default {
       tipDocument: null,
       an: null,
       luna: null,
+      // Capatul intervalului, doar la raportul cerut pe mai multe luni
+      lunaSfarsit: null,
       motiv: '',
       numarInregistrare: '',
       cuiPui: '',
@@ -562,7 +580,11 @@ export default {
         .filter(p => p !== 'cui_pui')
         .every(p => {
           const valoare = {
-            an: this.an, luna: this.luna, motiv: this.motiv, numar_inregistrare: this.numarInregistrare,
+            an: this.an,
+            luna: this.luna,
+            luna_sfarsit: this.lunaSfarsit,
+            motiv: this.motiv,
+            numar_inregistrare: this.numarInregistrare,
           }[p]
           return valoare !== null && valoare !== '' && valoare !== undefined
         })
@@ -702,6 +724,7 @@ export default {
         tip_document: this.tipDocument,
         an: this.an || null,
         luna: this.luna || null,
+        luna_sfarsit: this.lunaSfarsit || null,
         motiv: this.motiv || null,
         numar_inregistrare: this.numarInregistrare || null,
         cui_pui: this.cuiPui || null,

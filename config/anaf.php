@@ -149,7 +149,13 @@ return [
             'Adeverinte Venit' => ['an', 'motiv'],
             'Duplicat Recipisa' => ['numar_inregistrare'],
             'NeconcordanteD112CNP' => [],
-            'NeconcordanteD394' => ['an', 'luna'],
+            /*
+             * [2026-09-14] Singurul raport cerut pe un interval de luni, nu pe
+             * una singura: ANAF vrea `lunai` si `lunas`, si raspunde altfel cu
+             * „parametrii cui, an, lunai si lunas sunt obligatorii". `luna` e
+             * inceputul intervalului, `luna_sfarsit` capatul lui.
+             */
+            'NeconcordanteD394' => ['an', 'luna', 'luna_sfarsit'],
             'D112Contrib' => [],
             'D100' => ['an', 'luna'],
             'D101' => ['an'],

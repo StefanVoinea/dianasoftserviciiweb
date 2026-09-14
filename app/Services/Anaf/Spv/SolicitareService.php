@@ -62,6 +62,7 @@ class SolicitareService
             'tip_document' => $tipDocument,
             'an' => $optiuni['an'] ?? null,
             'luna' => $optiuni['luna'] ?? null,
+            'luna_sfarsit' => $optiuni['luna_sfarsit'] ?? null,
             'motiv' => $optiuni['motiv'] ?? null,
             'numar_inregistrare' => $optiuni['numar_inregistrare'] ?? null,
             'cui_pui' => $optiuni['cui_pui'] ?? null,

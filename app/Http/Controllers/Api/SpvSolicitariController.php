@@ -69,6 +69,8 @@ class SpvSolicitariController extends Controller
             'tip_document' => 'required|string|in:' . implode(',', array_keys($tipuri)),
             'an' => 'nullable|integer|min:2000|max:2100',
             'luna' => 'nullable|integer|min:1|max:12',
+            // Capatul intervalului, doar la raportul cerut pe mai multe luni
+            'luna_sfarsit' => 'nullable|integer|min:1|max:12',
             'motiv' => 'nullable|string|max:255',
             'numar_inregistrare' => 'nullable|string|max:100',
             'cui_pui' => 'nullable|string|max:20',
@@ -87,11 +89,23 @@ class SpvSolicitariController extends Controller
         if ($lipsa !== []) {
             return response()->json([
                 'success' => false,
-                'message' => 'Pentru „' . $date['tip_document'] . '” ANAF cere și: ' . implode(', ', $lipsa),
+                'message' => 'Pentru „' . $date['tip_document'] . '” ANAF cere și: '
+                    . implode(', ', str_replace('luna_sfarsit', 'luna de sfârșit', $lipsa)),
             ], 422);
         }
 
-        $optiuni = array_intersect_key($date, array_flip(['an', 'luna', 'motiv', 'numar_inregistrare', 'cui_pui']));
+        // Intervalul de luni are un singur inteles: de la prima catre ultima.
+        if (!empty($date['luna_sfarsit']) && !empty($date['luna']) && $date['luna_sfarsit'] < $date['luna']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Luna de sfârșit e înaintea celei de început.',
+            ], 422);
+        }
+
+        $optiuni = array_intersect_key(
+            $date,
+            array_flip(['an', 'luna', 'luna_sfarsit', 'motiv', 'numar_inregistrare', 'cui_pui'])
+        );
 
         $trimise = [];
         $erori = [];

@@ -118,13 +118,40 @@ class SpvClient
     {
         $query = ['tip' => $tip, 'cui' => $cui];
 
-        foreach (['an', 'luna', 'motiv', 'numar_inregistrare', 'cui_pui'] as $parametru) {
-            if (isset($optiuni[$parametru]) && $optiuni[$parametru] !== '' && $optiuni[$parametru] !== null) {
-                $query[$parametru] = $optiuni[$parametru];
+        foreach ($this->numeleParametrilor($tip) as $alNostru => $laAnaf) {
+            if (isset($optiuni[$alNostru]) && $optiuni[$alNostru] !== '' && $optiuni[$alNostru] !== null) {
+                $query[$laAnaf] = $optiuni[$alNostru];
             }
         }
 
         return $this->json('/cerere', $query);
+    }
+
+    /**
+     * Cum se cheamă la ANAF parametrii pe care îi trimitem.
+     *
+     * [2026-09-14] „NeconcordanteD394" e singurul raport cerut pe un interval de
+     * luni, nu pe una singură: acolo luna de început se numește `lunai`, iar cea
+     * de sfârșit `lunas`. Trimis cu `luna`, raportul se întorcea cu „Pentru tip
+     * raport= NeconcordanteD394 parametrii cui, an, lunai si lunas sunt
+     * obligatorii". La toate celelalte tipuri luna se cheamă `luna`.
+     *
+     * @return array<string, string> numele nostru => numele cerut de ANAF
+     */
+    protected function numeleParametrilor(string $tip): array
+    {
+        $comuni = [
+            'an' => 'an',
+            'motiv' => 'motiv',
+            'numar_inregistrare' => 'numar_inregistrare',
+            'cui_pui' => 'cui_pui',
+        ];
+
+        if ($tip === 'NeconcordanteD394') {
+            return $comuni + ['luna' => 'lunai', 'luna_sfarsit' => 'lunas'];
+        }
+
+        return $comuni + ['luna' => 'luna'];
     }
 
     public function descarcare(string $id): SpvFisier
