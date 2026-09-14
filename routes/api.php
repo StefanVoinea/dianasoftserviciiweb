@@ -283,6 +283,7 @@ Route::middleware(['auth:api', 'companie', 'modul:etransport'])->group(function 
     Route::get('/anaf-etransport/declaratii/curs', 'Api\EtransportDeclaratiiController@curs');
     Route::post('/anaf-etransport/declaratii/importa', 'Api\EtransportDeclaratiiController@importa');
     Route::post('/anaf-etransport/declaratii/intrastat', 'Api\EtransportDeclaratiiController@intrastat');
+    Route::post('/anaf-etransport/declaratii/intrastat/centralizator', 'Api\EtransportDeclaratiiController@centralizatorIntrastat');
     Route::post('/anaf-etransport/declaratii/importa-arhiva', 'Api\EtransportDeclaratiiController@importaArhiva');
     Route::get('/anaf-etransport/declaratii/gestiuni', 'Api\EtransportDeclaratiiController@gestiuni');
     Route::post('/anaf-etransport/declaratii/gestiuni', 'Api\EtransportDeclaratiiController@salveazaGestiune');

@@ -1140,9 +1140,11 @@
     <b-modal
       v-model="intrastatVizibil"
       title="Declarația Intrastat"
+      size="xl"
       :ok-title="intrastatInCurs ? 'Se întocmește...' : 'Generează XML'"
       cancel-title="Renunță"
-      :ok-disabled="intrastatInCurs || !intrastat.nume || !intrastat.prenume || !intrastat.telefon"
+      :ok-disabled="intrastatInCurs || !intrastat.nume || !intrastat.prenume || !intrastat.telefon
+        || (!intrastat.nula && !documenteBifate.length)"
       @ok.prevent="genereazaIntrastat"
     >
       <p class="text-muted small">
@@ -1237,6 +1239,162 @@
           />
         </b-col>
       </b-row>
+
+      <!--
+        Centralizatorul: ce intra in declaratie, inainte sa se genereze ceva.
+        Sus documentele, cu bifa pe fiecare; jos totalurile pe cod NC8.
+      -->
+      <template v-if="!intrastat.nula">
+        <hr>
+
+        <div class="d-flex align-items-center mb-1">
+          <strong>Centralizator</strong>
+          <b-spinner
+            v-if="centralizatorInCurs"
+            small
+            class="ml-1"
+          />
+          <b-button
+            size="sm"
+            variant="outline-secondary"
+            class="ml-auto"
+            :disabled="centralizatorInCurs"
+            @click="incarcaCentralizator(null)"
+          >
+            <feather-icon
+              icon="RefreshCwIcon"
+              class="mr-25"
+            />
+            Reîncarcă
+          </b-button>
+        </div>
+
+        <div
+          v-if="centralizator"
+          class="small"
+        >
+          <p class="text-muted mb-1">
+            {{ centralizator.totaluri.documente }} documente bifate,
+            {{ centralizator.totaluri.linii }} linii pe cod NC8,
+            {{ centralizator.totaluri.masa.toLocaleString('ro-RO') }} kg,
+            {{ centralizator.totaluri.valoare.toLocaleString('ro-RO') }} lei.
+          </p>
+
+          <b-alert
+            :show="intarziati.length > 0"
+            variant="warning"
+            class="py-1 px-2 mb-1"
+          >
+            {{ intarziati.length }} facturi mai vechi n-au intrat în nicio declarație Intrastat.
+            Bifați-le pe cele care se declară acum.
+          </b-alert>
+
+          <div
+            class="table-responsive mb-1"
+            style="max-height: 240px; overflow-y: auto"
+          >
+            <table class="table table-sm table-striped mb-0">
+              <thead>
+                <tr>
+                  <th style="width: 1%" />
+                  <th>Document</th>
+                  <th>Data</th>
+                  <th>Transport</th>
+                  <th class="text-right">
+                    Linii
+                  </th>
+                  <th class="text-right">
+                    Lei
+                  </th>
+                  <th>Stare</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="document in centralizator.documente"
+                  :key="document.id"
+                  :class="document.intarziat ? 'table-warning' : ''"
+                >
+                  <td>
+                    <b-form-checkbox
+                      :checked="document.bifat"
+                      @change="bifeazaDocument(document, $event)"
+                    />
+                  </td>
+                  <td>
+                    {{ document.numar }}
+                    <span
+                      v-if="document.intarziat"
+                      class="text-warning"
+                    >(mai veche)</span>
+                  </td>
+                  <td>{{ document.data || '-' }}</td>
+                  <td>{{ document.data_transport || '-' }}</td>
+                  <td class="text-right">
+                    {{ document.nr_linii }}
+                  </td>
+                  <td class="text-right">
+                    {{ (document.valoare_lei || 0).toLocaleString('ro-RO') }}
+                  </td>
+                  <td>
+                    <span :class="document.stare === 'validata' ? 'text-success' : 'text-muted'">
+                      {{ document.stare }}
+                    </span>
+                    <span
+                      v-if="!document.uit"
+                      class="text-muted"
+                    >· fără UIT</span>
+                  </td>
+                </tr>
+                <tr v-if="!centralizator.documente.length">
+                  <td
+                    colspan="7"
+                    class="text-muted"
+                  >
+                    Niciun transport pentru luna și fluxul alese.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div
+            v-if="centralizator.linii.length"
+            class="table-responsive"
+            style="max-height: 200px; overflow-y: auto"
+          >
+            <table class="table table-sm mb-0">
+              <thead>
+                <tr>
+                  <th>Cod NC8</th>
+                  <th>Țară / origine</th>
+                  <th class="text-right">
+                    Kg
+                  </th>
+                  <th class="text-right">
+                    Lei
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(linie, index) in centralizator.linii"
+                  :key="index"
+                >
+                  <td>{{ linie.cn8 }}</td>
+                  <td>{{ linie.tara }} / {{ linie.origine }}</td>
+                  <td class="text-right">
+                    {{ linie.masa.toLocaleString('ro-RO') }}
+                  </td>
+                  <td class="text-right">
+                    {{ linie.valoare.toLocaleString('ro-RO') }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
 
       <b-alert
         v-if="intrastatEroare"
@@ -1351,6 +1509,9 @@ export default {
       intrastatVizibil: false,
       intrastatInCurs: false,
       intrastatEroare: '',
+      // Ce ar intra in declaratie: documentele si totalurile pe cod NC8.
+      centralizator: null,
+      centralizatorInCurs: false,
       intrastat: {
         luna: 1,
         anul: 2026,
@@ -1451,6 +1612,14 @@ export default {
 
       return (this.nomenclatoare.traseu_pe_operatiune || {})[tip] || { start: 'adresa', final: 'adresa' }
     },
+    /** Documentele bifate in centralizator, cele care intra in fisier. */
+    documenteBifate() {
+      return ((this.centralizator || {}).documente || []).filter(d => d.bifat)
+    },
+    /** Facturi ale lunilor trecute care n-au intrat in nicio declaratie. */
+    intarziati() {
+      return ((this.centralizator || {}).documente || []).filter(d => d.intarziat)
+    },
     /**
      * La operatiunile prin care marfa pleaca din tara (livrare intracomunitara —
      * retururile —, lohn si stocuri la iesire, export, iesire dupa depozitare)
@@ -1472,6 +1641,32 @@ export default {
       }
 
       return this.declaratia[camp]
+    },
+  },
+  watch: {
+    /*
+     * Centralizatorul se reface cand se schimba luna, anul sau fluxul: e al
+     * unei perioade anume, iar unul vechi ar minti. Se cere din nou propunerea,
+     * nu bifele de dinainte, care erau ale altei luni.
+     */
+    'intrastat.luna': function reincarcaLaLuna() {
+      if (this.intrastatVizibil) this.incarcaCentralizator(null)
+    },
+    'intrastat.anul': function reincarcaLaAn() {
+      if (this.intrastatVizibil) this.incarcaCentralizator(null)
+    },
+    'intrastat.flux': function reincarcaLaFlux() {
+      if (this.intrastatVizibil) this.incarcaCentralizator(null)
+    },
+    // Declaratia nula n-are documente: centralizatorul se stinge si se reaprinde.
+    'intrastat.nula': function reincarcaLaNula(nula) {
+      if (!this.intrastatVizibil) return
+
+      if (nula) {
+        this.centralizator = null
+      } else {
+        this.incarcaCentralizator(null)
+      }
     },
   },
   created() {
@@ -1966,6 +2161,7 @@ export default {
       this.intrastat.luna = lunaTrecuta.getMonth() + 1
       this.intrastat.anul = lunaTrecuta.getFullYear()
       this.intrastat.nula = false
+      this.centralizator = null
 
       // Persoana de contact ramane de la o luna la alta.
       try {
@@ -1978,6 +2174,48 @@ export default {
       }
 
       this.intrastatVizibil = true
+      this.incarcaCentralizator(null)
+    },
+
+    /**
+     * Aduce centralizatorul lunii: documentele propuse si totalurile pe cod NC8.
+     *
+     * Cu `ids` null se cere propunerea — luna intreaga, fara intarziati; cu o
+     * lista, se socoteste pe ce e bifat acum.
+     */
+    incarcaCentralizator(ids) {
+      if (this.intrastat.nula) {
+        this.centralizator = null
+
+        return
+      }
+
+      this.centralizatorInCurs = true
+
+      this.$http.post('/anaf-etransport/declaratii/intrastat/centralizator', {
+        luna: this.intrastat.luna,
+        anul: this.intrastat.anul,
+        flux: this.intrastat.flux,
+        declaratii: ids,
+      })
+        .then(raspuns => {
+          this.centralizator = raspuns.data.data
+          this.intrastatEroare = ''
+        })
+        .catch(err => {
+          this.centralizator = null
+          this.intrastatEroare = this.mesajEroare(err, 'Centralizatorul nu s-a putut întocmi')
+        })
+        .finally(() => {
+          this.centralizatorInCurs = false
+        })
+    },
+
+    /** Bifa de pe un document; totalurile se refac pe ce ramane bifat. */
+    bifeazaDocument(rand, bifat) {
+      this.$set(rand, 'bifat', bifat)
+
+      this.incarcaCentralizator(this.documenteBifate.map(d => d.id))
     },
     genereazaIntrastat() {
       this.intrastatEroare = ''
@@ -1992,7 +2230,13 @@ export default {
         email: this.intrastat.email,
       }))
 
-      this.$http.post('/anaf-etransport/declaratii/intrastat', this.intrastat)
+      // Se trimit exact documentele bifate in centralizator.
+      const cerere = {
+        ...this.intrastat,
+        declaratii: this.intrastat.nula ? null : this.documenteBifate.map(d => d.id),
+      }
+
+      this.$http.post('/anaf-etransport/declaratii/intrastat', cerere)
         .then(raspuns => {
           const rezultat = raspuns.data.data
 

@@ -467,7 +467,39 @@ class EtransportDeclaratiiController extends Controller
     }
 
     /**
-     * Declarația Intrastat, întocmită din declarațiile e-Transport cu UIT.
+     * Centralizatorul declarației Intrastat: ce ar intra în ea, înainte de a se
+     * genera ceva.
+     *
+     * Arată documentele lunii și pe cele mai vechi rămase nedeclarate, cu bifă
+     * pe fiecare, plus totalurile pe cod NC8 care ies din cele bifate. Aici se
+     * verifică declarația, nu în XML-ul deja făcut.
+     */
+    public function centralizatorIntrastat(Request $request, \App\Services\Anaf\Etransport\IntrastatXml $intrastat)
+    {
+        $date = $request->validate([
+            'luna' => 'required|integer|min:1|max:12',
+            'anul' => 'required|integer|min:2000|max:2100',
+            'flux' => 'required|in:sosiri,expedieri',
+            'declaratii' => 'nullable|array',
+            'declaratii.*' => 'integer',
+        ]);
+
+        try {
+            $rezultat = $intrastat->centralizator(
+                (int) $date['luna'],
+                (int) $date['anul'],
+                $date['flux'],
+                $date['declaratii'] ?? null
+            );
+        } catch (EtransportException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['success' => true, 'data' => $rezultat]);
+    }
+
+    /**
+     * Declarația Intrastat, întocmită din transporturile lunii.
      *
      * Fișierul XML pe schema INS se descarcă și se încarcă în aplicația
      * Intrastat (online sau offline), care îl validează și îl depune.
@@ -485,6 +517,9 @@ class EtransportDeclaratiiController extends Controller
             // La declaratia nula nu exista linii, deci nici conditie de livrare.
             'incoterm' => 'nullable|string|in:EXW,FCA,FAS,FOB,CFR,CIF,CPT,CIP,DAP,DPU,DDP',
             'nula' => 'nullable|boolean',
+            // Documentele bifate in centralizator; lipsa inseamna propunerea lui.
+            'declaratii' => 'nullable|array',
+            'declaratii.*' => 'integer',
         ]);
 
         $companie = \App\Support\ContextCompanie::curenta();
@@ -499,7 +534,10 @@ class EtransportDeclaratiiController extends Controller
                 'telefon' => $date['telefon'],
                 'email' => $date['email'] ?? null,
                 'incoterm' => $date['incoterm'] ?? null,
-            ], $request->boolean('nula'));
+            ], [
+                'nula' => $request->boolean('nula'),
+                'declaratii' => $date['declaratii'] ?? null,
+            ]);
         } catch (EtransportException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }

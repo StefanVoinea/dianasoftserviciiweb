@@ -24,6 +24,23 @@ use DOMElement;
  * să declare și nu trimite nimic e trecut nerespondent și amendat. Schema INS o
  * are ca atare, cu rădăcina ei (`InsNillDispatch`, `InsNillArrival`) și cu
  * același cuprins ca oricare alta, doar fără linii de marfă.
+ *
+ * [2026-09-14] Trei lucruri s-au îndreptat, după o lună de august care ieșea pe
+ * jumătate:
+ *
+ *   - luna se ia după DATA DOCUMENTULUI, nu după a transportului. Marfa
+ *     facturată pe 31 august și plecată pe 3 septembrie ține de august; socotită
+ *     după transport, ea cădea în septembrie, iar augustul ieșea cu 11
+ *     declarații în loc de 24.
+ *   - nu se mai cere cod UIT. e-Transport și Intrastat sunt două obligații
+ *     deosebite: un transport nedeclarat la ANAF — sau declarat prea târziu ca
+ *     să mai primească UIT — tot trebuie declarat la statistică.
+ *   - întârziații se iau din urmă. O factură emisă pe 31 iulie, ajunsă după ce
+ *     s-a depus iulie, apare la august ca „mai veche, neintrată nicăieri". De
+ *     aceea fiecare transport își ține minte luna în care a intrat.
+ *
+ * Ce iese se vede întâi în centralizator, document cu document și adunat pe cod
+ * NC8, ca omul să verifice înainte de a trimite ceva la INS.
  */
 class IntrastatXml
 {
@@ -61,22 +78,17 @@ class IntrastatXml
     /**
      * @param array{cif: string, firma: string, nume: string, prenume: string,
      *     telefon: string, email: ?string, incoterm: ?string} $antet
-     * @param bool $nula declarație nulă: luna n-a avut nimic pe fluxul acesta
+     * @param array{nula?: bool, declaratii?: array<int, int>} $optiuni
+     *     `nula` — luna n-a avut nimic pe fluxul acesta;
+     *     `declaratii` — id-urile alese în centralizator; lipsă = cele propuse.
      * @return array{nume: string, xml: string, linii: int, declaratii: int, valoare: int, nula: bool}
      */
-    public function genereaza(int $luna, int $anul, string $flux, array $antet, bool $nula = false): array
+    public function genereaza(int $luna, int $anul, string $flux, array $antet, array $optiuni = []): array
     {
-        if (!isset(self::FLUXURI[$flux])) {
-            throw new EtransportException('Fluxul cerut nu există: se alege între sosiri și expedieri.');
-        }
+        $this->verificaFluxul($flux);
 
-        $declaratii = EtransportDeclaratie::whereNotNull('uit')
-            ->where('tip_operatiune', self::FLUXURI[$flux])
-            ->whereYear('data_transport', $anul)
-            ->whereMonth('data_transport', $luna)
-            ->get();
-
-        $felul = $flux === 'sosiri' ? 'achiziții intracomunitare (sosiri)' : 'livrări intracomunitare (expedieri)';
+        $nula = (bool) ($optiuni['nula'] ?? false);
+        $felul = $this->felul($flux);
 
         if ($nula) {
             /*
@@ -84,13 +96,15 @@ class IntrastatXml
              * Cand are, ea ar fi o declaratie mincinoasa, asa ca nu se face:
              * mai bine se opreste aici decat sa ajunga asa la INS.
              */
-            if ($declaratii->isNotEmpty()) {
+            $aleLunii = $this->candidate($luna, $anul, $flux)['ale_lunii'];
+
+            if ($aleLunii->isNotEmpty()) {
                 throw new EtransportException(sprintf(
-                    'Pe %02d/%d există %d declarații e-Transport cu UIT pentru %s, deci luna nu e goală. '
+                    'Pe %02d/%d există %d transporturi pentru %s, deci luna nu e goală. '
                         . 'Declarația nulă se depune doar când nu e nimic de declarat.',
                     $luna,
                     $anul,
-                    $declaratii->count(),
+                    $aleLunii->count(),
                     $felul
                 ));
             }
@@ -98,9 +112,11 @@ class IntrastatXml
             return $this->document($luna, $anul, $flux, $antet, [], true);
         }
 
+        $declaratii = $this->alese($luna, $anul, $flux, $optiuni['declaratii'] ?? null);
+
         if ($declaratii->isEmpty()) {
             throw new EtransportException(sprintf(
-                'Nicio declarație e-Transport cu UIT pentru %s pe %02d/%d. Dacă în luna aceasta chiar nu ați avut, '
+                'Niciun transport de declarat pentru %s pe %02d/%d. Dacă în luna aceasta chiar nu ați avut, '
                     . 'bifați „declarație nulă”: INS o cere oricum, altfel sunteți trecut nerespondent.',
                 $felul,
                 $luna,
@@ -112,7 +128,172 @@ class IntrastatXml
             throw new EtransportException('Lipsește condiția de livrare (Incoterm), cerută pe fiecare linie.');
         }
 
-        return $this->document($luna, $anul, $flux, $antet, $this->aduna($declaratii, $flux), false, $declaratii->count());
+        $rezultat = $this->document(
+            $luna,
+            $anul,
+            $flux,
+            $antet,
+            $this->aduna($declaratii, $flux),
+            false,
+            $declaratii->count()
+        );
+
+        /*
+         * Se insemneaza in ce luna Intrastat a intrat fiecare transport. De aici
+         * stie centralizatorul lunii urmatoare care facturi au ramas pe dinafara
+         * si trebuie luate din urma.
+         */
+        EtransportDeclaratie::whereIn('id', $declaratii->pluck('id'))
+            ->update(['intrastat_perioada' => $this->perioada($luna, $anul)]);
+
+        return $rezultat;
+    }
+
+    /**
+     * Centralizatorul: ce ar intra în declarație, înainte să se genereze ceva.
+     *
+     * Întoarce documentele propuse — cele ale lunii și cele mai vechi rămase
+     * nedeclarate — și totalurile pe cod NC8 care ies din cele alese.
+     *
+     * @param array<int, int>|null $alese id-urile bifate; lipsă = propunerea
+     * @return array{perioada: string, flux: string, documente: array, linii: array,
+     *     totaluri: array{documente: int, linii: int, masa: int, valoare: int}}
+     */
+    public function centralizator(int $luna, int $anul, string $flux, ?array $alese = null): array
+    {
+        $this->verificaFluxul($flux);
+
+        $candidate = $this->candidate($luna, $anul, $flux);
+        $toate = $candidate['ale_lunii']->concat($candidate['intarziate']);
+
+        // Fara o alegere anume, propunerea e: luna intreaga, fara intarziati.
+        $bifate = $alese === null
+            ? $candidate['ale_lunii']->pluck('id')->all()
+            : array_map('intval', $alese);
+
+        $documente = $toate->map(function (EtransportDeclaratie $d) use ($candidate, $bifate) {
+            $document = $d->documente[0] ?? [];
+
+            return [
+                'id' => $d->id,
+                'numar' => $document['numar'] ?? $d->referinta_interna,
+                'data' => $d->data_intrastat,
+                'luna' => $d->luna_intrastat,
+                'data_transport' => optional($d->data_transport)->format('Y-m-d'),
+                'referinta' => $d->referinta_interna,
+                'stare' => $d->stare,
+                'uit' => $d->uit,
+                'nr_linii' => count($d->linii ?: []),
+                'valoare_lei' => round(array_sum(array_column($d->linii ?: [], 'valoare_lei')), 2),
+                // Factura unei luni trecute, neintrata in nicio declaratie Intrastat.
+                'intarziat' => $candidate['intarziate']->contains('id', $d->id),
+                'bifat' => in_array($d->id, $bifate, true),
+            ];
+        })->values()->all();
+
+        $selectate = $toate->whereIn('id', $bifate);
+        $linii = $this->aduna($selectate, $flux);
+
+        return [
+            'perioada' => $this->perioada($luna, $anul),
+            'flux' => $flux,
+            'documente' => $documente,
+            'linii' => $linii,
+            'totaluri' => [
+                'documente' => $selectate->count(),
+                'linii' => count($linii),
+                'masa' => (int) array_sum(array_column($linii, 'masa')),
+                'valoare' => (int) array_sum(array_column($linii, 'valoare')),
+            ],
+        ];
+    }
+
+    /**
+     * Transporturile care pot intra în declarația lunii.
+     *
+     * `ale_lunii` — cele cu data documentului în luna cerută, neintrate în altă
+     * declarație Intrastat. `intarziate` — cele mai vechi, rămase nedeclarate:
+     * factura din 31 iulie sosită după depunerea lui iulie se ia acum.
+     *
+     * Cele respinse de ANAF nu intră: transportul acela s-a redepus cu altă
+     * declarație, iar la socoteală ar ieși marfa de două ori.
+     *
+     * @return array{ale_lunii: \Illuminate\Support\Collection, intarziate: \Illuminate\Support\Collection}
+     */
+    public function candidate(int $luna, int $anul, string $flux): array
+    {
+        $this->verificaFluxul($flux);
+
+        $perioada = $this->perioada($luna, $anul);
+        $inceput = \Carbon\Carbon::create($anul, $luna, 1)->startOfMonth();
+
+        $brute = EtransportDeclaratie::where('tip_operatiune', self::FLUXURI[$flux])
+            ->where('stare', '!=', 'respinsa')
+            ->where(function ($q) use ($perioada) {
+                $q->whereNull('intrastat_perioada')->orWhere('intrastat_perioada', $perioada);
+            })
+            /*
+             * Plasa larga, taiata dupa aceea pe data documentului: luna Intrastat
+             * se citeste din JSON, unde baza nu poate filtra de-a dreptul. Doi ani
+             * inapoi acopera orice intarziere adevarata, iar doua luni inainte
+             * prind facturile lunii al caror transport a plecat mai tarziu.
+             */
+            ->where(function ($q) use ($inceput) {
+                $q->whereNull('data_transport')
+                    ->orWhereBetween('data_transport', [
+                        $inceput->copy()->subYears(2)->toDateString(),
+                        $inceput->copy()->addMonths(2)->endOfMonth()->toDateString(),
+                    ]);
+            })
+            ->orderBy('id')
+            ->get();
+
+        $aleLunii = $brute->filter(function (EtransportDeclaratie $d) use ($perioada) {
+            return $d->luna_intrastat === $perioada;
+        })->values();
+
+        $intarziate = $brute->filter(function (EtransportDeclaratie $d) use ($perioada) {
+            return $d->luna_intrastat !== null
+                && $d->luna_intrastat < $perioada
+                && $d->intrastat_perioada === null;
+        })->values();
+
+        return ['ale_lunii' => $aleLunii, 'intarziate' => $intarziate];
+    }
+
+    /** Transporturile care intră în fișier: cele bifate, ori propunerea. */
+    protected function alese(int $luna, int $anul, string $flux, ?array $alese)
+    {
+        $candidate = $this->candidate($luna, $anul, $flux);
+
+        if ($alese === null) {
+            return $candidate['ale_lunii'];
+        }
+
+        $ids = array_map('intval', $alese);
+
+        return $candidate['ale_lunii']->concat($candidate['intarziate'])
+            ->whereIn('id', $ids)
+            ->values();
+    }
+
+    protected function verificaFluxul(string $flux): void
+    {
+        if (!isset(self::FLUXURI[$flux])) {
+            throw new EtransportException('Fluxul cerut nu există: se alege între sosiri și expedieri.');
+        }
+    }
+
+    protected function felul(string $flux): string
+    {
+        return $flux === 'sosiri'
+            ? 'achiziții intracomunitare (sosiri)'
+            : 'livrări intracomunitare (expedieri)';
+    }
+
+    protected function perioada(int $luna, int $anul): string
+    {
+        return sprintf('%d-%02d', $anul, $luna);
     }
 
     /**

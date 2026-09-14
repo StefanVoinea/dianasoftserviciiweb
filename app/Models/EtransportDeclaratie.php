@@ -87,6 +87,36 @@ class EtransportDeclaratie extends Model
     }
 
     /**
+     * [2026-09-14] Ziua după care transportul se așază într-o lună Intrastat.
+     *
+     * E data documentului, nu a transportului: marfa facturată pe 31 august și
+     * plecată pe 3 septembrie ține de august. Fără dată pe document rămâne ziua
+     * transportului, ca rândul să nu se piardă cu totul.
+     */
+    public function getDataIntrastatAttribute(): ?string
+    {
+        $data = trim((string) (($this->documente[0]['data'] ?? null) ?: ''));
+
+        if ($data !== '') {
+            try {
+                return \Carbon\Carbon::parse($data)->format('Y-m-d');
+            } catch (\Exception $e) {
+                // data scrisa altfel decat se asteapta: ramane transportul
+            }
+        }
+
+        return optional($this->data_transport)->format('Y-m-d');
+    }
+
+    /** Luna Intrastat de care ține transportul, scrisă „2026-08". */
+    public function getLunaIntrastatAttribute(): ?string
+    {
+        $data = $this->data_intrastat;
+
+        return $data ? substr($data, 0, 7) : null;
+    }
+
+    /**
      * Motivele pentru care ANAF a respins declarația, cum le-a scris el.
      *
      * Vin pe două căi, care spun același lucru: interogarea de stare
