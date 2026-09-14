@@ -86,6 +86,78 @@ class IntrastatXmlTest extends TestCase
         (new IntrastatXml())->genereaza(1, 2020, 'expedieri', $this->antet());
     }
 
+    /** Luna fara nimic de declarat isi are declaratia ei, cu radacina INS pentru nule. */
+    public function test_declaratia_nula_de_expedieri_are_radacina_ins_nill_dispatch()
+    {
+        $rezultat = (new IntrastatXml())->genereaza(8, 2026, 'expedieri', $this->antet(), true);
+
+        $this->assertTrue($rezultat['nula']);
+        $this->assertSame(0, $rezultat['linii']);
+        $this->assertSame(0, $rezultat['declaratii']);
+        $this->assertSame(0, $rezultat['valoare']);
+        $this->assertSame('intrastat_nula_expedieri_2026_08_15196216.xml', $rezultat['nume']);
+
+        $xml = $rezultat['xml'];
+
+        $this->assertStringContainsString('<InsNillDispatch', $xml);
+        $this->assertStringNotContainsString('<InsNewDispatch', $xml);
+        $this->assertStringContainsString('xmlns="http://www.intrastat.ro/xml/InsSchema"', $xml);
+        $this->assertStringContainsString('SchemaVersion="1.0"', $xml);
+        // Cuprinsul cerut de schema: versiunile si antetul, atat.
+        $this->assertStringContainsString('<InsCodeVersions>', $xml);
+        $this->assertStringContainsString('<VatNr>0015196216</VatNr>', $xml);
+        $this->assertStringContainsString('<RefPeriod>2026-08</RefPeriod>', $xml);
+        $this->assertStringContainsString('<LastName>Popescu</LastName>', $xml);
+        // Nicio linie de marfa.
+        $this->assertStringNotContainsString('<InsDispatchItem', $xml);
+        $this->assertStringNotContainsString('<Cn8Code>', $xml);
+    }
+
+    /** Aceeasi socoteala pe celalalt flux. */
+    public function test_declaratia_nula_de_sosiri_are_radacina_ins_nill_arrival()
+    {
+        // Pe o luna in care nu s-a miscat nimic: cele din proba sunt pe august.
+        $rezultat = (new IntrastatXml())->genereaza(3, 2026, 'sosiri', $this->antet(), true);
+
+        $this->assertStringContainsString('<InsNillArrival', $rezultat['xml']);
+        $this->assertStringNotContainsString('<InsArrivalItem', $rezultat['xml']);
+    }
+
+    /** Nu se declara „nimic" pe o luna care a avut miscari: ar fi o minciuna. */
+    public function test_declaratia_nula_se_refuza_cand_luna_are_miscari()
+    {
+        $this->declaratie('3E3G8N2TARTF4A48', [
+            ['cod_tarifar' => '61046200', 'valoare_lei' => 100, 'greutate_neta' => 1],
+        ]);
+
+        $this->expectException(EtransportException::class);
+        $this->expectExceptionMessageMatches('/luna nu e goală/u');
+
+        // Proba pune declaratii pe august 2026, flux sosiri.
+        (new IntrastatXml())->genereaza(8, 2026, 'sosiri', $this->antet(), true);
+    }
+
+    /** Cand luna e goala, mesajul spune ce are omul de facut. */
+    public function test_lipsa_declaratiilor_indruma_spre_declaratia_nula()
+    {
+        $this->expectException(EtransportException::class);
+        $this->expectExceptionMessageMatches('/declarație nulă/u');
+
+        (new IntrastatXml())->genereaza(1, 2020, 'expedieri', $this->antet());
+    }
+
+    /** Declaratia nula n-are linii, deci nu cere nici conditie de livrare. */
+    public function test_declaratia_nula_nu_cere_incoterm()
+    {
+        $antet = $this->antet();
+        unset($antet['incoterm']);
+
+        $rezultat = (new IntrastatXml())->genereaza(8, 2026, 'expedieri', $antet, true);
+
+        $this->assertTrue($rezultat['nula']);
+        $this->assertStringNotContainsString('<DeliveryTermsCode>', $rezultat['xml']);
+    }
+
     protected function declaratie(?string $uit, array $linii): EtransportDeclaratie
     {
         return EtransportDeclaratie::create([

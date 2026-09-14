@@ -18,6 +18,12 @@ use DOMElement;
  *
  * Sosirile ies din achizițiile intracomunitare (AIC), expedierile din
  * livrările intracomunitare (LIC), cu liniile adunate pe cod NC8 și țară.
+ *
+ * [2026-09-14] Se întocmește și declarația NULĂ, pentru luna în care nu s-a
+ * mișcat nimic pe fluxul acela. Ea nu e o formalitate de prisos: cine e obligat
+ * să declare și nu trimite nimic e trecut nerespondent și amendat. Schema INS o
+ * are ca atare, cu rădăcina ei (`InsNillDispatch`, `InsNillArrival`) și cu
+ * același cuprins ca oricare alta, doar fără linii de marfă.
  */
 class IntrastatXml
 {
@@ -27,6 +33,12 @@ class IntrastatXml
     public const FLUXURI = [
         'sosiri' => 10,
         'expedieri' => 20,
+    ];
+
+    /** Rădăcina documentului, pe flux și pe fel de declarație. */
+    protected const RADACINI = [
+        'sosiri' => ['obisnuita' => 'InsNewArrival', 'nula' => 'InsNillArrival'],
+        'expedieri' => ['obisnuita' => 'InsNewDispatch', 'nula' => 'InsNillDispatch'],
     ];
 
     /**
@@ -48,10 +60,11 @@ class IntrastatXml
 
     /**
      * @param array{cif: string, firma: string, nume: string, prenume: string,
-     *     telefon: string, email: ?string, incoterm: string} $antet
-     * @return array{nume: string, xml: string, linii: int, declaratii: int, valoare: int}
+     *     telefon: string, email: ?string, incoterm: ?string} $antet
+     * @param bool $nula declarație nulă: luna n-a avut nimic pe fluxul acesta
+     * @return array{nume: string, xml: string, linii: int, declaratii: int, valoare: int, nula: bool}
      */
-    public function genereaza(int $luna, int $anul, string $flux, array $antet): array
+    public function genereaza(int $luna, int $anul, string $flux, array $antet, bool $nula = false): array
     {
         if (!isset(self::FLUXURI[$flux])) {
             throw new EtransportException('Fluxul cerut nu există: se alege între sosiri și expedieri.');
@@ -63,23 +76,62 @@ class IntrastatXml
             ->whereMonth('data_transport', $luna)
             ->get();
 
+        $felul = $flux === 'sosiri' ? 'achiziții intracomunitare (sosiri)' : 'livrări intracomunitare (expedieri)';
+
+        if ($nula) {
+            /*
+             * Declaratia nula spune ca luna n-a avut nimic pe fluxul acesta.
+             * Cand are, ea ar fi o declaratie mincinoasa, asa ca nu se face:
+             * mai bine se opreste aici decat sa ajunga asa la INS.
+             */
+            if ($declaratii->isNotEmpty()) {
+                throw new EtransportException(sprintf(
+                    'Pe %02d/%d există %d declarații e-Transport cu UIT pentru %s, deci luna nu e goală. '
+                        . 'Declarația nulă se depune doar când nu e nimic de declarat.',
+                    $luna,
+                    $anul,
+                    $declaratii->count(),
+                    $felul
+                ));
+            }
+
+            return $this->document($luna, $anul, $flux, $antet, [], true);
+        }
+
         if ($declaratii->isEmpty()) {
             throw new EtransportException(sprintf(
-                'Nicio declarație e-Transport cu UIT pentru %s pe %02d/%d.',
-                $flux === 'sosiri' ? 'achiziții intracomunitare (sosiri)' : 'livrări intracomunitare (expedieri)',
+                'Nicio declarație e-Transport cu UIT pentru %s pe %02d/%d. Dacă în luna aceasta chiar nu ați avut, '
+                    . 'bifați „declarație nulă”: INS o cere oricum, altfel sunteți trecut nerespondent.',
+                $felul,
                 $luna,
                 $anul
             ));
         }
 
-        $linii = $this->aduna($declaratii, $flux);
+        if (trim((string) ($antet['incoterm'] ?? '')) === '') {
+            throw new EtransportException('Lipsește condiția de livrare (Incoterm), cerută pe fiecare linie.');
+        }
 
+        return $this->document($luna, $anul, $flux, $antet, $this->aduna($declaratii, $flux), false, $declaratii->count());
+    }
+
+    /**
+     * Documentul XML, cu sau fără linii de marfă.
+     *
+     * Cuprinsul e același la amândouă felurile — versiunile nomenclatoarelor și
+     * antetul —; declarația nulă se deosebește doar prin rădăcină și prin faptul
+     * că nu are nicio linie.
+     *
+     * @return array{nume: string, xml: string, linii: int, declaratii: int, valoare: int, nula: bool}
+     */
+    protected function document(int $luna, int $anul, string $flux, array $antet, array $linii, bool $nula, int $declaratii = 0): array
+    {
         $doc = new DOMDocument('1.0', 'UTF-8');
         $doc->formatOutput = true;
 
         $radacina = $doc->createElementNS(
             self::NAMESPACE,
-            $flux === 'sosiri' ? 'InsNewArrival' : 'InsNewDispatch'
+            self::RADACINI[$flux][$nula ? 'nula' : 'obisnuita']
         );
         $doc->appendChild($radacina);
         $radacina->setAttribute('SchemaVersion', '1.0');
@@ -122,11 +174,20 @@ class IntrastatXml
         }
 
         return [
-            'nume' => sprintf('intrastat_%s_%d_%02d_%s.xml', $flux, $anul, $luna, preg_replace('/\D/', '', $antet['cif'])),
+            // „nula" in nume, ca fisierul sa se recunoasca dintr-o privire in dosar.
+            'nume' => sprintf(
+                'intrastat_%s%s_%d_%02d_%s.xml',
+                $nula ? 'nula_' : '',
+                $flux,
+                $anul,
+                $luna,
+                preg_replace('/\D/', '', $antet['cif'])
+            ),
             'xml' => $doc->saveXML(),
             'linii' => count($linii),
-            'declaratii' => $declaratii->count(),
+            'declaratii' => $declaratii,
             'valoare' => $valoareTotala,
+            'nula' => $nula,
         ];
     }
 

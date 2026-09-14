@@ -1150,7 +1150,9 @@
         alese: sosirile din achizițiile intracomunitare, expedierile din
         livrările intracomunitare, cu liniile adunate pe cod NC8 și țară.
         Fișierul XML se încarcă în aplicația Intrastat (INS), care îl validează
-        și îl depune.
+        și îl depune. Pentru o lună fără nicio mișcare pe fluxul ales se bifează
+        „declarație nulă”: INS o cere oricum, altfel firma e trecută
+        nerespondentă.
       </p>
 
       <b-row>
@@ -1182,7 +1184,23 @@
         </b-col>
       </b-row>
 
-      <b-row class="mt-1">
+      <!--
+        Declaratia nula: luna in care nu s-a miscat nimic pe fluxul ales. Nu e o
+        formalitate de prisos — cine e obligat sa declare si nu trimite nimic e
+        trecut nerespondent si amendat.
+      -->
+      <b-form-checkbox
+        v-model="intrastat.nula"
+        class="mt-1"
+      >
+        Declarație nulă (luna nu a avut
+        {{ intrastat.flux === 'sosiri' ? 'sosiri' : 'expedieri' }})
+      </b-form-checkbox>
+
+      <b-row
+        v-if="!intrastat.nula"
+        class="mt-1"
+      >
         <b-col cols="6">
           <label class="small mb-0">Condiția de livrare (Incoterm)</label>
           <b-form-select
@@ -1334,7 +1352,17 @@ export default {
       intrastatInCurs: false,
       intrastatEroare: '',
       intrastat: {
-        luna: 1, anul: 2026, flux: 'sosiri', incoterm: 'EXW', nume: '', prenume: '', telefon: '', email: '',
+        luna: 1,
+        anul: 2026,
+        flux: 'sosiri',
+        incoterm: 'EXW',
+        nume: '',
+        prenume: '',
+        telefon: '',
+        email: '',
+        // Declaratie nula: luna n-a avut nimic pe fluxul ales. Se bifeaza de
+        // fiecare data, nu se tine minte: e a unei luni anume.
+        nula: false,
       },
       emailVizibil: false,
       emailAdrese: '',
@@ -1937,6 +1965,7 @@ export default {
 
       this.intrastat.luna = lunaTrecuta.getMonth() + 1
       this.intrastat.anul = lunaTrecuta.getFullYear()
+      this.intrastat.nula = false
 
       // Persoana de contact ramane de la o luna la alta.
       try {
@@ -1976,8 +2005,13 @@ export default {
           setTimeout(() => window.URL.revokeObjectURL(url), 60000)
 
           this.intrastatVizibil = false
-          this.info = `Declarația Intrastat: ${rezultat.linii} linii din ${rezultat.declaratii} declarații, `
-            + `${rezultat.valoare.toLocaleString('ro-RO')} lei. Fișierul ${rezultat.nume} s-a descărcat — `
+
+          const cuprinsul = rezultat.nula
+            ? 'Declarația Intrastat nulă: luna nu a avut nimic de declarat pe fluxul acesta.'
+            : `Declarația Intrastat: ${rezultat.linii} linii din ${rezultat.declaratii} declarații, `
+              + `${rezultat.valoare.toLocaleString('ro-RO')} lei.`
+
+          this.info = `${cuprinsul} Fișierul ${rezultat.nume} s-a descărcat; `
             + 'se încarcă în aplicația Intrastat (INS) pentru validare și depunere.'
         })
         .catch(err => {

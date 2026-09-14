@@ -482,7 +482,9 @@ class EtransportDeclaratiiController extends Controller
             'prenume' => 'required|string|max:100',
             'telefon' => 'required|string|max:30',
             'email' => 'nullable|email|max:100',
-            'incoterm' => 'required|string|in:EXW,FCA,FAS,FOB,CFR,CIF,CPT,CIP,DAP,DPU,DDP',
+            // La declaratia nula nu exista linii, deci nici conditie de livrare.
+            'incoterm' => 'nullable|string|in:EXW,FCA,FAS,FOB,CFR,CIF,CPT,CIP,DAP,DPU,DDP',
+            'nula' => 'nullable|boolean',
         ]);
 
         $companie = \App\Support\ContextCompanie::curenta();
@@ -496,22 +498,29 @@ class EtransportDeclaratiiController extends Controller
                 'prenume' => $date['prenume'],
                 'telefon' => $date['telefon'],
                 'email' => $date['email'] ?? null,
-                'incoterm' => $date['incoterm'],
-            ]);
+                'incoterm' => $date['incoterm'] ?? null,
+            ], $request->boolean('nula'));
         } catch (EtransportException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
         }
 
         Jurnal::scrie(
             'etransport_declaratie',
-            sprintf(
-                'A întocmit declarația Intrastat (%s, %02d/%d): %d linii din %d declarații e-Transport',
-                $date['flux'],
-                $date['luna'],
-                $date['anul'],
-                $rezultat['linii'],
-                $rezultat['declaratii']
-            )
+            $rezultat['nula']
+                ? sprintf(
+                    'A întocmit declarația Intrastat NULĂ (%s, %02d/%d): luna nu a avut nimic de declarat pe fluxul acesta',
+                    $date['flux'],
+                    $date['luna'],
+                    $date['anul']
+                )
+                : sprintf(
+                    'A întocmit declarația Intrastat (%s, %02d/%d): %d linii din %d declarații e-Transport',
+                    $date['flux'],
+                    $date['luna'],
+                    $date['anul'],
+                    $rezultat['linii'],
+                    $rezultat['declaratii']
+                )
         );
 
         return response()->json(['success' => true, 'data' => $rezultat]);
