@@ -214,6 +214,39 @@ class IntrastatXmlTest extends TestCase
         $this->assertSame(7000, $cuIntarziat['totaluri']['valoare']);
     }
 
+    /**
+     * Cazul Emporio: arhivele lui iulie, importate acum, intră în august.
+     *
+     * Importul de arhivă lasă ciorne fără dată de transport — ea se completează
+     * la depunerea la ANAF, care aici nu mai are rost: transportul a trecut, iar
+     * ANAF nu mai dă cod UIT pentru el. Rămâne data facturii, și după ea se
+     * așază: facturile lui iulie, nedeclarate nicăieri, se iau la august.
+     */
+    public function test_arhivele_lui_iulie_importate_acum_intra_in_august()
+    {
+        $iulie = $this->declaratie(null, $this->linie(2500), [
+            'stare' => 'ciorna',
+            'data_transport' => null,
+            'documente' => [['tip' => 20, 'numar' => '10068001', 'data' => '2026-07-31']],
+        ]);
+
+        $centralizator = (new IntrastatXml())->centralizator(8, 2026, 'sosiri');
+
+        $this->assertCount(1, $centralizator['documente']);
+        $this->assertTrue($centralizator['documente'][0]['intarziat']);
+        $this->assertSame('10068001', $centralizator['documente'][0]['numar']);
+        $this->assertNull($centralizator['documente'][0]['data_transport']);
+
+        $rezultat = (new IntrastatXml())->genereaza(8, 2026, 'sosiri', $this->antet(), [
+            'declaratii' => [$iulie->id],
+        ]);
+
+        $this->assertSame(1, $rezultat['declaratii']);
+        $this->assertSame(2500, $rezultat['valoare']);
+        $this->assertStringContainsString('<RefPeriod>2026-08</RefPeriod>', $rezultat['xml']);
+        $this->assertSame('2026-08', $iulie->fresh()->intrastat_perioada);
+    }
+
     /** Ce a intrat într-o declarație se însemnează și nu mai apare data viitoare. */
     public function test_ce_a_intrat_intr_o_declaratie_nu_se_mai_propune()
     {

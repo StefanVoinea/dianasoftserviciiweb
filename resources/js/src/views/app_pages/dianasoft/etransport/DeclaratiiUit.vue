@@ -1285,8 +1285,21 @@
             variant="warning"
             class="py-1 px-2 mb-1"
           >
-            {{ intarziati.length }} facturi mai vechi n-au intrat în nicio declarație Intrastat.
-            Bifați-le pe cele care se declară acum.
+            <div class="d-flex align-items-center">
+              <span>
+                {{ intarziati.length }} facturi mai vechi n-au intrat în nicio declarație Intrastat.
+                Se declară acum doar cele bifate.
+              </span>
+              <b-button
+                size="sm"
+                variant="outline-warning"
+                class="ml-auto text-nowrap"
+                :disabled="centralizatorInCurs || !intarziatiNebifati.length"
+                @click="bifeazaIntarziatii"
+              >
+                Bifează-le pe toate
+              </b-button>
+            </div>
           </b-alert>
 
           <div
@@ -1296,7 +1309,14 @@
             <table class="table table-sm table-striped mb-0">
               <thead>
                 <tr>
-                  <th style="width: 1%" />
+                  <th style="width: 1%">
+                    <!-- Bifa din cap le ia sau le lasa pe toate deodata. -->
+                    <b-form-checkbox
+                      :checked="toateBifate"
+                      :disabled="centralizatorInCurs"
+                      @change="bifeazaToate"
+                    />
+                  </th>
                   <th>Document</th>
                   <th>Data</th>
                   <th>Transport</th>
@@ -1619,6 +1639,14 @@ export default {
     /** Facturi ale lunilor trecute care n-au intrat in nicio declaratie. */
     intarziati() {
       return ((this.centralizator || {}).documente || []).filter(d => d.intarziat)
+    },
+    intarziatiNebifati() {
+      return this.intarziati.filter(d => !d.bifat)
+    },
+    toateBifate() {
+      const documente = (this.centralizator || {}).documente || []
+
+      return documente.length > 0 && documente.every(d => d.bifat)
     },
     /**
      * La operatiunile prin care marfa pleaca din tara (livrare intracomunitara —
@@ -2214,6 +2242,29 @@ export default {
     /** Bifa de pe un document; totalurile se refac pe ce ramane bifat. */
     bifeazaDocument(rand, bifat) {
       this.$set(rand, 'bifat', bifat)
+
+      this.incarcaCentralizator(this.documenteBifate.map(d => d.id))
+    },
+
+    /** Bifa din capul tabelului: le ia sau le lasa pe toate deodata. */
+    bifeazaToate(bifat) {
+      ((this.centralizator || {}).documente || []).forEach(document_ => {
+        this.$set(document_, 'bifat', bifat)
+      })
+
+      this.incarcaCentralizator(this.documenteBifate.map(d => d.id))
+    },
+
+    /**
+     * Ia toate facturile mai vechi ramase nedeclarate.
+     *
+     * Cazul obisnuit al inceputului de luna: arhivele lunii trecute, importate
+     * dupa ce declaratia ei plecase deja, se declara acum, toate odata.
+     */
+    bifeazaIntarziatii() {
+      this.intarziati.forEach(document_ => {
+        this.$set(document_, 'bifat', true)
+      })
 
       this.incarcaCentralizator(this.documenteBifate.map(d => d.id))
     },
