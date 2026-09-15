@@ -292,6 +292,73 @@ class IntrastatXmlTest extends TestCase
         $this->assertSame('2026-08', $unul->fresh()->intrastat_perioada);
     }
 
+    /**
+     * [2026-09-15] Unitatea de măsură suplimentară, acolo unde codul o cere.
+     *
+     * Declarația lui august a fost respinsă de INS cu 110 erori „Cod Unitate de
+     * Măsură Suplimentară invalid", câte una pe fiecare linie al cărei cod are
+     * în Nomenclatorul Combinat o unitate în afară de kilogram. Cantitatea o
+     * aveam pe linii, din fișierele furnizorului; n-o trimiteam.
+     */
+    public function test_unitatea_suplimentara_se_trimite_unde_o_cere_codul()
+    {
+        // 61046200 (pantaloni) cere bucăți; 39262000 (accesorii din plastic) nu cere nimic.
+        $this->declaratie('UIT-SU', [
+            ['cod_tarifar' => '61046200', 'valoare_lei' => 1000, 'greutate_neta' => 10, 'cantitate' => 38],
+            ['cod_tarifar' => '39262000', 'valoare_lei' => 500, 'greutate_neta' => 5, 'cantitate' => 7],
+        ], ['documente' => [['tip' => 20, 'numar' => 'F-SU', 'data' => '2026-08-10']]]);
+
+        $xml = (new IntrastatXml())->genereaza(8, 2026, 'sosiri', $this->antet())['xml'];
+
+        $this->assertStringContainsString('<SupplUnitCode>p/st</SupplUnitCode>', $xml);
+        $this->assertStringContainsString('<QtyInSupplUnits>38</QtyInSupplUnits>', $xml);
+        // O singură linie o cere, deci un singur bloc.
+        $this->assertSame(1, substr_count($xml, '<InsSupplUnitsInfo>'));
+
+        /*
+         * Locul ei in rand: dupa tara de origine si inaintea tarii de expediere,
+         * cum cere schema INS. Ordinea gresita strica tot randul.
+         */
+        $this->assertMatchesRegularExpression(
+            '#<CountryOfOrigin>[A-Z]{2}</CountryOfOrigin>\s*<InsSupplUnitsInfo>.*?</InsSupplUnitsInfo>\s*<CountryOfConsignment>#s',
+            $xml
+        );
+    }
+
+    /** Cantitatea se adună pe cod, ca valoarea și masa, și se scrie fără zecimale. */
+    public function test_cantitatea_din_unitatea_suplimentara_se_aduna_pe_cod()
+    {
+        $this->declaratie('UIT-1', [
+            ['cod_tarifar' => '61046200', 'valoare_lei' => 1000, 'greutate_neta' => 10, 'cantitate' => 38],
+        ], ['documente' => [['tip' => 20, 'numar' => 'F-1', 'data' => '2026-08-10']]]);
+        $this->declaratie('UIT-2', [
+            ['cod_tarifar' => '61046200', 'valoare_lei' => 500, 'greutate_neta' => 4, 'cantitate' => 6],
+        ], ['documente' => [['tip' => 20, 'numar' => 'F-2', 'data' => '2026-08-11']]]);
+
+        $xml = (new IntrastatXml())->genereaza(8, 2026, 'sosiri', $this->antet())['xml'];
+
+        $this->assertStringContainsString('<QtyInSupplUnits>44</QtyInSupplUnits>', $xml);
+    }
+
+    /**
+     * Nomenclatoarele legate de an își poartă anul drept versiune.
+     *
+     * Natura tranzacției pleca cu versiunea 2010, dinaintea Regulamentului
+     * 2020/1197 care a schimbat codificarea. INS n-o găsea și răspundea „Cod
+     * Natură Tranzacţie B lipseşte" pe fiecare linie, deși codul era scris.
+     */
+    public function test_versiunile_nomenclatoarelor_legate_de_an_poarta_anul()
+    {
+        $xml = (new IntrastatXml())->genereaza(8, 2026, 'expedieri', $this->antet(), ['nula' => true])['xml'];
+
+        $this->assertStringContainsString('<CnVer>2026</CnVer>', $xml);
+        $this->assertStringContainsString('<NatureOfTransactionAVer>2026</NatureOfTransactionAVer>', $xml);
+        $this->assertStringContainsString('<NatureOfTransactionBVer>2026</NatureOfTransactionBVer>', $xml);
+        // Celelalte rămân cum erau: codurile lor au trecut de validarea INS.
+        $this->assertStringContainsString('<CountryVer>2007</CountryVer>', $xml);
+        $this->assertStringContainsString('<DeliveryTermsVer>2011</DeliveryTermsVer>', $xml);
+    }
+
     /** Declarația respinsă de ANAF nu intră: transportul s-a redepus cu alta. */
     public function test_declaratia_respinsa_nu_intra_in_intrastat()
     {

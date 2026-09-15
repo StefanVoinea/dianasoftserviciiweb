@@ -18,6 +18,12 @@ use Illuminate\Support\Facades\DB;
  * toate cele 9797 de coduri de 8 cifre), cu denumirea compusă din lanțul
  * ierarhic al nomenclatorului. La ediția pe anul următor se ia nomenclatoare.xls
  * de pe intrastat.ro și se regenerează CSV-ul.
+ *
+ * [2026-09-15] A patra coloană, `um_suplimentara`, e unitatea de măsură în afară
+ * de kilogram pe care Nomenclatorul Combinat o cere la unele coduri: `p/st`
+ * bucăți, `pa` perechi, `m2` și așa mai departe. Din 9797 de coduri, 2711 au
+ * una, iar declarația Intrastat e respinsă fără ea. Valorile vin din CN_2026.xml
+ * al INS (http://www.intrastat.ro/doc/CN_2026.xml, elementul `RefCode`).
  */
 class ImportaCoduriVamale extends Command
 {
@@ -57,10 +63,16 @@ class ImportaCoduriVamale extends Command
                 continue;
             }
 
+            // Coloana unitatii suplimentare lipseste din CSV-urile mai vechi.
+            $um = isset($coloane['um_suplimentara'])
+                ? trim((string) ($rand[$coloane['um_suplimentara']] ?? ''))
+                : '';
+
             $randuri[] = [
                 'cod' => str_pad($cod, 8, '0', STR_PAD_LEFT),
                 'denumire' => $rand[$coloane['denumire']] ?? '',
                 'denumire_scurta' => $rand[$coloane['denumire_scurta']] ?? null,
+                'um_suplimentara' => $um !== '' ? $um : null,
             ];
 
             if (count($randuri) >= 500) {

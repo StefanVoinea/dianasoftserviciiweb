@@ -2,6 +2,7 @@
 
 namespace App\Services\Anaf\Etransport;
 
+use App\Models\EtransportCodVamal;
 use App\Models\EtransportDeclaratie;
 use DOMDocument;
 use DOMElement;
@@ -418,6 +419,20 @@ class IntrastatXml
             $this->text($doc, $element, 'ModeOfTransportCode', '3');
             $this->text($doc, $element, 'CountryOfOrigin', $linie['origine']);
 
+            /*
+             * [2026-09-15] Unitatea de masura suplimentara, acolo unde codul o
+             * cere. Sta dupa tara de origine, cum arata schema: `CountryOfOrigin`
+             * si `InsSupplUnitsInfo` inchid tipul de baza, iar tara de expediere
+             * ori cea de destinatie vin dupa, din tipul derivat.
+             */
+            if (!empty($linie['um_suplimentara']) && !empty($linie['cantitate'])) {
+                $unitati = $doc->createElementNS(self::NAMESPACE, 'InsSupplUnitsInfo');
+                $element->appendChild($unitati);
+
+                $this->text($doc, $unitati, 'SupplUnitCode', $linie['um_suplimentara']);
+                $this->text($doc, $unitati, 'QtyInSupplUnits', (string) $linie['cantitate']);
+            }
+
             if ($flux === 'sosiri') {
                 $this->text($doc, $element, 'CountryOfConsignment', $linie['tara']);
             } else {
@@ -484,12 +499,14 @@ class IntrastatXml
                         'origine' => $origine,
                         'valoare' => 0,
                         'masa' => 0.0,
+                        'cantitate' => 0.0,
                         'partener_cod' => trim((string) $declaratie->partener_cod),
                     ];
                 }
 
                 $linii[$cheie]['valoare'] += (int) round((float) ($rand['valoare_lei'] ?? 0));
                 $linii[$cheie]['masa'] += (float) ($rand['greutate_neta'] ?? 0);
+                $linii[$cheie]['cantitate'] += (float) ($rand['cantitate'] ?? 0);
             }
         }
 
@@ -497,17 +514,62 @@ class IntrastatXml
             // INS cere numere intregi, iar sub un kilogram se scrie 1.
             $linie['masa'] = max(1, (int) round($linie['masa']));
             $linie['valoare'] = max(1, $linie['valoare']);
+            // Aceeasi regula si la unitatea suplimentara: fara zecimale, minim 1.
+            $linie['cantitate'] = $linie['cantitate'] > 0 ? max(1, (int) round($linie['cantitate'])) : 0;
         }
 
-        return array_values($linii);
+        unset($linie);
+
+        return $this->completeazaUnitatile(array_values($linii));
+    }
+
+    /**
+     * Pune pe fiecare linie unitatea de măsură suplimentară cerută de codul ei.
+     *
+     * [2026-09-15] Nomenclatorul Combinat cere la unele coduri o unitate în afară
+     * de kilogram: bucăți (`p/st`), perechi (`pa`), metri pătrați. Fără ea, INS
+     * respinge declarația cu „Cod Unitate de Măsură Suplimentară invalid", câte o
+     * eroare pe fiecare asemenea linie. Codurile care n-au una rămân cum sunt.
+     */
+    protected function completeazaUnitatile(array $linii): array
+    {
+        $coduri = array_filter(array_column($linii, 'cn8'));
+
+        if ($coduri === []) {
+            return $linii;
+        }
+
+        $unitati = EtransportCodVamal::whereIn('cod', $coduri)
+            ->whereNotNull('um_suplimentara')
+            ->pluck('um_suplimentara', 'cod');
+
+        foreach ($linii as &$linie) {
+            $linie['um_suplimentara'] = $unitati[$linie['cn8']] ?? null;
+        }
+
+        return $linii;
     }
 
     protected function versiunile(DOMDocument $doc, int $anul): DOMElement
     {
         $element = $doc->createElementNS(self::NAMESPACE, 'InsCodeVersions');
 
+        /*
+         * [2026-09-15] Nomenclatoarele legate de anul declarației își poartă anul
+         * drept versiune. INS o spune limpede în „Important de citit 2026":
+         * „versiunea 2026 a nomenclatoarelor de bunuri NC8, natura tranzacției și
+         * țări de origine se vor activa în mod automat"; fișierul lor CN_2026.xml
+         * poartă la rândul lui `<Version>2026</Version>`.
+         *
+         * Natura tranzacției era trimisă cu versiunea 2010, dinaintea
+         * Regulamentului 2020/1197 care a schimbat codificarea. INS n-o găsea și
+         * răspundea „Cod Natură Tranzacţie B lipseşte" pe fiecare linie, deși
+         * codul era scris pe fiecare.
+         */
+        $peAn = ['CnVer', 'NatureOfTransactionAVer', 'NatureOfTransactionBVer'];
+
         foreach (self::VERSIUNI as $nume => $valoare) {
-            $this->text($doc, $element, $nume, $nume === 'CnVer' ? (string) $anul : $valoare);
+            $this->text($doc, $element, $nume, in_array($nume, $peAn, true) ? (string) $anul : $valoare);
         }
 
         return $element;
