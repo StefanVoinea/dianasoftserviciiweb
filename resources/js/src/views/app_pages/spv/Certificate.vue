@@ -67,7 +67,7 @@
               class="mr-50 text-primary"
             />
             <h6 class="mb-0">
-              Aplicația de telefon SPV Curier
+              SPV Curier Android
             </h6>
             <b-badge
               v-if="mobil.exista"
