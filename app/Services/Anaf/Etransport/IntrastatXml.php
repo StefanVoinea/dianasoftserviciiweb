@@ -191,6 +191,30 @@ class IntrastatXml
             ];
         })->values()->all();
 
+        // Ce nu intra, si de ce: altfel documentele lipsesc fara nicio vorba.
+        $neincluse = [];
+
+        foreach ($candidate['neincluse'] as $lasat) {
+            $motiv = $lasat['motiv'];
+            $declaratie = $lasat['declaratie'];
+
+            if (!isset($neincluse[$motiv])) {
+                $neincluse[$motiv] = ['motiv' => $motiv, 'nr' => 0, 'exemple' => []];
+            }
+
+            $neincluse[$motiv]['nr']++;
+
+            if (count($neincluse[$motiv]['exemple']) < 3) {
+                $neincluse[$motiv]['exemple'][] = ($declaratie->documente[0]['numar'] ?? null)
+                    ?: $declaratie->referinta_interna;
+            }
+
+            if ($motiv === 'alt_flux' || $motiv === 'alta_operatiune') {
+                $neincluse[$motiv]['operatiune'] = Nomenclatoare::TIPURI_OPERATIUNE[$declaratie->tip_operatiune]
+                    ?? (string) $declaratie->tip_operatiune;
+            }
+        }
+
         $selectate = $toate->whereIn('id', $bifate);
         $linii = $this->aduna($selectate, $flux);
 
@@ -198,6 +222,7 @@ class IntrastatXml
             'perioada' => $this->perioada($luna, $anul),
             'flux' => $flux,
             'documente' => $documente,
+            'neincluse' => array_values($neincluse),
             'linii' => $linii,
             'totaluri' => [
                 'documente' => $selectate->count(),
@@ -227,38 +252,88 @@ class IntrastatXml
         $perioada = $this->perioada($luna, $anul);
         $inceput = \Carbon\Carbon::create($anul, $luna, 1)->startOfMonth();
 
-        $brute = EtransportDeclaratie::where('tip_operatiune', self::FLUXURI[$flux])
-            ->where('stare', '!=', 'respinsa')
-            ->where(function ($q) use ($perioada) {
-                $q->whereNull('intrastat_perioada')->orWhere('intrastat_perioada', $perioada);
-            })
-            /*
-             * Plasa larga, taiata dupa aceea pe data documentului: luna Intrastat
-             * se citeste din JSON, unde baza nu poate filtra de-a dreptul. Doi ani
-             * inapoi acopera orice intarziere adevarata, iar doua luni inainte
-             * prind facturile lunii al caror transport a plecat mai tarziu.
-             */
-            ->where(function ($q) use ($inceput) {
-                $q->whereNull('data_transport')
-                    ->orWhereBetween('data_transport', [
-                        $inceput->copy()->subYears(2)->toDateString(),
-                        $inceput->copy()->addMonths(2)->endOfMonth()->toDateString(),
-                    ]);
-            })
+        /*
+         * Plasa larga, taiata dupa aceea in PHP: luna Intrastat se citeste din
+         * JSON-ul documentelor, unde baza nu poate filtra de-a dreptul. Doi ani
+         * inapoi acopera orice intarziere adevarata, iar doua luni inainte prind
+         * facturile lunii al caror transport a plecat mai tarziu.
+         *
+         * [2026-09-15] Se aduc si cele care NU intra — de pe alt flux, respinse,
+         * declarate deja —, ca sa se poata spune omului de ce lipsesc. Altfel
+         * ele pur si simplu nu apar, si nu are de unde sti pe ce sa se uite.
+         */
+        $brute = EtransportDeclaratie::where(function ($q) use ($inceput) {
+            $q->whereNull('data_transport')
+                ->orWhereBetween('data_transport', [
+                    $inceput->copy()->subYears(2)->toDateString(),
+                    $inceput->copy()->addMonths(2)->endOfMonth()->toDateString(),
+                ]);
+        })
             ->orderBy('id')
             ->get();
 
-        $aleLunii = $brute->filter(function (EtransportDeclaratie $d) use ($perioada) {
-            return $d->luna_intrastat === $perioada;
-        })->values();
+        $aleLunii = [];
+        $intarziate = [];
+        $neincluse = [];
 
-        $intarziate = $brute->filter(function (EtransportDeclaratie $d) use ($perioada) {
-            return $d->luna_intrastat !== null
-                && $d->luna_intrastat < $perioada
-                && $d->intrastat_perioada === null;
-        })->values();
+        foreach ($brute as $declaratie) {
+            $lunaEi = $declaratie->luna_intrastat;
 
-        return ['ale_lunii' => $aleLunii, 'intarziate' => $intarziate];
+            // Fara nicio data nu se poate aseza intr-o luna; se propune ca
+            // intarziata, ca sa fie macar vazuta si sa i se poata pune data.
+            $aLunii = $lunaEi === $perioada;
+            $maiVeche = $lunaEi === null || $lunaEi < $perioada;
+
+            if (!$aLunii && !$maiVeche) {
+                continue;
+            }
+
+            $motiv = $this->deCeNuIntra($declaratie, $flux, $perioada);
+
+            if ($motiv !== null) {
+                $neincluse[] = ['declaratie' => $declaratie, 'motiv' => $motiv];
+
+                continue;
+            }
+
+            if ($aLunii) {
+                $aleLunii[] = $declaratie;
+            } else {
+                $intarziate[] = $declaratie;
+            }
+        }
+
+        return [
+            'ale_lunii' => collect($aleLunii),
+            'intarziate' => collect($intarziate),
+            'neincluse' => collect($neincluse),
+        ];
+    }
+
+    /**
+     * De ce nu intră un transport în declarația cerută. `null` = intră.
+     *
+     * Motivele sunt cele care se pot vedea din afară și se pot îndrepta: fluxul
+     * greșit pe declarație, respingerea la ANAF, sau faptul că marfa a fost deja
+     * declarată în altă lună.
+     */
+    protected function deCeNuIntra(EtransportDeclaratie $declaratie, string $flux, string $perioada): ?string
+    {
+        if ((int) $declaratie->tip_operatiune !== self::FLUXURI[$flux]) {
+            return in_array((int) $declaratie->tip_operatiune, self::FLUXURI, true)
+                ? 'alt_flux'
+                : 'alta_operatiune';
+        }
+
+        if ($declaratie->stare === 'respinsa') {
+            return 'respinsa';
+        }
+
+        if ($declaratie->intrastat_perioada !== null && $declaratie->intrastat_perioada !== $perioada) {
+            return 'declarata';
+        }
+
+        return null;
     }
 
     /** Transporturile care intră în fișier: cele bifate, ori propunerea. */

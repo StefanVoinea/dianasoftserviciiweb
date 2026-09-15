@@ -300,7 +300,87 @@ class IntrastatXmlTest extends TestCase
             'documente' => [['tip' => 20, 'numar' => 'F-RESP', 'data' => '2026-08-10']],
         ]);
 
-        $this->assertSame([], (new IntrastatXml())->centralizator(8, 2026, 'sosiri')['documente']);
+        $centralizator = (new IntrastatXml())->centralizator(8, 2026, 'sosiri');
+
+        $this->assertSame([], $centralizator['documente']);
+        // Dar se spune de ce lipseste, in loc sa dispara fara nicio vorba.
+        $this->assertSame('respinsa', $centralizator['neincluse'][0]['motiv']);
+        $this->assertSame(1, $centralizator['neincluse'][0]['nr']);
+    }
+
+    /**
+     * [2026-09-15] Un transport trecut pe celălalt flux nu dispare în tăcere.
+     *
+     * Cazul care a trimis omul să caute degeaba: facturi importate și ajunse pe
+     * „livrări intracomunitare" nu apăreau la sosiri, iar centralizatorul nu
+     * spunea nimic. Acum spune câte sunt și pe ce operațiune stau.
+     */
+    public function test_transportul_de_pe_alt_flux_se_spune_de_ce_nu_intra()
+    {
+        $this->declaratie('UIT-LIC', $this->linie(5000), [
+            'tip_operatiune' => 20,
+            'documente' => [['tip' => 20, 'numar' => 'F-LIC', 'data' => '2026-08-12']],
+        ]);
+
+        $centralizator = (new IntrastatXml())->centralizator(8, 2026, 'sosiri');
+
+        $this->assertSame([], $centralizator['documente']);
+        $this->assertCount(1, $centralizator['neincluse']);
+        $this->assertSame('alt_flux', $centralizator['neincluse'][0]['motiv']);
+        $this->assertSame(['F-LIC'], $centralizator['neincluse'][0]['exemple']);
+        $this->assertStringContainsString('LIC', $centralizator['neincluse'][0]['operatiune']);
+
+        // Pe fluxul lui apare normal, fara nicio instiintare.
+        $expedieri = (new IntrastatXml())->centralizator(8, 2026, 'expedieri');
+        $this->assertCount(1, $expedieri['documente']);
+        $this->assertSame([], $expedieri['neincluse']);
+    }
+
+    /** Transportul național nu e mișcare Intrastat, dar tot se spune că e acolo. */
+    public function test_transportul_national_se_arata_ca_alta_operatiune()
+    {
+        $this->declaratie('UIT-TTN', $this->linie(1500), [
+            'tip_operatiune' => 30,
+            'documente' => [['tip' => 20, 'numar' => 'F-TTN', 'data' => '2026-08-12']],
+        ]);
+
+        $centralizator = (new IntrastatXml())->centralizator(8, 2026, 'sosiri');
+
+        $this->assertSame('alta_operatiune', $centralizator['neincluse'][0]['motiv']);
+    }
+
+    /** Marfa declarată în altă lună nu se mai propune, dar se spune de ce. */
+    public function test_ce_s_a_declarat_in_alta_luna_se_spune_ca_atare()
+    {
+        $this->declaratie('UIT-DECL', $this->linie(1000), [
+            'intrastat_perioada' => '2026-07',
+            'documente' => [['tip' => 20, 'numar' => 'F-DECL', 'data' => '2026-08-05']],
+        ]);
+
+        $centralizator = (new IntrastatXml())->centralizator(8, 2026, 'sosiri');
+
+        $this->assertSame([], $centralizator['documente']);
+        $this->assertSame('declarata', $centralizator['neincluse'][0]['motiv']);
+    }
+
+    /**
+     * Fără nicio dată — nici pe document, nici de transport — rândul nu se mai
+     * pierde: apare ca întârziat, ca să fie măcar văzut și îndreptat.
+     */
+    public function test_transportul_fara_nicio_data_apare_ca_intarziat()
+    {
+        $this->declaratie(null, $this->linie(700), [
+            'stare' => 'ciorna',
+            'data_transport' => null,
+            'documente' => [['tip' => 20, 'numar' => 'F-FARA-DATA', 'data' => '']],
+        ]);
+
+        $centralizator = (new IntrastatXml())->centralizator(8, 2026, 'sosiri');
+
+        $this->assertCount(1, $centralizator['documente']);
+        $this->assertTrue($centralizator['documente'][0]['intarziat']);
+        $this->assertNull($centralizator['documente'][0]['data']);
+        $this->assertFalse($centralizator['documente'][0]['bifat']);
     }
 
     /** Declaratia nula n-are linii, deci nu cere nici conditie de livrare. */

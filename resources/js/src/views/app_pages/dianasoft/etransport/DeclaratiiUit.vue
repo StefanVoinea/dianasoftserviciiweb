@@ -1302,6 +1302,23 @@
             </div>
           </b-alert>
 
+          <!--
+            Ce nu intra, si de ce. Fara randul asta documentele lipseau fara
+            nicio vorba, iar omul nu avea unde sa se uite.
+          -->
+          <b-alert
+            :show="explicatiiNeincluse.length > 0"
+            variant="secondary"
+            class="py-1 px-2 mb-1"
+          >
+            <div
+              v-for="(explicatie, index) in explicatiiNeincluse"
+              :key="index"
+            >
+              {{ explicatie }}
+            </div>
+          </b-alert>
+
           <div
             class="table-responsive mb-1"
             style="max-height: 240px; overflow-y: auto"
@@ -1647,6 +1664,28 @@ export default {
       const documente = (this.centralizator || {}).documente || []
 
       return documente.length > 0 && documente.every(d => d.bifat)
+    },
+    /**
+     * Transporturile din perioada care nu intra in declaratie, spuse pe
+     * romaneste. Asa se vede dintr-o privire ca o factura lipseste fiindca e
+     * trecuta pe celalalt flux, nu fiindca importul n-a mers.
+     */
+    explicatiiNeincluse() {
+      const vorbe = {
+        alt_flux: 'sunt trecute pe celălalt flux',
+        alta_operatiune: 'sunt pe altă operațiune',
+        respinsa: 'au fost respinse de ANAF',
+        declarata: 'au intrat deja în altă declarație Intrastat',
+      }
+
+      return ((this.centralizator || {}).neincluse || []).map(grup => {
+        const cate = grup.nr === 1 ? 'Un transport din perioadă nu intră aici: ' : `${grup.nr} transporturi din perioadă nu intră aici: `
+        const motiv = vorbe[grup.motiv] || 'nu se potrivesc declarației'
+        const operatiune = grup.operatiune ? ` (${grup.operatiune})` : ''
+        const exemple = (grup.exemple || []).length ? `. De pildă: ${grup.exemple.join(', ')}` : ''
+
+        return `${cate}${motiv}${operatiune}${exemple}.`
+      })
     },
     /**
      * La operatiunile prin care marfa pleaca din tara (livrare intracomunitara —
