@@ -341,22 +341,47 @@ class IntrastatXmlTest extends TestCase
     }
 
     /**
-     * Nomenclatoarele legate de an își poartă anul drept versiune.
+     * [2026-09-15] Versiunile nomenclatoarelor, luate dintr-o declarație pe care
+     * INS a primit-o, întocmită cu aplicația lui.
      *
-     * Natura tranzacției pleca cu versiunea 2010, dinaintea Regulamentului
-     * 2020/1197 care a schimbat codificarea. INS n-o găsea și răspundea „Cod
-     * Natură Tranzacţie B lipseşte" pe fiecare linie, deși codul era scris.
+     * Nu se deduc din nimic și nu sunt scrise în niciun ghid. Până acum erau
+     * ghicite: țări 2007, condiții de livrare 2011, natura tranzacției 2010,
+     * județe și unități 2005. Doar nomenclatorul de bunuri ține de anul
+     * declarației, fiindcă el se schimbă în fiecare ianuarie.
      */
-    public function test_versiunile_nomenclatoarelor_legate_de_an_poarta_anul()
+    public function test_versiunile_nomenclatoarelor_sunt_cele_primite_de_ins()
     {
         $xml = (new IntrastatXml())->genereaza(8, 2026, 'expedieri', $this->antet(), ['nula' => true])['xml'];
 
         $this->assertStringContainsString('<CnVer>2026</CnVer>', $xml);
-        $this->assertStringContainsString('<NatureOfTransactionAVer>2026</NatureOfTransactionAVer>', $xml);
-        $this->assertStringContainsString('<NatureOfTransactionBVer>2026</NatureOfTransactionBVer>', $xml);
-        // Celelalte rămân cum erau: codurile lor au trecut de validarea INS.
-        $this->assertStringContainsString('<CountryVer>2007</CountryVer>', $xml);
-        $this->assertStringContainsString('<DeliveryTermsVer>2011</DeliveryTermsVer>', $xml);
+        $this->assertStringContainsString('<CountryVer>2022</CountryVer>', $xml);
+        $this->assertStringContainsString('<EuCountryVer>2022</EuCountryVer>', $xml);
+        $this->assertStringContainsString('<DeliveryTermsVer>2021</DeliveryTermsVer>', $xml);
+        $this->assertStringContainsString('<NatureOfTransactionAVer>2022</NatureOfTransactionAVer>', $xml);
+        $this->assertStringContainsString('<NatureOfTransactionBVer>2022</NatureOfTransactionBVer>', $xml);
+        $this->assertStringContainsString('<CountyVer>1</CountyVer>', $xml);
+        $this->assertStringContainsString('<LocalityVer>06/2006</LocalityVer>', $xml);
+        $this->assertStringContainsString('<UnitVer>1</UnitVer>', $xml);
+    }
+
+    /**
+     * Codul naturii tranzacției B se scrie întreg, cu punct.
+     *
+     * Trimis ca „1", INS răspundea „Cod Natură Tranzacţie B lipseşte" pe fiecare
+     * linie din 141, deși codul era scris pe fiecare: nu-l găsea în nomenclator.
+     * În declarațiile primite de el scrie „1.1".
+     */
+    public function test_natura_tranzactiei_b_se_scrie_intreaga()
+    {
+        $this->declaratie('UIT-NT', $this->linie(1000), [
+            'documente' => [['tip' => 20, 'numar' => 'F-NT', 'data' => '2026-08-10']],
+        ]);
+
+        $xml = (new IntrastatXml())->genereaza(8, 2026, 'sosiri', $this->antet())['xml'];
+
+        $this->assertStringContainsString('<NatureOfTransactionACode>1</NatureOfTransactionACode>', $xml);
+        $this->assertStringContainsString('<NatureOfTransactionBCode>1.1</NatureOfTransactionBCode>', $xml);
+        $this->assertStringNotContainsString('<NatureOfTransactionBCode>1</NatureOfTransactionBCode>', $xml);
     }
 
     /** Declarația respinsă de ANAF nu intră: transportul s-a redepus cu alta. */

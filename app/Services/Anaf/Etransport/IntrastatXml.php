@@ -64,17 +64,30 @@ class IntrastatXml
      * revalidează oricum totul la import; anul NC8 se pune la generare.
      */
     protected const VERSIUNI = [
-        'CountryVer' => '2007',
-        'EuCountryVer' => '2007',
+        'CountryVer' => '2022',
+        'EuCountryVer' => '2022',
         'CnVer' => '',
         'ModeOfTransportVer' => '2005',
-        'DeliveryTermsVer' => '2011',
-        'NatureOfTransactionAVer' => '2010',
-        'NatureOfTransactionBVer' => '2010',
-        'CountyVer' => '2005',
-        'LocalityVer' => '2005',
-        'UnitVer' => '2005',
+        'DeliveryTermsVer' => '2021',
+        'NatureOfTransactionAVer' => '2022',
+        'NatureOfTransactionBVer' => '2022',
+        'CountyVer' => '1',
+        'LocalityVer' => '06/2006',
+        'UnitVer' => '1',
     ];
+
+    /**
+     * Natura tranzacției: achiziție / vânzare definitivă.
+     *
+     * [2026-09-15] Codul B se scrie întreg, cu punct — „1.1", nu „1". Așa îl
+     * scrie și aplicația INS în declarațiile pe care le primește. Trimis ca „1",
+     * INS răspundea „Cod Natură Tranzacţie B lipseşte" pe fiecare linie, deși
+     * codul era acolo: pur și simplu nu-l găsea în nomenclatorul lui.
+     *
+     * Dacă vreodată se declară retururi ca livrări intracomunitare, codul lor e
+     * 2.1, „Returnări de bunuri", nu acesta.
+     */
+    protected const NATURA_TRANZACTIEI = ['a' => '1', 'b' => '1.1'];
 
     /**
      * @param array{cif: string, firma: string, nume: string, prenume: string,
@@ -411,9 +424,9 @@ class IntrastatXml
             $this->text($doc, $element, 'InvoiceValue', (string) $linie['valoare']);
             $this->text($doc, $element, 'StatisticalValue', (string) $linie['valoare']);
             $this->text($doc, $element, 'NetMass', (string) $linie['masa']);
-            // Natura tranzacției 1/1: cumpărare/vânzare definitivă.
-            $this->text($doc, $element, 'NatureOfTransactionACode', '1');
-            $this->text($doc, $element, 'NatureOfTransactionBCode', '1');
+            // Natura tranzacției 1.1: cumpărare/vânzare definitivă.
+            $this->text($doc, $element, 'NatureOfTransactionACode', self::NATURA_TRANZACTIEI['a']);
+            $this->text($doc, $element, 'NatureOfTransactionBCode', self::NATURA_TRANZACTIEI['b']);
             $this->text($doc, $element, 'DeliveryTermsCode', $antet['incoterm']);
             // Transport rutier: doar el trece prin e-Transport.
             $this->text($doc, $element, 'ModeOfTransportCode', '3');
@@ -555,21 +568,17 @@ class IntrastatXml
         $element = $doc->createElementNS(self::NAMESPACE, 'InsCodeVersions');
 
         /*
-         * [2026-09-15] Nomenclatoarele legate de anul declarației își poartă anul
-         * drept versiune. INS o spune limpede în „Important de citit 2026":
-         * „versiunea 2026 a nomenclatoarelor de bunuri NC8, natura tranzacției și
-         * țări de origine se vor activa în mod automat"; fișierul lor CN_2026.xml
-         * poartă la rândul lui `<Version>2026</Version>`.
+         * [2026-09-15] Versiunile sunt cele dintr-o declarație pe care INS a
+         * primit-o, întocmită cu aplicația lui: țări 2022, condiții de livrare
+         * 2021, natura tranzacției 2022, județe „1", localități „06/2006",
+         * unități „1". Nu se deduc din nimic și nu sunt scrise în niciun ghid;
+         * până acum erau ghicite, iar câteva nici nu existau la INS.
          *
-         * Natura tranzacției era trimisă cu versiunea 2010, dinaintea
-         * Regulamentului 2020/1197 care a schimbat codificarea. INS n-o găsea și
-         * răspundea „Cod Natură Tranzacţie B lipseşte" pe fiecare linie, deși
-         * codul era scris pe fiecare.
+         * Singura care ține de anul declarației e nomenclatorul de bunuri: pe el
+         * îl schimbăm în fiecare ianuarie, odată cu codurile vamale.
          */
-        $peAn = ['CnVer', 'NatureOfTransactionAVer', 'NatureOfTransactionBVer'];
-
         foreach (self::VERSIUNI as $nume => $valoare) {
-            $this->text($doc, $element, $nume, in_array($nume, $peAn, true) ? (string) $anul : $valoare);
+            $this->text($doc, $element, $nume, $nume === 'CnVer' ? (string) $anul : $valoare);
         }
 
         return $element;
