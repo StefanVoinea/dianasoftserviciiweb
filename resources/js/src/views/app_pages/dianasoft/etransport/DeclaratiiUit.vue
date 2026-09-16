@@ -97,6 +97,19 @@
           @change="importaDosarul"
         >
 
+        <!--
+          Marfa de retur face doua drumuri: din magazin la depozitul
+          transportatorului, pe teritoriul national, si de acolo afara din tara.
+          Bifata, importul face cate doua ciorne pe fiecare factura.
+        -->
+        <b-form-checkbox
+          v-if="importPermis"
+          v-model="marfaRetur"
+          class="ml-1"
+        >
+          Marfă retur
+        </b-form-checkbox>
+
         <!-- Formularul cu codurile UIT pentru transportator -->
         <b-button
           variant="outline-primary"
@@ -1092,7 +1105,7 @@
             v-for="ciorna in arhivaRezultat.ciorne"
             :key="ciorna.id"
           >
-            Factura {{ ciorna.factura }}<span v-if="ciorna.magazin"> — {{ ciorna.magazin }}</span>
+            {{ ciorna.factura }}<span v-if="ciorna.magazin"> — {{ ciorna.magazin }}</span>
           </li>
         </ul>
         <div
@@ -1637,6 +1650,8 @@ export default {
       arhivaFisier: null,
       // Importul unui dosar intreg, cu tot ce e in el.
       dosarInCurs: false,
+      // Marfa de retur: cate doua ciorne pe factura, TTN si LIC.
+      marfaRetur: false,
       arhivaEroare: '',
       arhivaRezultat: null,
       gestiuni: [],
@@ -2274,6 +2289,7 @@ export default {
 
       const formular = new FormData()
       fisiere.forEach(fisier => formular.append('fisiere[]', fisier))
+      formular.append('marfa_retur', this.marfaRetur ? '1' : '0')
 
       this.$http.post('/anaf-etransport/declaratii/importa-dosar', formular, { headers: { 'Content-Type': 'multipart/form-data' } })
         .then(raspuns => {
@@ -2301,6 +2317,7 @@ export default {
 
       const formular = new FormData()
       formular.append('fisier', this.arhivaFisier)
+      formular.append('marfa_retur', this.marfaRetur ? '1' : '0')
 
       this.$http.post('/anaf-etransport/declaratii/importa-arhiva', formular, { headers: { 'Content-Type': 'multipart/form-data' } })
         .then(raspuns => {

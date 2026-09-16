@@ -69,16 +69,28 @@ class ImportArhiva
     protected $note = [];
 
     /**
+     * [2026-09-16] Marfa de retur se declară în două etape, deci în două
+     * declarații pe fiecare factură.
+     *
+     * Marfa se strânge din magazine la depozitul transportatorului — transport
+     * pe teritoriul național, TTN —, iar de acolo pleacă din țară — livrare
+     * intracomunitară, LIC. Sunt două transporturi deosebite, fiecare cu UIT-ul
+     * lui, chiar dacă marfa și factura sunt aceleași.
+     */
+    protected $marfaRetur = false;
+
+    /**
      * Citește arhiva și face câte o ciornă pe fiecare factură din ea.
      *
      * @return array{ciorne: array<int, array{id: int, factura: string, magazin: ?string}>, avertismente: array<int, string>, gestiuni_noi: array<int, array{cod_furnizor: string, denumire_furnizor: ?string}>}
      */
-    public function importa(string $caleArhiva, ?string $cifDeclarant, ?int $userId = null): array
+    public function importa(string $caleArhiva, ?string $cifDeclarant, ?int $userId = null, bool $marfaRetur = false): array
     {
         return $this->importaFisiere(
             [['nume' => basename($caleArhiva), 'cale' => $caleArhiva]],
             $cifDeclarant,
-            $userId
+            $userId,
+            $marfaRetur
         );
     }
 
@@ -95,8 +107,10 @@ class ImportArhiva
      * @param array<int, array{nume: string, cale: string}> $fisiere
      * @return array{ciorne: array, avertismente: array<int, string>, gestiuni_noi: array}
      */
-    public function importaFisiere(array $fisiere, ?string $cifDeclarant, ?int $userId = null): array
+    public function importaFisiere(array $fisiere, ?string $cifDeclarant, ?int $userId = null, bool $marfaRetur = false): array
     {
+        $this->marfaRetur = $marfaRetur;
+
         $rezultat = ['ciorne' => [], 'avertismente' => [], 'gestiuni_noi' => []];
         $grupuri = [];
         $excele = [];
@@ -136,8 +150,15 @@ class ImportArhiva
         ksort($facturi);
 
         foreach ($facturi as $factura => $bucati) {
-            // Arhiva importata a doua oara nu dubleaza ciornele.
-            if (EtransportDeclaratie::whereIn('referinta_interna', ['Factura ' . $factura, 'Retur ' . $factura])->exists()) {
+            // Importul facut a doua oara nu dubleaza ciornele.
+            $referinte = [
+                'Factura ' . $factura,
+                'Retur ' . $factura,
+                'Retur ' . $factura . ' (TTN)',
+                'Retur ' . $factura . ' (LIC)',
+            ];
+
+            if (EtransportDeclaratie::whereIn('referinta_interna', $referinte)->exists()) {
                 $rezultat['avertismente'][] = 'Factura ' . $factura . ' era deja adusă; sărită.';
 
                 continue;
@@ -152,7 +173,7 @@ class ImportArhiva
             $this->note = [];
 
             try {
-                $declaratie = $this->ciorna((string) $factura, $bucati, $cifDeclarant, $userId);
+                $declaratii = $this->ciorna((string) $factura, $bucati, $cifDeclarant, $userId);
             } catch (\Exception $e) {
                 $rezultat['avertismente'][] = 'Factura ' . $factura . ': ' . $e->getMessage();
 
@@ -163,24 +184,26 @@ class ImportArhiva
                 $rezultat['avertismente'][] = 'Factura ' . $factura . ': ' . $nota;
             }
 
-            $locMagazin = $declaratie->loc_magazin;
+            foreach ($declaratii as $declaratie) {
+                $locMagazin = $declaratie->loc_magazin;
 
-            $rezultat['ciorne'][] = [
-                'id' => $declaratie->id,
-                'factura' => (string) $factura,
-                'magazin' => $locMagazin['magazin_denumire'] ?? null,
-            ];
-
-            // Un cod de magazin nestiut inca: utilizatorul e intrebat cum se numeste gestiunea.
-            $codMagazin = mb_strtoupper((string) ($locMagazin['magazin_cod'] ?? ''));
-
-            if ($codMagazin !== ''
-                && !isset($this->gestiunile()[$codMagazin])
-                && !isset($rezultat['gestiuni_noi'][$codMagazin])) {
-                $rezultat['gestiuni_noi'][$codMagazin] = [
-                    'cod_furnizor' => $codMagazin,
-                    'denumire_furnizor' => $locMagazin['magazin_denumire'] ?? null,
+                $rezultat['ciorne'][] = [
+                    'id' => $declaratie->id,
+                    'factura' => $declaratie->referinta_interna,
+                    'magazin' => $locMagazin['magazin_denumire'] ?? null,
                 ];
+
+                // Un cod de magazin nestiut inca: utilizatorul e intrebat cum se numeste gestiunea.
+                $codMagazin = mb_strtoupper((string) ($locMagazin['magazin_cod'] ?? ''));
+
+                if ($codMagazin !== ''
+                    && !isset($this->gestiunile()[$codMagazin])
+                    && !isset($rezultat['gestiuni_noi'][$codMagazin])) {
+                    $rezultat['gestiuni_noi'][$codMagazin] = [
+                        'cod_furnizor' => $codMagazin,
+                        'denumire_furnizor' => $locMagazin['magazin_denumire'] ?? null,
+                    ];
+                }
             }
         }
 
@@ -326,7 +349,8 @@ class ImportArhiva
      * Unele arhive vin fără T02 la anumite facturi: ciorna se face atunci
      * doar cu destinația și factura, iar liniile le pune omul.
      */
-    protected function ciorna(string $factura, array $bucati, ?string $cifDeclarant, ?int $userId): EtransportDeclaratie
+    /** @return array<int, EtransportDeclaratie> una singură, ori cele două ale unui retur */
+    protected function ciorna(string $factura, array $bucati, ?string $cifDeclarant, ?int $userId): array
     {
         $citit = ['linii' => [], 'antet' => []];
         $tipLinii = isset($bucati['T02']) ? 'T02' : (isset($bucati['T01']) ? 'T01' : null);
@@ -350,7 +374,8 @@ class ImportArhiva
         }
 
         $antet = $citit['antet'];
-        $retur = $this->esteRetur($bucati);
+        // Bifa „marfă retur" e mai tare decât ce se citește din fișiere.
+        $retur = $this->marfaRetur || $this->esteRetur($bucati);
 
         /*
          * Magazinul: la livrari e destinatia din blocul „Destinazione" al
@@ -358,7 +383,7 @@ class ImportArhiva
          * adresa lui se ia din ultima declaratie a aceluiasi magazin.
          */
         $magazin = $retur
-            ? $this->adresaMagazinului($this->magazinulDinD01($bucati['D01'] ?? ''))
+            ? $this->magazinulReturului($bucati)
             : (isset($bucati['D01']) ? $this->destinatia($bucati['D01']) : []);
 
         // Cand gestiunea e stiuta, denumirea magazinului se ia din ea, nu de la furnizor.
@@ -389,17 +414,10 @@ class ImportArhiva
         $ptf = ['tip' => 'ptf', 'cod_ptf' => self::PTF_IMPLICIT];
         $adresaMagazin = ['tip' => 'adresa'] + $magazin;
 
-        return EtransportDeclaratie::create([
+        $comun = [
             'stare' => 'ciorna',
             'cif_declarant' => $cifDeclarant,
-            'referinta_interna' => ($retur ? 'Retur ' : 'Factura ') . $factura,
-            'tip_operatiune' => $retur ? 20 : 10,
-            'partener_tara' => $antet['partener_tara'] ?? 'IT',
-            'partener_cod' => $antet['partener_cod'] ?? null,
-            'partener_denumire' => $antet['partener_denumire'] ?? null,
             'transportator_tara' => 'RO',
-            'loc_start' => $retur ? $adresaMagazin : $ptf,
-            'loc_final' => $retur ? $ptf : $adresaMagazin,
             'documente' => [[
                 'tip' => 20,
                 'numar' => $factura,
@@ -411,7 +429,117 @@ class ImportArhiva
             'curs' => $curs ?: null,
             'fisiere_importate' => ['arhiva: factura ' . $factura],
             'user_id' => $userId,
-        ]);
+        ];
+
+        $partenerStrain = [
+            'partener_tara' => $antet['partener_tara'] ?? 'IT',
+            'partener_cod' => $antet['partener_cod'] ?? null,
+            'partener_denumire' => $antet['partener_denumire'] ?? null,
+        ];
+
+        /*
+         * [2026-09-16] Marfa de retur face doua drumuri, deci doua declaratii:
+         * din magazin la depozitul transportatorului, pe teritoriul national,
+         * si de acolo afara din tara. Fiecare isi are UIT-ul ei.
+         */
+        if ($this->marfaRetur) {
+            $depozit = $this->adresaDepozitului();
+
+            return [
+                EtransportDeclaratie::create($comun + [
+                    'referinta_interna' => 'Retur ' . $factura . ' (TTN)',
+                    'tip_operatiune' => 30,
+                    // Pe drumul din tara marfa ramane a clientului: el e si partener.
+                    'partener_tara' => 'RO',
+                    'partener_cod' => $cifDeclarant,
+                    'partener_denumire' => $this->denumireaClientului(),
+                    'loc_start' => $adresaMagazin,
+                    'loc_final' => ['tip' => 'adresa'] + $depozit,
+                ]),
+                EtransportDeclaratie::create($comun + $partenerStrain + [
+                    'referinta_interna' => 'Retur ' . $factura . ' (LIC)',
+                    'tip_operatiune' => 20,
+                    // Din depozit pleaca afara din tara; magazinul ramane scris,
+                    // ca declaratia sa se stie a carui magazin e.
+                    'loc_start' => ['tip' => 'adresa'] + $depozit + $magazin,
+                    'loc_final' => $ptf,
+                ]),
+            ];
+        }
+
+        return [
+            EtransportDeclaratie::create($comun + $partenerStrain + [
+                'referinta_interna' => ($retur ? 'Retur ' : 'Factura ') . $factura,
+                'tip_operatiune' => $retur ? 20 : 10,
+                'loc_start' => $retur ? $adresaMagazin : $ptf,
+                'loc_final' => $retur ? $ptf : $adresaMagazin,
+            ]),
+        ];
+    }
+
+    /**
+     * Magazinul din care pleacă marfa de retur.
+     *
+     * În distinta unui retur el e expeditorul, cu codul pe rândul „From". Când
+     * bifa „marfă retur" e pusă pe o arhivă de livrare, rândul acela lipsește:
+     * atunci magazinul e cel din blocul „Destinazione", adică tot el, doar că
+     * scris ca destinatar al livrării de atunci.
+     *
+     * @return array<string, mixed>
+     */
+    protected function magazinulReturului(array $bucati): array
+    {
+        $cod = $this->magazinulDinD01($bucati['D01'] ?? '');
+
+        if ($cod !== null) {
+            return $this->adresaMagazinului($cod);
+        }
+
+        $destinatie = isset($bucati['D01']) ? $this->destinatia($bucati['D01']) : [];
+
+        if ($destinatie !== []) {
+            return $destinatie;
+        }
+
+        // Nici „From", nici „Destinazione": se spune omului si ramane gol.
+        return $this->adresaMagazinului(null);
+    }
+
+    /**
+     * Depozitul transportatorului, de unde marfa de retur pleacă din țară.
+     *
+     * Se ia din ultima declarație de transport național a clientului: acolo a
+     * fost scris ultima oară. Fără una, ciorna rămâne cu locul gol și se spune
+     * omului să-l completeze.
+     *
+     * @return array<string, mixed>
+     */
+    protected function adresaDepozitului(): array
+    {
+        $anterioara = EtransportDeclaratie::where('tip_operatiune', 30)
+            ->whereNotNull('loc_final')
+            ->orderByDesc('id')
+            ->first();
+
+        $depozit = $anterioara ? (array) $anterioara->loc_final : [];
+
+        // Magazinul de pe declaratia veche n-are ce cauta pe cea noua.
+        unset($depozit['tip'], $depozit['magazin_cod'], $depozit['magazin_denumire']);
+
+        if ($depozit === []) {
+            $this->note[] = 'nu există nicio declarație de transport național din care să iau adresa'
+                . ' depozitului transportatorului; completați-o pe cele două ciorne.';
+        }
+
+        return $depozit;
+    }
+
+    /** Denumirea clientului, partener pe drumul dinăuntrul țării. */
+    protected function denumireaClientului(): ?string
+    {
+        $companie = \App\Support\ContextCompanie::curenta();
+
+        return $companie ? optional(\App\Models\Company::find($companie))->denumire : null;
     }
 
     /**

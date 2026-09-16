@@ -394,6 +394,8 @@ class EtransportDeclaratiiController extends Controller
         $request->validate([
             'fisiere' => 'required|array|min:1|max:500',
             'fisiere.*' => 'file|max:51200',
+            // Marfa de retur: cate doua declaratii pe factura, TTN si LIC
+            'marfa_retur' => 'nullable|boolean',
         ]);
 
         $fisiere = array_map(function ($fisier) {
@@ -404,7 +406,8 @@ class EtransportDeclaratiiController extends Controller
             $rezultat = $import->importaFisiere(
                 $fisiere,
                 $this->cifClientului(),
-                optional($request->user())->id
+                optional($request->user())->id,
+                $request->boolean('marfa_retur')
             );
         } catch (EtransportException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
@@ -436,7 +439,11 @@ class EtransportDeclaratiiController extends Controller
             ], 403);
         }
 
-        $request->validate(['fisier' => 'required|file|max:51200']);
+        $request->validate([
+            'fisier' => 'required|file|max:51200',
+            // Marfa de retur: cate doua declaratii pe factura, TTN si LIC
+            'marfa_retur' => 'nullable|boolean',
+        ]);
 
         $fisier = $request->file('fisier');
 
@@ -444,7 +451,8 @@ class EtransportDeclaratiiController extends Controller
             $rezultat = $import->importa(
                 $fisier->getRealPath(),
                 $this->cifClientului(),
-                optional($request->user())->id
+                optional($request->user())->id,
+                $request->boolean('marfa_retur')
             );
         } catch (EtransportException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);

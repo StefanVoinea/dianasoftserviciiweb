@@ -131,7 +131,7 @@ class EtransportArhivaTest extends TestCase
         $this->assertCount(1, $rezultat['ciorne']);
         $this->assertSame([], $rezultat['avertismente']);
         $this->assertSame([], $rezultat['gestiuni_noi']);
-        $this->assertSame('10074615', $rezultat['ciorne'][0]['factura']);
+        $this->assertSame('Retur 10074615', $rezultat['ciorne'][0]['factura']);
         $this->assertSame('Brasov Coresi', $rezultat['ciorne'][0]['magazin']);
 
         $ciorna = EtransportDeclaratie::find($rezultat['ciorne'][0]['id']);
@@ -230,8 +230,8 @@ class EtransportArhivaTest extends TestCase
         sort($facturi);
 
         $this->assertCount(4, $rezultat['ciorne']);
-        $this->assertContains('10099001', $facturi);
-        $this->assertContains('10053419', $facturi);
+        $this->assertContains('Factura 10099001', $facturi);
+        $this->assertContains('Factura 10053419', $facturi);
 
         $razleata = EtransportDeclaratie::where('referinta_interna', 'Factura 10099001')->first();
         $this->assertNotNull($razleata);
@@ -242,6 +242,76 @@ class EtransportArhivaTest extends TestCase
         $spuse = implode(' | ', $rezultat['avertismente']);
         $this->assertStringContainsString('Factura 10099001.pdf', $spuse);
         $this->assertStringContainsString('fel de fișier necunoscut', $spuse);
+    }
+
+    /**
+     * [2026-09-16] Marfa de retur face două drumuri, deci două declarații.
+     *
+     * Din magazin la depozitul transportatorului, pe teritoriul național, apoi
+     * de acolo afară din țară. Fiecare drum e un transport deosebit, cu UIT-ul
+     * lui, chiar dacă marfa și factura sunt aceleași.
+     */
+    public function test_marfa_retur_face_doua_declaratii_pe_factura()
+    {
+        // Adresa depozitului se ia din ultima declaratie de transport national.
+        EtransportDeclaratie::create([
+            'stare' => 'validata', 'tip_operatiune' => 30, 'referinta_interna' => 'Retur vechi',
+            'loc_start' => ['tip' => 'adresa', 'localitate' => 'IASI'],
+            'loc_final' => [
+                'tip' => 'adresa', 'cod_judet' => 5, 'localitate' => 'ORADEA', 'strada' => 'PETRE CARP',
+                'numar' => '11', 'alte_info' => 'Depozitul transportatorului',
+                'magazin_cod' => 'NEG0002360', 'magazin_denumire' => '2360 Moldova Mall Iasi',
+            ],
+        ]);
+
+        $rezultat = (new ImportArhiva())->importa($this->arhiva(), '15196216', null, true);
+
+        // Trei facturi in arhiva, cate doua declaratii fiecare.
+        $this->assertCount(6, $rezultat['ciorne']);
+
+        $ttn = EtransportDeclaratie::where('referinta_interna', 'Retur 10053419 (TTN)')->first();
+        $lic = EtransportDeclaratie::where('referinta_interna', 'Retur 10053419 (LIC)')->first();
+
+        $this->assertNotNull($ttn);
+        $this->assertNotNull($lic);
+
+        // Drumul dinauntrul tarii: din magazin la depozit, cu clientul drept partener.
+        $this->assertSame(30, $ttn->tip_operatiune);
+        $this->assertSame('RO', $ttn->partener_tara);
+        $this->assertSame('15196216', $ttn->partener_cod);
+        $this->assertSame('PROBA ARHIVA SRL', $ttn->partener_denumire);
+        $this->assertSame('BUCURESTI', $ttn->loc_start['localitate']);
+        $this->assertSame('ORADEA', $ttn->loc_final['localitate']);
+        $this->assertSame('PETRE CARP', $ttn->loc_final['strada']);
+        // Magazinul vechi nu se ia odata cu adresa depozitului.
+        $this->assertArrayNotHasKey('magazin_cod', $ttn->loc_final);
+
+        // Drumul afara din tara: din depozit la frontiera, cu furnizorul partener.
+        $this->assertSame(20, $lic->tip_operatiune);
+        $this->assertSame('IT', $lic->partener_tara);
+        $this->assertSame('TEDDY S.P.A.', $lic->partener_denumire);
+        $this->assertSame('ORADEA', $lic->loc_start['localitate']);
+        $this->assertSame('NEG0000548', $lic->loc_start['magazin_cod']);
+        $this->assertSame(38, $lic->loc_final['cod_ptf']);
+
+        // Aceeasi marfa si aceeasi factura pe amandoua.
+        $this->assertSame($ttn->linii, $lic->linii);
+        $this->assertSame('10053419', $lic->documente[0]['numar']);
+
+        // Importat a doua oara, nu se dubleaza.
+        $dinNou = (new ImportArhiva())->importa($this->arhiva(), '15196216', null, true);
+        $this->assertSame([], $dinNou['ciorne']);
+    }
+
+    /** Fără nicio declarație de transport național, omul e trimis să pună adresa. */
+    public function test_marfa_retur_fara_depozit_stiut_spune_ce_lipseste()
+    {
+        $rezultat = (new ImportArhiva())->importa($this->arhiva(), '15196216', null, true);
+
+        $spuse = implode(' | ', $rezultat['avertismente']);
+
+        $this->assertStringContainsString('depozitului transportatorului', $spuse);
+        $this->assertCount(6, $rezultat['ciorne']);
     }
 
     public function test_formularul_transportatorului_are_cate_o_foaie_pe_magazin()
