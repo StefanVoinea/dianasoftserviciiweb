@@ -50,6 +50,26 @@ class EtransportNotificare extends Model
         return $this->belongsTo(AnafCertificat::class, 'certificat_id');
     }
 
+    /**
+     * [2026-09-16] Declarația din care a plecat notificarea.
+     *
+     * Se leagă prin indexul de încărcare: fiecare depunere are indexul ei, deci
+     * perechea e sigură. De acolo vine numărul facturii, pe care ANAF nu-l
+     * trimite înapoi în notificare.
+     */
+    public function declaratie()
+    {
+        return $this->hasOne(EtransportDeclaratie::class, 'index_incarcare', 'id_incarcare');
+    }
+
+    /** Numărul documentului de transport, luat din declarația noastră. */
+    public function getFacturaAttribute(): ?string
+    {
+        $declaratie = $this->relationLoaded('declaratie') ? $this->getRelation('declaratie') : $this->declaratie;
+
+        return $declaratie ? ($declaratie->documente[0]['numar'] ?? null) : null;
+    }
+
     public function getOperatiuneAttribute(): ?string
     {
         return self::OPERATIUNI[$this->tip_op] ?? ($this->tip_op ? (string) $this->tip_op : null);

@@ -21,7 +21,7 @@ class EtransportAnafController extends Controller
 {
     public function index(Request $request)
     {
-        $query = EtransportNotificare::with('certificat')
+        $query = EtransportNotificare::with(['certificat', 'declaratie'])
             ->orderByDesc('data_creare')
             ->orderByDesc('id');
 
@@ -48,6 +48,8 @@ class EtransportAnafController extends Controller
                     'are_erori' => $n->are_erori,
                     'cod_decl' => $n->cod_decl,
                     'ref_decl' => $n->ref_decl,
+                    // Numarul facturii nu vine de la ANAF; se ia din declaratia noastra.
+                    'factura' => $n->factura,
                     'operatiune' => $n->operatiune,
                     'data_transp' => Format::data($n->data_transp),
                     'data_creare' => Format::dataOra($n->data_creare),

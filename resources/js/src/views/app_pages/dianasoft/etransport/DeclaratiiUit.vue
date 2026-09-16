@@ -93,7 +93,7 @@
       </div>
 
       <b-table
-        :items="declaratii"
+        :items="declaratiiFiltrate"
         :fields="campuriLista"
         :busy="listaInCurs"
         responsive
@@ -101,13 +101,43 @@
         small
         show-empty
         class="mb-0"
-        empty-text="Nicio declarație. Începeți cu „Declarație nouă”."
+        :empty-text="areFiltre
+          ? 'Nicio declarație nu se potrivește filtrelor din capul coloanelor.'
+          : 'Nicio declarație. Începeți cu „Declarație nouă”.'"
       >
         <template #table-busy>
           <div class="text-center my-2">
             <b-spinner class="align-middle mr-1" />
             Se încarcă...
           </div>
+        </template>
+
+        <!--
+          Sub fiecare titlu de coloana, o casuta de cautare. Filtrarea lucreaza
+          pe randurile deja aduse si pe ce se vede in celula, nu pe campul din
+          spatele ei.
+        -->
+        <template #head()="cap">
+          <div>{{ cap.label }}</div>
+          <b-form-input
+            v-if="cap.column !== 'actiuni'"
+            :value="filtreColoane[cap.column]"
+            size="sm"
+            class="mt-25 font-weight-normal"
+            placeholder="caută..."
+            @input="scrieFiltru(cap.column, $event)"
+          />
+          <b-button
+            v-else-if="areFiltre"
+            v-b-tooltip.hover.top.window.v-light
+            size="sm"
+            variant="flat-secondary"
+            class="btn-icon mt-25"
+            title="Șterge filtrele"
+            @click="stergeFiltrele"
+          >
+            <feather-icon icon="XIcon" />
+          </b-button>
         </template>
 
         <template #cell(stare)="rand">
@@ -138,6 +168,12 @@
           </div>
           <div class="small text-muted">
             {{ rand.item.partener || '' }}
+          </div>
+        </template>
+
+        <template #cell(factura)="rand">
+          <div class="small">
+            {{ rand.item.factura || '-' }}
           </div>
         </template>
 
@@ -1569,6 +1605,8 @@ export default {
       emailInCurs: false,
       info: '',
       eroare: '',
+      // Ce s-a scris in capul fiecarei coloane, ca sa se restranga lista.
+      filtreColoane: {},
       listaInCurs: false,
       importInCurs: false,
       salvareInCurs: false,
@@ -1590,6 +1628,8 @@ export default {
         { key: 'stare', label: 'Stare / UIT' },
         { key: 'cif_declarant', label: 'Declarant' },
         { key: 'operatiune', label: 'Operațiune / partener' },
+        // Numarul documentului: dupa el se cauta cel mai des o declaratie.
+        { key: 'factura', label: 'Factură' },
         // Magazinul vine din arhiva importata: are rost doar la cine importa.
         ...(this.importPermis ? [{ key: 'magazin', label: 'Magazin' }] : []),
         { key: 'vehicul', label: 'Vehicul' },
@@ -1652,6 +1692,28 @@ export default {
     /** Documentele bifate in centralizator, cele care intra in fisier. */
     documenteBifate() {
       return ((this.centralizator || {}).documente || []).filter(d => d.bifat)
+    },
+    /**
+     * Lista, trecuta prin filtrele scrise in capul coloanelor.
+     *
+     * Filtrarea se face pe ce se vede in coloana, nu pe campul din spate: cine
+     * scrie „respinsa" la Stare cauta eticheta, nu cheia; cine scrie un cod de
+     * magazin il cauta acolo unde il vede, sub denumire.
+     */
+    declaratiiFiltrate() {
+      const filtre = Object.keys(this.filtreColoane)
+        .filter(cheie => String(this.filtreColoane[cheie] || '').trim() !== '')
+        .map(cheie => [cheie, String(this.filtreColoane[cheie]).trim().toLowerCase()])
+
+      if (!filtre.length) return this.declaratii
+
+      return this.declaratii.filter(rand => filtre.every(
+        ([cheie, cautat]) => this.textCelula(rand, cheie).toLowerCase().includes(cautat),
+      ))
+    },
+    areFiltre() {
+      return Object.keys(this.filtreColoane)
+        .some(cheie => String(this.filtreColoane[cheie] || '').trim() !== '')
     },
     /** Facturi ale lunilor trecute care n-au intrat in nicio declaratie. */
     intarziati() {
@@ -2376,6 +2438,33 @@ export default {
         .finally(() => {
           this.emailInCurs = false
         })
+    },
+    /**
+     * Ce se vede intr-o celula, pus cap la cap, pentru filtrare.
+     *
+     * Coloanele care arata doua-trei lucruri deodata — starea cu UIT-ul si
+     * motivul respingerii, operatiunea cu partenerul — se cauta ca un tot.
+     */
+    textCelula(rand, cheie) {
+      if (cheie === 'stare') {
+        return [rand.stare_eticheta, rand.uit, ...(rand.erori || [])].filter(Boolean).join(' ')
+      }
+      if (cheie === 'operatiune') {
+        return [rand.operatiune, rand.partener].filter(Boolean).join(' ')
+      }
+      if (cheie === 'magazin') {
+        return [rand.magazin, rand.magazin_cod].filter(Boolean).join(' ')
+      }
+
+      const valoare = rand[cheie]
+
+      return valoare === null || valoare === undefined ? '' : String(valoare)
+    },
+    scrieFiltru(cheie, valoare) {
+      this.$set(this.filtreColoane, cheie, valoare)
+    },
+    stergeFiltrele() {
+      this.filtreColoane = {}
     },
     verificaDinLista(id) {
       this.$http.post(`/anaf-etransport/declaratii/${id}/verifica`)

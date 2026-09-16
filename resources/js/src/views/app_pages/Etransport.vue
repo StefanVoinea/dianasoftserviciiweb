@@ -303,7 +303,7 @@
           </b-row>
 
           <b-table
-            :items="notificari"
+            :items="notificariFiltrate"
             :fields="campuri"
             :busy="listaInCurs"
             responsive
@@ -311,12 +311,47 @@
             small
             class="mb-0"
             show-empty
-            empty-text="Nicio notificare. Apăsați „Preia” pentru a le aduce de la ANAF."
+            :empty-text="areFiltreColoane
+              ? 'Nicio notificare nu se potrivește filtrelor din capul coloanelor.'
+              : 'Nicio notificare. Apăsați „Preia” pentru a le aduce de la ANAF.'"
           >
             <template #table-busy>
               <div class="text-center my-2">
                 <b-spinner class="align-middle mr-1" />
                 Se încarcă...
+              </div>
+            </template>
+
+            <!--
+              Sub fiecare titlu de coloana, o casuta de cautare. Filtrarea
+              lucreaza pe notificarile deja aduse si pe ce se vede in celula.
+            -->
+            <template #head()="cap">
+              <div>{{ cap.label }}</div>
+              <b-form-input
+                v-if="cap.column !== 'actiuni'"
+                :value="filtreColoane[cap.column]"
+                size="sm"
+                class="mt-25 font-weight-normal"
+                placeholder="caută..."
+                @input="scrieFiltru(cap.column, $event)"
+              />
+              <b-button
+                v-else-if="areFiltreColoane"
+                v-b-tooltip.hover.top.window.v-light
+                size="sm"
+                variant="flat-secondary"
+                class="btn-icon mt-25"
+                title="Șterge filtrele"
+                @click="stergeFiltrele"
+              >
+                <feather-icon icon="XIcon" />
+              </b-button>
+            </template>
+
+            <template #cell(factura)="rand">
+              <div class="small">
+                {{ rand.item.factura || '-' }}
               </div>
             </template>
 
@@ -471,9 +506,13 @@ export default {
       oauthConfigurat: false,
       oauthRedirect: '',
       autorizare: { autorizat: false, expira_la: null, zile_ramase: null },
+      // Ce s-a scris in capul fiecarei coloane, ca sa se restranga lista.
+      filtreColoane: {},
       campuri: [
         { key: 'uit', label: 'UIT / stare' },
         { key: 'cod_decl', label: 'Declarant' },
+        // Numarul documentului nu vine de la ANAF; se ia din declaratia noastra.
+        { key: 'factura', label: 'Factură' },
         { key: 'transport', label: 'Operațiune' },
         { key: 'parteneri', label: 'Parteneri' },
         { key: 'vehicul', label: 'Vehicul' },
@@ -488,6 +527,28 @@ export default {
       if (!this.ultimaPreluareNumar) return 'fără notificări noi'
 
       return this.ultimaPreluareNumar === 1 ? 'o notificare nouă' : `${this.ultimaPreluareNumar} notificări noi`
+    },
+    /**
+     * Lista, trecuta prin filtrele scrise in capul coloanelor.
+     *
+     * Filtrarea se face pe ce se vede in coloana, nu pe campul din spate: cine
+     * scrie „cu erori" la UIT cauta eticheta, iar cine cauta un mesaj ANAF il
+     * cauta acolo unde il citeste.
+     */
+    notificariFiltrate() {
+      const filtre = Object.keys(this.filtreColoane)
+        .filter(cheie => String(this.filtreColoane[cheie] || '').trim() !== '')
+        .map(cheie => [cheie, String(this.filtreColoane[cheie]).trim().toLowerCase()])
+
+      if (!filtre.length) return this.notificari
+
+      return this.notificari.filter(rand => filtre.every(
+        ([cheie, cautat]) => this.textCelula(rand, cheie).toLowerCase().includes(cautat),
+      ))
+    },
+    areFiltreColoane() {
+      return Object.keys(this.filtreColoane)
+        .some(cheie => String(this.filtreColoane[cheie] || '').trim() !== '')
     },
   },
   watch: {
@@ -708,6 +769,36 @@ export default {
         .finally(() => {
           this.depunereInCurs = false
         })
+    },
+    /**
+     * Ce se vede intr-o celula, pus cap la cap, pentru filtrare.
+     *
+     * Coloanele care arata mai multe lucruri deodata — UIT-ul cu starea si
+     * felul, partenerul cu transportatorul, mesajele ANAF — se cauta ca un tot.
+     */
+    textCelula(rand, cheie) {
+      if (cheie === 'uit') {
+        return [rand.uit, rand.are_erori ? 'cu erori' : 'validă', rand.tip_eticheta].filter(Boolean).join(' ')
+      }
+      if (cheie === 'transport') {
+        return [rand.operatiune, rand.data_transp].filter(Boolean).join(' ')
+      }
+      if (cheie === 'parteneri') {
+        return [rand.partener, rand.transportator].filter(Boolean).join(' ')
+      }
+      if (cheie === 'mesaje') {
+        return (rand.mesaje || []).map(mesaj => mesaj.mesaj).join(' ')
+      }
+
+      const valoare = rand[cheie]
+
+      return valoare === null || valoare === undefined ? '' : String(valoare)
+    },
+    scrieFiltru(cheie, valoare) {
+      this.$set(this.filtreColoane, cheie, valoare)
+    },
+    stergeFiltrele() {
+      this.filtreColoane = {}
     },
     deschideEmail(notificare) {
       this.emailNotificareId = notificare.id

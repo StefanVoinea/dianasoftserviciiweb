@@ -162,6 +162,36 @@ class EtransportStareTest extends TestCase
         });
     }
 
+    /**
+     * [2026-09-16] Numărul facturii pe notificare, luat din declarația noastră.
+     *
+     * ANAF nu-l trimite înapoi: notificarea poartă doar referința cu care am
+     * depus. Se ia din declarația legată prin indexul de încărcare, ca lista de
+     * notificări să se poată citi și filtra după numărul documentului.
+     */
+    public function test_notificarea_arata_numarul_facturii_din_declaratie(): void
+    {
+        ContextCompanie::pentru(self::FIRMA, function () {
+            $this->declaratie([
+                'index_incarcare' => '19196306666',
+                'documente' => [['tip' => 20, 'numar' => '10076134', 'data' => '2026-09-07']],
+            ]);
+
+            $notificare = EtransportNotificare::create([
+                'uit' => 'UIT-F-1', 'tip' => 'NOT', 'stare' => 'OK', 'id_incarcare' => '19196306666',
+            ]);
+
+            $this->assertSame('10076134', $notificare->factura);
+
+            // Fara declaratie pereche nu se inventeaza nimic.
+            $straina = EtransportNotificare::create([
+                'uit' => 'UIT-F-2', 'tip' => 'NOT', 'stare' => 'OK', 'id_incarcare' => '99999999999',
+            ]);
+
+            $this->assertNull($straina->factura);
+        });
+    }
+
     /** O ciornă nedepusă nu se atinge: notificarea e a altei depuneri. */
     public function test_notificarea_nu_atinge_o_ciorna(): void
     {

@@ -46,6 +46,8 @@ class EtransportDeclaratiiController extends Controller
                     'magazin' => $d->loc_magazin['magazin_denumire'] ?? null,
                     'magazin_cod' => $d->loc_magazin['magazin_cod'] ?? null,
                     'vehicul' => trim(implode(' + ', array_filter([$d->nr_vehicul, $d->nr_remorca1, $d->nr_remorca2]))),
+                    // Numarul documentului de transport: dupa el se cauta cel mai des.
+                    'factura' => $d->documente[0]['numar'] ?? null,
                     'data_transport' => Format::data($d->data_transport),
                     'nr_linii' => count($d->linii ?: []),
                     'valoare_lei' => round(array_sum(array_column($d->linii ?: [], 'valoare_lei')), 2),
