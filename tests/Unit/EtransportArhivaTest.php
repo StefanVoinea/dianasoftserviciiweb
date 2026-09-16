@@ -298,6 +298,10 @@ class EtransportArhivaTest extends TestCase
         $this->assertSame($ttn->linii, $lic->linii);
         $this->assertSame('10053419', $lic->documente[0]['numar']);
 
+        // Marfa care se intoarce nu mai merge spre comercializare: scopul e „Altele".
+        $this->assertSame(9901, $ttn->linii[0]['scop_operatiune']);
+        $this->assertSame(9901, $lic->linii[0]['scop_operatiune']);
+
         // Importat a doua oara, nu se dubleaza.
         $dinNou = (new ImportArhiva())->importa($this->arhiva(), '15196216', null, true);
         $this->assertSame([], $dinNou['ciorne']);

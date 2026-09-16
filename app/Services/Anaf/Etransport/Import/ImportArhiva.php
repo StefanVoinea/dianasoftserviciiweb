@@ -401,8 +401,16 @@ class ImportArhiva
 
         $linii = [];
 
+        /*
+         * [2026-09-16] Marfa care se intoarce nu mai merge spre comercializare,
+         * asa ca scopul ei e „Altele" (9901). Se potriveste amandurora
+         * drumurilor returului: si transportului national, si livrarii
+         * intracomunitare.
+         */
+        $scop = $this->marfaRetur ? 9901 : 101;
+
         foreach ($citit['linii'] as $linie) {
-            $linie['scop_operatiune'] = 101;
+            $linie['scop_operatiune'] = $scop;
             $linie['valoare_lei'] = $curs > 0 && $linie['valoare'] !== null
                 ? round($linie['valoare'] * $curs, 2)
                 : null;
