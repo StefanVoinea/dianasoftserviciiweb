@@ -375,6 +375,58 @@ class EtransportDeclaratiiController extends Controller
      * Același drept ca la importul de fișiere: parserele sunt scrise pe
      * formatele furnizorilor clientului.
      */
+    /**
+     * [2026-09-16] Tot ce s-a găsit într-un dosar, dintr-o apăsare.
+     *
+     * Furnizorul nu trimite totul la fel: unele zile vin ca arhivă, altele ca
+     * fișiere răzlețe, iar de la alții vine un Excel. Aici se dau toate deodată,
+     * iar importul le sortează singur după fel.
+     */
+    public function importaDosar(Request $request, \App\Services\Anaf\Etransport\Import\ImportArhiva $import)
+    {
+        if (!$this->importPermis($request)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Importul de fișiere nu e deschis pentru acest utilizator.',
+            ], 403);
+        }
+
+        $request->validate([
+            'fisiere' => 'required|array|min:1|max:500',
+            'fisiere.*' => 'file|max:51200',
+        ]);
+
+        $fisiere = array_map(function ($fisier) {
+            return ['nume' => $fisier->getClientOriginalName(), 'cale' => $fisier->getRealPath()];
+        }, $request->file('fisiere'));
+
+        try {
+            $rezultat = $import->importaFisiere(
+                $fisiere,
+                $this->cifClientului(),
+                optional($request->user())->id
+            );
+        } catch (EtransportException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        Jurnal::scrie(
+            'etransport_declaratie',
+            sprintf(
+                'A importat un dosar cu %d fișiere: %d ciorne de declarație create',
+                count($fisiere),
+                count($rezultat['ciorne'])
+            )
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => $rezultat['ciorne'],
+            'avertismente' => $rezultat['avertismente'],
+            'gestiuni_noi' => $rezultat['gestiuni_noi'],
+        ]);
+    }
+
     public function importaArhiva(Request $request, \App\Services\Anaf\Etransport\Import\ImportArhiva $import)
     {
         if (!$this->importPermis($request)) {

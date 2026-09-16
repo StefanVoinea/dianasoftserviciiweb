@@ -63,6 +63,40 @@
           Import arhivă
         </b-button>
 
+        <!--
+          Dosarul intreg, dintr-o apasare: arhive, fisiere razlete si Excel,
+          cum le-a lasat furnizorul acolo. Browserul nu stie de cai, doar de
+          dosare alese de om, de aceea intrarea ascunsa cu „webkitdirectory".
+        -->
+        <b-button
+          v-if="importPermis"
+          variant="outline-primary"
+          size="sm"
+          class="ml-1"
+          :disabled="dosarInCurs"
+          @click="alegeDosarul"
+        >
+          <b-spinner
+            v-if="dosarInCurs"
+            small
+            class="mr-25"
+          />
+          <feather-icon
+            v-else
+            icon="FolderIcon"
+            class="mr-25"
+          />
+          Import folder
+        </b-button>
+        <input
+          ref="dosar"
+          type="file"
+          webkitdirectory
+          multiple
+          class="d-none"
+          @change="importaDosarul"
+        >
+
         <!-- Formularul cu codurile UIT pentru transportator -->
         <b-button
           variant="outline-primary"
@@ -1009,7 +1043,7 @@
     -->
     <b-modal
       v-model="arhivaVizibila"
-      title="Import arhivă zilnică"
+      title="Import din arhivă sau dosar"
       :ok-title="arhivaInCurs ? 'Se importă...' : 'Importă arhiva'"
       cancel-title="Renunță"
       :ok-disabled="!arhivaFisier || arhivaInCurs"
@@ -1022,6 +1056,12 @@
         magazinul din distinta D01: locul de descărcare la livrări, locul de
         plecare la retururi (declarate ca livrare intracomunitară). Rămân de
         completat vehiculul, transportatorul și data transportului.
+      </p>
+
+      <p class="text-muted small">
+        Cu „Import folder" se ia dintr-o dată tot ce e într-un dosar: arhive
+        ZIP, fișiere T02, T01 și D01 răzlețe, și fișiere Excel cu detaliile
+        facturii. Ce nu se potrivește niciunui fel se spune în raport.
       </p>
 
       <b-form-file
@@ -1595,6 +1635,8 @@ export default {
       arhivaVizibila: false,
       arhivaInCurs: false,
       arhivaFisier: null,
+      // Importul unui dosar intreg, cu tot ce e in el.
+      dosarInCurs: false,
       arhivaEroare: '',
       arhivaRezultat: null,
       gestiuni: [],
@@ -2208,6 +2250,50 @@ export default {
           this.eroare = this.mesajEroare(err, 'Starea nu s-a putut verifica')
         })
     },
+    /** Deschide alegerea de dosar; browserul nu da cai, ci dosare alese de om. */
+    alegeDosarul() {
+      this.$refs.dosar.value = ''
+      this.$refs.dosar.click()
+    },
+
+    /**
+     * Tot ce s-a gasit in dosar, trimis deodata.
+     *
+     * Importul sorteaza singur dupa fel: arhivele se desfac, fisierele text se
+     * aduna pe facturi, iar fiecare Excel isi face ciorna lui. Ce nu se
+     * potriveste se spune in raport, nu se pierde in tacere.
+     */
+    importaDosarul(eveniment) {
+      const fisiere = Array.from(eveniment.target.files || [])
+
+      if (!fisiere.length) return
+
+      this.arhivaEroare = ''
+      this.arhivaRezultat = null
+      this.dosarInCurs = true
+
+      const formular = new FormData()
+      fisiere.forEach(fisier => formular.append('fisiere[]', fisier))
+
+      this.$http.post('/anaf-etransport/declaratii/importa-dosar', formular, { headers: { 'Content-Type': 'multipart/form-data' } })
+        .then(raspuns => {
+          this.arhivaRezultat = { ciorne: raspuns.data.data || [], avertismente: raspuns.data.avertismente || [] }
+          this.arhivaVizibila = true
+          this.incarcaLista()
+
+          this.gestiuniNoi = raspuns.data.gestiuni_noi || []
+          this.urmatoareaGestiune()
+        })
+        .catch(err => {
+          this.arhivaEroare = this.mesajEroare(err, 'Importul dosarului a eșuat')
+          this.arhivaVizibila = true
+        })
+        .finally(() => {
+          this.dosarInCurs = false
+          this.$refs.dosar.value = ''
+        })
+    },
+
     importaArhiva() {
       this.arhivaEroare = ''
       this.arhivaRezultat = null

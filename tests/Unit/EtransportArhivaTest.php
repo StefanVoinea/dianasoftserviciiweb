@@ -180,6 +180,70 @@ class EtransportArhivaTest extends TestCase
         $this->assertSame(['tip' => 'adresa', 'magazin_cod' => 'NEG0009999'], $faraAdresa->loc_start);
     }
 
+    /**
+     * [2026-09-16] Importul unui dosar întreg: arhive, fișiere răzlețe și ce nu
+     * se potrivește, toate deodată.
+     *
+     * Furnizorul nu trimite totul la fel — o zi vine ca arhivă, alta ca fișiere
+     * puse în dosar. Ce nu e de citit nu se pierde în tăcere, ci se spune.
+     */
+    public function test_dosarul_se_importa_cu_arhive_si_fisiere_razlete_deodata()
+    {
+        $dosar = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'dosar' . uniqid();
+        mkdir($dosar);
+
+        // Fisierele unei facturi, razlete in dosar, ca si cum ar fi fost dezarhivate.
+        $t02 = implode("\n", [
+            '     Sender.............: TEDDY S.P.A.',
+            '                          Italy                                          Vat N: 00953910403',
+            '     Doc number.........:  10099001 of 03.07.2026',
+            '     BD   Bangladesh                     61046200  Pantaloni                20,307         22,515        133  EUR           985,23',
+        ]);
+        file_put_contents($dosar . '/T02_2_TEDDY_2026_10099001.TXT', $t02);
+        file_put_contents($dosar . '/D01_2_TEDDY_2026_10099001.TXT', implode("\n", [
+            '    Number ......:   10099001     del  3/07/2026',
+            '    Destinazione.:  0029818 007 S.C. EMPORIO COM SRL MAGAZIN TERRAN',
+            '    NEG0000548      BD GEN GH MAGHERU, NR 33, SECTOR 1,',
+            '                    000000     BUCURESTI     RO',
+        ]));
+        // Un fisier care nu ne priveste: trebuie spus, nu inghitit.
+        file_put_contents($dosar . '/Factura 10099001.pdf', 'nu conteaza');
+
+        $fisiere = [
+            ['nume' => 'zilnica.zip', 'cale' => $this->arhiva()],
+            ['nume' => 'T02_2_TEDDY_2026_10099001.TXT', 'cale' => $dosar . '/T02_2_TEDDY_2026_10099001.TXT'],
+            ['nume' => 'D01_2_TEDDY_2026_10099001.TXT', 'cale' => $dosar . '/D01_2_TEDDY_2026_10099001.TXT'],
+            ['nume' => 'Factura 10099001.pdf', 'cale' => $dosar . '/Factura 10099001.pdf'],
+        ];
+
+        $rezultat = (new ImportArhiva())->importaFisiere($fisiere, '15196216');
+
+        foreach ($fisiere as $fisier) {
+            if ($fisier['nume'] !== 'zilnica.zip') {
+                @unlink($fisier['cale']);
+            }
+        }
+        @rmdir($dosar);
+
+        // Trei facturi din arhiva, plus cea razleata din dosar.
+        $facturi = array_column($rezultat['ciorne'], 'factura');
+        sort($facturi);
+
+        $this->assertCount(4, $rezultat['ciorne']);
+        $this->assertContains('10099001', $facturi);
+        $this->assertContains('10053419', $facturi);
+
+        $razleata = EtransportDeclaratie::where('referinta_interna', 'Factura 10099001')->first();
+        $this->assertNotNull($razleata);
+        $this->assertCount(1, $razleata->linii);
+        $this->assertSame('BUCURESTI', $razleata->loc_final['localitate']);
+
+        // PDF-ul e spus pe nume, ca omul sa stie ca n-a intrat.
+        $spuse = implode(' | ', $rezultat['avertismente']);
+        $this->assertStringContainsString('Factura 10099001.pdf', $spuse);
+        $this->assertStringContainsString('fel de fișier necunoscut', $spuse);
+    }
+
     public function test_formularul_transportatorului_are_cate_o_foaie_pe_magazin()
     {
         $rezultat = (new ImportArhiva())->importa($this->arhiva(), '15196216');

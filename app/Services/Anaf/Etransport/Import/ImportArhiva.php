@@ -31,6 +31,14 @@ class ImportArhiva
     /** PTF-ul obișnuit al camioanelor Teddy: Borș 2 - A3. Rămâne editabil. */
     protected const PTF_IMPLICIT = 38;
 
+    /**
+     * Fișierele care ne interesează și bucata de nume care le leagă.
+     *
+     * Ale aceleiași facturi au același nume după prefix:
+     * T02_2_TEDDY_..._10053419.TXT și D01_2_TEDDY_..._10053419.TXT.
+     */
+    protected const TIPAR_FISIER = '/^(T01|T02|D01)_(.+)\.(?:txt|text|prn)$/i';
+
     /** Orașele reședință de județ, pentru județul locului de descărcare. */
     protected const ORASE = [
         'BUCURESTI' => 40, 'BUCUREŞTI' => 40, 'BUCHARESTI' => 40, 'BUCHAREST' => 40,
@@ -67,35 +75,55 @@ class ImportArhiva
      */
     public function importa(string $caleArhiva, ?string $cifDeclarant, ?int $userId = null): array
     {
-        $arhiva = new \ZipArchive();
+        return $this->importaFisiere(
+            [['nume' => basename($caleArhiva), 'cale' => $caleArhiva]],
+            $cifDeclarant,
+            $userId
+        );
+    }
 
-        if ($arhiva->open($caleArhiva) !== true) {
-            throw new EtransportException('Arhiva nu a putut fi deschisă (se așteaptă un ZIP).');
-        }
-
-        /*
-         * Fisierele aceleiasi facturi au acelasi nume dupa prefix:
-         * T02_2_TEDDY_..._10053419.TXT si D01_2_TEDDY_..._10053419.TXT. Dupa el
-         * se aduna; numarul facturii se afla abia dupa, din nume sau dinauntru.
-         */
+    /**
+     * [2026-09-16] Același import, dar pe un teanc de fișiere: tot ce s-a găsit
+     * într-un dosar.
+     *
+     * Furnizorul nu trimite totul la fel. Unele zile vin ca arhivă, altele ca
+     * fișiere răzlețe puse în dosar, iar de la alți furnizori vine un Excel cu
+     * detaliile facturii. Aici se iau toate deodată: arhivele se desfac,
+     * fișierele text se adună pe facturi ca și cum ar fi venit dintr-o arhivă,
+     * iar fiecare Excel își face ciorna lui.
+     *
+     * @param array<int, array{nume: string, cale: string}> $fisiere
+     * @return array{ciorne: array, avertismente: array<int, string>, gestiuni_noi: array}
+     */
+    public function importaFisiere(array $fisiere, ?string $cifDeclarant, ?int $userId = null): array
+    {
+        $rezultat = ['ciorne' => [], 'avertismente' => [], 'gestiuni_noi' => []];
         $grupuri = [];
+        $excele = [];
 
-        for ($i = 0; $i < $arhiva->numFiles; $i++) {
-            $nume = basename($arhiva->getNameIndex($i));
+        foreach ($fisiere as $fisier) {
+            $nume = basename($fisier['nume']);
+            $extensie = strtolower(pathinfo($nume, PATHINFO_EXTENSION));
 
-            if (!preg_match('/^(T01|T02|D01)_(.+)\.txt$/i', $nume, $gasit)) {
-                continue;
+            if ($extensie === 'zip') {
+                $this->desfaArhiva($fisier, $grupuri, $rezultat);
+            } elseif (in_array($extensie, ['txt', 'text', 'prn'], true)) {
+                if (preg_match(self::TIPAR_FISIER, $nume, $gasit)) {
+                    $grupuri[$gasit[2]][strtoupper($gasit[1])] = (string) file_get_contents($fisier['cale']);
+                } else {
+                    $rezultat['avertismente'][] = '„' . $nume . '" nu e T02, T01 sau D01; sărit.';
+                }
+            } elseif (in_array($extensie, ['xls', 'xlsx', 'ods'], true)) {
+                $excele[] = $fisier;
+            } else {
+                $rezultat['avertismente'][] = '„' . $nume . '": fel de fișier necunoscut; sărit.';
             }
-
-            $grupuri[$gasit[2]][strtoupper($gasit[1])] = $arhiva->getFromIndex($i);
         }
 
-        if ($grupuri === []) {
-            $arhiva->close();
-
+        if ($grupuri === [] && $excele === []) {
             throw new EtransportException(
-                'Arhiva nu are fișiere T02_* (recapitulația pe coduri vamale) sau T01_* (lista pe articole).'
-                . ' Este arhiva zilnică a furnizorului?'
+                'Nu s-a găsit nimic de citit: se așteaptă arhive ZIP, fișiere T02_*, T01_* și D01_*, ori Excel'
+                . ' cu detaliile facturii.'
             );
         }
 
@@ -106,8 +134,6 @@ class ImportArhiva
         }
 
         ksort($facturi);
-
-        $rezultat = ['ciorne' => [], 'avertismente' => [], 'gestiuni_noi' => []];
 
         foreach ($facturi as $factura => $bucati) {
             // Arhiva importata a doua oara nu dubleaza ciornele.
@@ -158,11 +184,114 @@ class ImportArhiva
             }
         }
 
+        foreach ($excele as $excel) {
+            $this->ciornaDinExcel($excel, $cifDeclarant, $userId, $rezultat);
+        }
+
         $rezultat['gestiuni_noi'] = array_values($rezultat['gestiuni_noi']);
+
+        return $rezultat;
+    }
+
+    /**
+     * Desface o arhivă în fișierele ei, adăugându-le la grupurile de facturi.
+     *
+     * Ce nu e T02, T01 sau D01 se lasă acolo: arhiva mai poartă și facturi PDF,
+     * detalii de articole și alte fișiere care nu ne trebuie.
+     */
+    protected function desfaArhiva(array $fisier, array &$grupuri, array &$rezultat): void
+    {
+        $arhiva = new \ZipArchive();
+
+        if ($arhiva->open($fisier['cale']) !== true) {
+            $rezultat['avertismente'][] = 'Arhiva „' . basename($fisier['nume']) . '" nu a putut fi deschisă; sărită.';
+
+            return;
+        }
+
+        $gasiteAici = 0;
+
+        for ($i = 0; $i < $arhiva->numFiles; $i++) {
+            $nume = basename($arhiva->getNameIndex($i));
+
+            if (!preg_match(self::TIPAR_FISIER, $nume, $gasit)) {
+                continue;
+            }
+
+            $grupuri[$gasit[2]][strtoupper($gasit[1])] = $arhiva->getFromIndex($i);
+            $gasiteAici++;
+        }
 
         $arhiva->close();
 
-        return $rezultat;
+        if ($gasiteAici === 0) {
+            $rezultat['avertismente'][] = 'Arhiva „' . basename($fisier['nume'])
+                . '" nu are fișiere T02_*, T01_* sau D01_*; sărită.';
+        }
+    }
+
+    /**
+     * Ciorna dintr-un Excel cu detaliile facturii.
+     *
+     * Excelul aduce doar marfa: cod vamal, cantități, greutăți și valori. N-are
+     * nici partener, nici destinație, nici număr de factură, așa că ciorna se
+     * numește după fișier și se completează în formular.
+     */
+    protected function ciornaDinExcel(array $fisier, ?string $cifDeclarant, ?int $userId, array &$rezultat): void
+    {
+        $nume = basename($fisier['nume']);
+        $referinta = pathinfo($nume, PATHINFO_FILENAME);
+
+        if (EtransportDeclaratie::where('referinta_interna', $referinta)->exists()) {
+            $rezultat['avertismente'][] = '„' . $nume . '" era deja adus; sărit.';
+
+            return;
+        }
+
+        try {
+            $citit = $this->fisiere->importa([['nume' => $nume, 'cale' => $fisier['cale']]]);
+        } catch (\Exception $e) {
+            $rezultat['avertismente'][] = '„' . $nume . '": ' . $e->getMessage();
+
+            return;
+        }
+
+        if ($citit['linii'] === []) {
+            $rezultat['avertismente'][] = '„' . $nume . '" nu are nicio linie de citit; sărit.';
+
+            return;
+        }
+
+        $linii = [];
+
+        foreach ($citit['linii'] as $linie) {
+            $linie['scop_operatiune'] = 101;
+            $linie['valoare_lei'] = null;
+            $linii[] = $linie;
+        }
+
+        $declaratie = EtransportDeclaratie::create([
+            'stare' => 'ciorna',
+            'cif_declarant' => $cifDeclarant,
+            'referinta_interna' => $referinta,
+            'tip_operatiune' => 10,
+            'transportator_tara' => 'RO',
+            'loc_start' => ['tip' => 'ptf', 'cod_ptf' => self::PTF_IMPLICIT],
+            'loc_final' => ['tip' => 'adresa'],
+            'linii' => $linii,
+            'valuta' => $citit['antet']['valuta'] ?? 'EUR',
+            'fisiere_importate' => [$nume],
+            'user_id' => $userId,
+        ]);
+
+        $rezultat['ciorne'][] = [
+            'id' => $declaratie->id,
+            'factura' => $referinta,
+            'magazin' => null,
+        ];
+
+        $rezultat['avertismente'][] = '„' . $nume . '": Excelul aduce doar marfa;'
+            . ' completați partenerul, documentul și locul de descărcare.';
     }
 
     /**
