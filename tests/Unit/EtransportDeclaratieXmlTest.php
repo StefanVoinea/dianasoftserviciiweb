@@ -33,6 +33,49 @@ class EtransportDeclaratieXmlTest extends TestCase
         $this->assertStringContainsString('tipDocument="20"', $xml);
     }
 
+    /**
+     * [2026-09-16] Transportul declarat cu valoare zero pleacă la ANAF cu zero
+     * scris pe fiecare linie, nu cu câmpul lipsă.
+     *
+     * Pe ecran valorile rămân goale, dar declarația trebuie totuși să spună
+     * limpede că marfa se mișcă fără valoare: mutări fără vânzare, ambalaje
+     * returnate, mostre.
+     */
+    public function test_declaratia_cu_valoare_zero_trimite_zero_pe_fiecare_linie()
+    {
+        $declaratie = $this->declaratia([
+            'valoare_zero' => true,
+            'curs' => null,
+            'linii' => [
+                [
+                    'cod_tarifar' => '61046200', 'denumire' => 'Pantaloni', 'scop_operatiune' => 101,
+                    'cantitate' => 133, 'um' => 'H87', 'greutate_neta' => 20.307, 'greutate_bruta' => 22.515,
+                    'valoare' => null, 'valoare_lei' => null,
+                ],
+                [
+                    'cod_tarifar' => '61091000', 'denumire' => 'Tricouri', 'scop_operatiune' => 101,
+                    'cantitate' => 10, 'um' => 'H87', 'greutate_neta' => 2, 'greutate_bruta' => 2.4,
+                    // Chiar daca pe linie a ramas o suma, bifa e mai tare ca ea.
+                    'valoare' => 500, 'valoare_lei' => 2500,
+                ],
+            ],
+        ]);
+
+        $xml = (new DeclaratieXml())->construieste($declaratie);
+
+        $this->assertSame(2, substr_count($xml, 'valoareLeiFaraTva="0"'));
+        $this->assertStringNotContainsString('valoareLeiFaraTva="2500"', $xml);
+    }
+
+    /** Fără bifă, valoarea pleacă așa cum e scrisă pe linie. */
+    public function test_fara_bifa_valoarea_ramane_cea_de_pe_linie()
+    {
+        $xml = (new DeclaratieXml())->construieste($this->declaratia(['valoare_zero' => false]));
+
+        $this->assertStringContainsString('valoareLeiFaraTva="5162.15"', $xml);
+        $this->assertStringNotContainsString('valoareLeiFaraTva="0"', $xml);
+    }
+
     /** Numarul de inmatriculare se curata de spatii si liniute, cum cere ANAF. */
     public function test_numarul_de_inmatriculare_se_curata()
     {

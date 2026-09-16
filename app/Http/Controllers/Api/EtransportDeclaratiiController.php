@@ -670,6 +670,8 @@ class EtransportDeclaratiiController extends Controller
             'linii' => 'nullable|array',
             'valuta' => 'nullable|string|size:3',
             'curs' => 'nullable|numeric',
+            // Transportul care se declara fara valoare, desi fisierul are sume
+            'valoare_zero' => 'nullable|boolean',
             'fisiere_importate' => 'nullable|array',
         ]);
     }
@@ -700,6 +702,7 @@ class EtransportDeclaratiiController extends Controller
             'linii' => $d->linii ?: [],
             'valuta' => $d->valuta,
             'curs' => $d->curs,
+            'valoare_zero' => (bool) $d->valoare_zero,
             'fisiere_importate' => $d->fisiere_importate ?: [],
             'index_incarcare' => $d->index_incarcare,
             'uit' => $d->uit,

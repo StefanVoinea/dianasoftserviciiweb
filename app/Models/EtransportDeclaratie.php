@@ -36,6 +36,7 @@ class EtransportDeclaratie extends Model
         'data_transport' => 'date',
         'depusa_la' => 'datetime',
         'curs' => 'float',
+        'valoare_zero' => 'boolean',
     ];
 
     public const STARI = [

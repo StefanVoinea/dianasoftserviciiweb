@@ -55,7 +55,14 @@ class DeclaratieXml
 
             $bunuri->setAttribute('greutateBruta', $this->numar($linie['greutate_bruta']));
 
-            if (isset($linie['valoare_lei']) && $linie['valoare_lei'] !== null && $linie['valoare_lei'] !== '') {
+            /*
+             * [2026-09-16] Transportul declarat cu valoare zero: marfa mutata
+             * fara vanzare, ambalaje returnate, mostre. Pe ecran valorile raman
+             * goale, dar ANAF primeste zero scris limpede, nu un camp lipsa.
+             */
+            if ($declaratie->valoare_zero) {
+                $bunuri->setAttribute('valoareLeiFaraTva', '0');
+            } elseif (isset($linie['valoare_lei']) && $linie['valoare_lei'] !== null && $linie['valoare_lei'] !== '') {
                 $bunuri->setAttribute('valoareLeiFaraTva', $this->numar($linie['valoare_lei']));
             }
         }

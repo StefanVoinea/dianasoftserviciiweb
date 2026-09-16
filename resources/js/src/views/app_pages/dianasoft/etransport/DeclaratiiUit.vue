@@ -447,7 +447,31 @@
             <feather-icon icon="PlusIcon" />
             Linie nouă
           </b-button>
+
+          <!--
+            Transportul declarat fara valoare: marfa mutata fara vanzare,
+            ambalaje returnate, mostre. Bifa se pune o data, pe declaratie, in
+            loc sa fie stearsa suma de pe fiecare linie si pusa la loc de
+            fiecare recalculare.
+          -->
+          <b-form-checkbox
+            v-model="declaratia.valoare_zero"
+            class="ml-auto"
+            :disabled="!editabila"
+            @change="valoareZeroSchimbata"
+          >
+            Declarație cu valoare zero
+          </b-form-checkbox>
         </div>
+
+        <b-alert
+          :show="declaratia.valoare_zero"
+          variant="secondary"
+          class="py-1 px-2 mb-1"
+        >
+          Valorile și cursul rămân goale, iar la ANAF fiecare linie pleacă cu
+          valoarea zero. Debifați ca să se poată scrie din nou sume.
+        </b-alert>
 
         <datalist id="coduri-vamale-lista">
           <option
@@ -564,7 +588,7 @@
                     type="number"
                     step="0.01"
                     size="sm"
-                    :disabled="!editabila"
+                    :disabled="!editabila || declaratia.valoare_zero"
                     @change="recalculeazaLeii"
                   />
                 </td>
@@ -574,7 +598,7 @@
                     type="number"
                     step="0.01"
                     size="sm"
-                    :disabled="!editabila"
+                    :disabled="!editabila || declaratia.valoare_zero"
                   />
                 </td>
                 <td v-if="editabila">
@@ -625,10 +649,12 @@
                 v-model.number="declaratia.curs"
                 type="number"
                 step="0.0001"
+                :disabled="declaratia.valoare_zero"
               />
               <b-input-group-append>
                 <b-button
                   variant="outline-primary"
+                  :disabled="declaratia.valoare_zero"
                   @click="iaCursulBnr"
                 >
                   Curs BNR
@@ -668,6 +694,7 @@
               variant="outline-primary"
               size="sm"
               block
+              :disabled="declaratia.valoare_zero"
               @click="recalculeazaLeii(true)"
             >
               Recalculează valorile în lei
@@ -1532,6 +1559,8 @@ const declaratieGoala = () => ({
   linii: [],
   valuta: 'EUR',
   curs: null,
+  // Transportul declarat fara valoare, desi fisierul furnizorului are sume.
+  valoare_zero: false,
   fisiere_importate: [],
   index_incarcare: null,
   uit: null,
@@ -1965,9 +1994,11 @@ export default {
       const permise = (this.nomenclatoare.scopuri_pe_operatiune || {})[this.declaratia.tip_operatiune] || []
       const scop = permise[0] || 9999
 
+      // La declaratia cu valoare zero, sumele din fisier nu se preiau deloc.
       const linii = (rezultat.linii || []).map(linie => ({
         ...linie,
         scop_operatiune: scop,
+        valoare: this.declaratia.valoare_zero ? null : linie.valoare,
         valoare_lei: null,
       }))
 
@@ -2046,8 +2077,29 @@ export default {
           if (tacut !== true) this.eroare = this.mesajEroare(err, 'Cursul BNR nu s-a putut lua')
         })
     },
+    /**
+     * Bifa „declarație cu valoare zero": șterge ce e scris și oprește socoteala.
+     *
+     * Debifarea nu pune nimic la loc — sumele s-au șters. Se scriu din nou de
+     * mână, ori se aduc apăsând „Recalculează valorile în lei".
+     */
+    valoareZeroSchimbata(bifat) {
+      if (!bifat) return
+
+      this.declaratia.curs = null
+      this.declaratia.linii.forEach(linie => {
+        /* eslint-disable no-param-reassign */
+        linie.valoare = null
+        linie.valoare_lei = null
+        /* eslint-enable no-param-reassign */
+      })
+    },
+
     /** valoare (in valuta) x curs = valoare lei; scrie doar unde e de scris. */
     recalculeazaLeii(peste) {
+      // Cat timp declaratia e cu valoare zero, nimic nu se socoteste la loc.
+      if (this.declaratia.valoare_zero) return
+
       const curs = this.declaratia.valuta === 'RON' ? 1 : this.declaratia.curs
 
       if (!curs) return
