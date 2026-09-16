@@ -270,28 +270,11 @@
             no-gutters
             class="mb-2 align-items-center"
           >
-            <b-col
-              md="3"
-              class="pr-1"
-            >
-              <b-form-input
-                v-model="filtre.uit"
-                size="sm"
-                placeholder="Caută după UIT"
-                @change="incarcaLista"
-              />
-            </b-col>
-            <b-col
-              md="3"
-              class="pr-1"
-            >
-              <b-form-input
-                v-model="filtre.cif"
-                size="sm"
-                placeholder="Caută după CIF declarant"
-                @change="incarcaLista"
-              />
-            </b-col>
+            <!--
+              [2026-09-16] Cautarea dupa UIT si dupa CIF s-a mutat in capul
+              coloanelor, unde se cauta pe orice coloana si pe ce se vede in ea.
+              Aici a ramas doar ce restrange ce se aduce de la ANAF.
+            -->
             <b-col md="3">
               <b-form-checkbox
                 v-model="filtre.doar_erori"
@@ -489,7 +472,7 @@ export default {
       ultimaPreluare: '',
       ultimaPreluareNumar: 0,
       notificari: [],
-      filtre: { uit: '', cif: '', doar_erori: false },
+      filtre: { doar_erori: false },
       info: '',
       eroare: '',
       listaInCurs: false,
@@ -642,8 +625,6 @@ export default {
     incarcaLista() {
       this.listaInCurs = true
       const params = {}
-      if (this.filtre.uit) params.uit = this.filtre.uit
-      if (this.filtre.cif) params.cif = this.filtre.cif
       if (this.filtre.doar_erori) params.doar_erori = 1
 
       this.$http.get('/anaf-etransport', { params })

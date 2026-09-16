@@ -39,15 +39,6 @@
           Declarație nouă
         </b-button>
 
-        <b-form-select
-          v-model="filtruStare"
-          :options="optiuniFiltruStare"
-          size="sm"
-          class="ml-2"
-          style="width: auto"
-          @change="incarcaLista"
-        />
-
         <!-- Arhiva zilnica a furnizorului: cate o ciorna pe fiecare factura -->
         <b-button
           v-if="importPermis"
@@ -1644,7 +1635,6 @@ export default {
       fisiereDeImportat: [],
       grupate: true,
       greutateBrutaTotala: null,
-      filtruStare: '',
       arhivaVizibila: false,
       arhivaInCurs: false,
       arhivaFisier: null,
@@ -1737,15 +1727,6 @@ export default {
     },
     optiuniTipDocument() {
       return this.perechi(this.nomenclatoare.tipuri_document)
-    },
-    optiuniFiltruStare() {
-      return [
-        { value: '', text: 'Toate stările' },
-        { value: 'ciorna', text: 'Ciorne' },
-        { value: 'depusa', text: 'Depuse' },
-        { value: 'validata', text: 'Validate (cu UIT)' },
-        { value: 'respinsa', text: 'Respinse' },
-      ]
     },
     /** Scopurile permise la tipul de operatiune ales. */
     optiuniScop() {
@@ -1928,11 +1909,14 @@ export default {
           this.eroare = this.mesajEroare(err, 'Nomenclatoarele nu s-au putut încărca')
         })
     },
+    /*
+     * [2026-09-16] Lista vine intreaga; restrangerea se face in capul
+     * coloanelor, unde starea se cauta dupa eticheta ei, ca tot restul.
+     */
     incarcaLista() {
       this.listaInCurs = true
-      const params = this.filtruStare ? { stare: this.filtruStare } : {}
 
-      this.$http.get('/anaf-etransport/declaratii', { params })
+      this.$http.get('/anaf-etransport/declaratii')
         .then(raspuns => {
           this.declaratii = raspuns.data.data || []
         })
