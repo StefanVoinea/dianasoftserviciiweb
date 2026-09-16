@@ -245,6 +245,80 @@ class EtransportArhivaTest extends TestCase
     }
 
     /**
+     * [2026-09-16] Fișierele al căror nume nu spune nimic se recunosc din ce scrie în ele.
+     *
+     * Furnizorul le mai trimite și dezarhivate, botezate altfel și cu altă
+     * extensie: „TARIC 01 ACC SH 10076193.dat" e lista pe articole, iar
+     * „236203000002.txt" e distinta ei. Numele nu leagă una de alta — numărul
+     * facturii din antet o face.
+     */
+    public function test_fisierele_botezate_altfel_se_recunosc_din_continut()
+    {
+        $dosar = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'dat' . uniqid();
+        mkdir($dosar);
+
+        $articole = implode("\n", [
+            '     Sender.............: TEDDY S.P.A.',
+            '                          Italy                                          Vat N: 00953910403',
+            '     Documents..........:  10076193 of 07.09.2026',
+            '     Item_________ Lot Description_of_clotMade In__________________ Taric____ ____    Net_weight Quantity__ Val_Unit_price__ Price__________',
+            '     SAB0066865001   1 Pants              BD   Bangladesh           61046200  Pantaloni,tute con bretelle         9,730         70 EUR         2,45          171,48',
+            '     Total gross weight.:    KG              11,500',
+        ]);
+        $distinta = implode("\n", [
+            '    DISTINTA CON LISTINI VENDITA',
+            '    Document ....:  01 ACC SH CREDIT NOTE',
+            '    Number ......:   10076193     del  7/09/2026',
+            '    Destinazione.:  0000004 000 TEDDY S.P.A.',
+            '                                 From  S.C. EMPORIO COM SRL                     NEG0002521',
+        ]);
+
+        file_put_contents($dosar . '/TARIC 01 ACC SH 10076193.dat', $articole);
+        file_put_contents($dosar . '/236203000002.txt', $distinta);
+
+        // Magazinul are o declaratie anterioara, din care isi ia adresa.
+        EtransportDeclaratie::create([
+            'stare' => 'validata', 'tip_operatiune' => 10, 'referinta_interna' => 'Livrare veche',
+            'loc_start' => ['tip' => 'ptf', 'cod_ptf' => 38],
+            'loc_final' => [
+                'tip' => 'adresa', 'cod_judet' => 25, 'localitate' => 'BAIA MARE', 'strada' => 'BD UNIRII',
+                'numar' => '1', 'magazin_cod' => 'NEG0002521', 'magazin_denumire' => '2521 Baia Mare',
+            ],
+        ]);
+
+        $fisiere = [
+            ['nume' => 'TARIC 01 ACC SH 10076193.dat', 'cale' => $dosar . '/TARIC 01 ACC SH 10076193.dat'],
+            ['nume' => '236203000002.txt', 'cale' => $dosar . '/236203000002.txt'],
+        ];
+
+        $rezultat = (new ImportArhiva())->importaFisiere($fisiere, '15196216', null, true);
+
+        foreach ($fisiere as $fisier) {
+            @unlink($fisier['cale']);
+        }
+        @rmdir($dosar);
+
+        // Cele doua fisiere sunt ale aceleiasi facturi: un retur, deci doua declaratii.
+        $this->assertCount(2, $rezultat['ciorne']);
+
+        // Nu s-a plans de fisiere neintelese; doar de depozitul pe care nu-l stie de nicaieri.
+        $spuse = implode(' | ', $rezultat['avertismente']);
+        $this->assertStringNotContainsString('fel de fișier necunoscut', $spuse);
+        $this->assertStringContainsString('adresa depozitului', $spuse);
+
+        $ttn = EtransportDeclaratie::where('referinta_interna', 'Retur 10076193 (TTN)')->first();
+        $this->assertNotNull($ttn);
+
+        // Liniile vin din „.dat", iar magazinul de plecare din „.txt".
+        $this->assertCount(1, $ttn->linii);
+        $this->assertSame('61046200', $ttn->linii[0]['cod_tarifar']);
+        $this->assertSame('BAIA MARE', $ttn->loc_start['localitate']);
+        $this->assertSame('NEG0002521', $ttn->loc_start['magazin_cod']);
+        $this->assertSame('10076193', $ttn->documente[0]['numar']);
+        $this->assertSame('2026-09-07', $ttn->documente[0]['data']);
+    }
+
+    /**
      * [2026-09-16] Marfa de retur face două drumuri, deci două declarații.
      *
      * Din magazin la depozitul transportatorului, pe teritoriul național, apoi
@@ -291,8 +365,20 @@ class EtransportArhivaTest extends TestCase
         $this->assertSame('IT', $lic->partener_tara);
         $this->assertSame('TEDDY S.P.A.', $lic->partener_denumire);
         $this->assertSame('ORADEA', $lic->loc_start['localitate']);
-        $this->assertSame('NEG0000548', $lic->loc_start['magazin_cod']);
         $this->assertSame(38, $lic->loc_final['cod_ptf']);
+
+        /*
+         * Depozitul poarta numele magazinului, ca sa se vada a cui e declaratia,
+         * dar nu si codul lui: altfel adresa depozitului ar trece drept adresa
+         * magazinului la urmatoarea factura de la acelasi magazin.
+         */
+        $this->assertArrayNotHasKey('magazin_cod', $lic->loc_start);
+        $this->assertSame($ttn->loc_start['magazin_denumire'], $lic->loc_start['magazin_denumire']);
+
+        // Si a doua, si a treia factura a magazinului pleaca tot de la el, nu din depozit.
+        foreach (EtransportDeclaratie::where('tip_operatiune', 30)->where('referinta_interna', 'like', 'Retur 10%')->get() as $drum) {
+            $this->assertSame('BUCURESTI', $drum->loc_start['localitate'], $drum->referinta_interna);
+        }
 
         // Aceeasi marfa si aceeasi factura pe amandoua.
         $this->assertSame($ttn->linii, $lic->linii);

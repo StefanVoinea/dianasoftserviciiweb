@@ -20,6 +20,22 @@ class ImportRaportText implements ParserFisier
     protected const LINIE = '/^\s+([A-Z]{2})\s+\S.*?\s{2,}(\d{4,8})\s+(.+?)\s{2,}([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([A-Z]{3})\s+([\d.,]+)\s*$/u';
 
     /**
+     * Antetul de coloane, după care se recunoaște raportul.
+     *
+     * [2026-09-16] Furnizorul trimite aceleași rapoarte și sub alte nume, ori cu
+     * altă extensie, așa că felul lor se citește din conținut, nu din nume.
+     * „Made In" stă aici la începutul rândului; în lista pe articole el apare
+     * abia în mijlocul antetului, lipit de coloanele dinaintea lui.
+     */
+    public const SEMN = '/^\s*Made In_+/mi';
+
+    /** Este acesta recapitulația pe coduri vamale (T02)? */
+    public static function recunoaste(string $continut): bool
+    {
+        return (bool) preg_match(self::SEMN, $continut);
+    }
+
+    /**
      * Tarile cum le scrie raportul — pe englezeste in cele noi, pe italiana in
      * cele vechi — aduse la codul din declaratie. Grecia e „EL" la ANAF.
      */

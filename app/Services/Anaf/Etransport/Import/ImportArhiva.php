@@ -121,12 +121,8 @@ class ImportArhiva
 
             if ($extensie === 'zip') {
                 $this->desfaArhiva($fisier, $grupuri, $rezultat);
-            } elseif (in_array($extensie, ['txt', 'text', 'prn'], true)) {
-                if (preg_match(self::TIPAR_FISIER, $nume, $gasit)) {
-                    $grupuri[$gasit[2]][strtoupper($gasit[1])] = (string) file_get_contents($fisier['cale']);
-                } else {
-                    $rezultat['avertismente'][] = '„' . $nume . '" nu e T02, T01 sau D01; sărit.';
-                }
+            } elseif (in_array($extensie, ['txt', 'text', 'prn', 'dat'], true)) {
+                $this->aseazaRaportul($fisier, $grupuri, $rezultat);
             } elseif (in_array($extensie, ['xls', 'xlsx', 'ods'], true)) {
                 $excele[] = $fisier;
             } else {
@@ -330,12 +326,10 @@ class ImportArhiva
         }
 
         foreach (['T02', 'T01', 'D01'] as $tip) {
-            if (!isset($bucati[$tip])) {
-                continue;
-            }
+            $numar = isset($bucati[$tip]) ? $this->numarulDinContinut($bucati[$tip]) : null;
 
-            if (preg_match('/^\s*(?:Doc number|Documents|Numero documento|Number)\s*\.*\s*:\s*(\d+)\s+(?:of|del)\b/im', $bucati[$tip], $gasit)) {
-                return $gasit[1];
+            if ($numar !== null) {
+                return $numar;
             }
         }
 
@@ -467,9 +461,14 @@ class ImportArhiva
                 EtransportDeclaratie::create($comun + $partenerStrain + [
                     'referinta_interna' => 'Retur ' . $factura . ' (LIC)',
                     'tip_operatiune' => 20,
-                    // Din depozit pleaca afara din tara; magazinul ramane scris,
-                    // ca declaratia sa se stie a carui magazin e.
-                    'loc_start' => ['tip' => 'adresa'] + $depozit + $magazin,
+                    /*
+                     * Din depozit pleaca afara din tara. Din magazin ramane doar
+                     * numele, ca sa se stie a cui e declaratia; codul lui nu, ca
+                     * altfel adresa depozitului ar trece drept adresa
+                     * magazinului la urmatorul retur din acelasi magazin.
+                     */
+                    'loc_start' => ['tip' => 'adresa'] + $depozit
+                        + array_filter(['magazin_denumire' => $magazin['magazin_denumire'] ?? null]),
                     'loc_final' => $ptf,
                 ]),
             ];
@@ -483,6 +482,79 @@ class ImportArhiva
                 'loc_final' => $retur ? $ptf : $adresaMagazin,
             ]),
         ];
+    }
+
+    /**
+     * Așază un raport la factura lui.
+     *
+     * Fișierele din arhive își spun felul din nume: „T02_...", „D01_...". Cele
+     * lăsate de-a dreptul în dosar nu, iar furnizorul le mai schimbă și numele,
+     * și extensia — „TARIC 01 ACC SH 10076193.dat" e lista pe articole, iar
+     * „236203000002.txt" e distinta ei. De aceea, când numele nu spune nimic,
+     * felul se citește din conținut, iar factura de care ține din antet.
+     */
+    protected function aseazaRaportul(array $fisier, array &$grupuri, array &$rezultat): void
+    {
+        $nume = basename($fisier['nume']);
+        $continut = (string) file_get_contents($fisier['cale']);
+
+        if (preg_match(self::TIPAR_FISIER, $nume, $gasit)) {
+            $grupuri[$gasit[2]][strtoupper($gasit[1])] = $continut;
+
+            return;
+        }
+
+        $fel = $this->felulRaportului($continut);
+
+        if ($fel === null) {
+            $rezultat['avertismente'][] = '„' . $nume . '" nu e T02, T01 sau D01; sărit.';
+
+            return;
+        }
+
+        $factura = $this->numarulDinContinut($continut);
+
+        if ($factura === null) {
+            $rezultat['avertismente'][] = '„' . $nume . '" e ' . $fel
+                . ', dar nu-i găsesc numărul facturii în antet; sărit.';
+
+            return;
+        }
+
+        $grupuri[$factura][$fel] = $continut;
+    }
+
+    /**
+     * Ce fel de raport e, citit din conținut.
+     *
+     * Lista pe articole se caută prima: antetul ei poartă și „Made In", dar
+     * lipit de coloanele dinaintea lui, nu la începutul rândului ca la
+     * recapitulație.
+     */
+    protected function felulRaportului(string $continut): ?string
+    {
+        if (ImportRaportArticole::recunoaste($continut)) {
+            return 'T01';
+        }
+
+        if (ImportRaportText::recunoaste($continut)) {
+            return 'T02';
+        }
+
+        // Distinta: „DISTINTA CON LISTINI VENDITA", cu blocul „Destinazione".
+        if (preg_match('/DISTINTA|^\s*Destinazione\.*\s*:/mi', $continut)) {
+            return 'D01';
+        }
+
+        return null;
+    }
+
+    /** Numărul facturii din antetul unui raport. */
+    protected function numarulDinContinut(string $continut): ?string
+    {
+        $tipar = '/^\s*(?:Doc number|Documents|Numero documento|Number)\s*\.*\s*:\s*(\d+)\s+(?:of|del)\b/im';
+
+        return preg_match($tipar, $continut, $gasit) ? $gasit[1] : null;
     }
 
     /**
@@ -602,7 +674,22 @@ class ImportArhiva
             return ['magazin_cod' => $cod];
         }
 
-        $adresa = $anterioara->loc_magazin;
+        /*
+         * Adresa se ia din locul care poartă chiar codul căutat, nu din cel pe
+         * care l-ar bănui felul operațiunii: la transportul național (30)
+         * magazinul stă la plecare când marfa se întoarce de la el, și la
+         * sosire când i se duce, iar „loc_magazin" nu are cum să le deosebească.
+         */
+        $adresa = [];
+
+        foreach ([$anterioara->loc_magazin, (array) $anterioara->loc_start, (array) $anterioara->loc_final] as $loc) {
+            if (($loc['magazin_cod'] ?? null) === $cod) {
+                $adresa = $loc;
+
+                break;
+            }
+        }
+
         unset($adresa['tip']);
 
         return ['magazin_cod' => $cod] + $adresa;

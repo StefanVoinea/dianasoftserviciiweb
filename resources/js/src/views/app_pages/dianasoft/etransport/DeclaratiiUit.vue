@@ -367,7 +367,7 @@
               v-model="fisiereDeImportat"
               multiple
               size="sm"
-              accept=".xlsx,.xls,.ods,.txt"
+              accept=".xlsx,.xls,.ods,.txt,.dat"
               placeholder="Excel cu detaliile facturii sau raport text..."
               browse-text="Alege"
             />

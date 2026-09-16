@@ -60,7 +60,9 @@ class ImportFisiere
             return new ImportExcelDetalii();
         }
 
-        if (in_array($extensie, ['txt', 'text', 'prn'], true)) {
+        // [2026-09-16] „.dat" e tot un raport la imprimanta; furnizorul le trimite
+        // si asa, cu alt nume si alta extensie.
+        if (in_array($extensie, ['txt', 'text', 'prn', 'dat'], true)) {
             /*
              * Doua rapoarte text de la acelasi furnizor, cu acelasi antet: T02,
              * recapitulatia pe coduri vamale, si T01, lista pe articole care
