@@ -36,6 +36,13 @@ foreach (File::allFiles(__DIR__ . '/api_routes') as $route_file) {
 // pentru SPA, care o cheama dupa adresa, nu dupa nume.
 Route::post('/login','Api\AuthController@login')->middleware(['throttle:60,1']);
 Route::post('/registerAPI','Api\AuthController@register');
+/*
+ * Formularul „Solicită demo" de pe pagina de prezentare spvcurier.ro.
+ *
+ * Pagina e un fisier static pe alt domeniu, deci ruta e deschisa oricui si
+ * strunita la cateva cereri pe minut de la aceeasi adresa.
+ */
+Route::post('/cerere-demo','Api\CerereDemoController@trimite')->middleware('throttle:5,1');
 // Reinnoirea tokenului pentru aplicatiile care nu pot pastra datele clientului OAuth (cea mobila)
 Route::post('/refresh','Api\AuthController@refresh')->middleware('throttle:60,1');
 /*
