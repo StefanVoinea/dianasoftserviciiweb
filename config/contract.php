@@ -19,7 +19,7 @@ return [
         'reg_com' => 'J13/888/2003',
         'cui' => 'RO15208744',
         'iban' => env('CONTRACT_IBAN', 'RO63BTRLRONCRT0479389401'),
-        'banca' => env('CONTRACT_BANCA', 'TRANSILVANIA'),
+        'banca' => env('CONTRACT_BANCA', 'Banca Transilvania'),
         'email' => 'office@dianasoft.ro',
         'telefon' => '0744 476 969',
         'reprezentant' => env('CONTRACT_REPREZENTANT', 'STEFAN VOINEA'),
