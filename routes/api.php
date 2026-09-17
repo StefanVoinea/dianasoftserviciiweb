@@ -118,6 +118,9 @@ Route::middleware(['auth:api', 'administrator.serviciu'])->group(function () {
     Route::post('/administrare/clienti/{client}/import-declaratii', 'Api\AdministrareController@importaDeclaratii');
     Route::post('/administrare/clienti/{client}/import-declaratii/ani', 'Api\AdministrareController@aniiDeclaratiilor');
     Route::put('/administrare/clienti/{client}/abonament', 'Api\AdministrareController@salveazaAbonament');
+    // Cine pe cine a adus, si luna gratuita cuvenita fiecaruia
+    Route::put('/administrare/clienti/{client}/recomandare', 'Api\AdministrareController@salveazaRecomandare');
+    Route::post('/administrare/recomandari/{recomandare}/acorda', 'Api\AdministrareController@acordaLunaRecomandare');
     Route::put('/administrare/utilizatori/{utilizator}', 'Api\AdministrareController@actualizeazaUtilizator');
     Route::post('/administrare/utilizatori/{utilizator}/deconectare', 'Api\AdministrareController@deconecteaza');
 

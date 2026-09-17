@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AbonamentClient;
 use App\Models\Company;
 use App\Models\DianaSoftMenuOption;
+use App\Models\RecomandareClient;
 use App\Models\User;
 use App\Support\Modul;
 use App\Services\AccesIp;
@@ -33,10 +34,20 @@ class AdministrareController extends Controller
     {
         $abonamente = AbonamentClient::all()->keyBy('company_id');
 
+        // Recomandarile se citesc o data pentru toti, nu o data pe fiecare client.
+        $recomandari = RecomandareClient::all();
+        $primite = $recomandari->keyBy('company_id');
+        $facute = $recomandari->groupBy('recomandat_de_id');
+        $denumiri = Company::pluck('denumire', 'id');
+
         $clienti = Company::with(['users' => function ($intrebare) {
             $intrebare->orderBy('name');
-        }])->orderBy('denumire')->get()->map(function (Company $client) use ($abonamente) {
-            return $this->prezinta($client, $abonamente->get($client->id));
+        }])->orderBy('denumire')->get()->map(function (Company $client) use ($abonamente, $primite, $facute, $denumiri) {
+            return $this->prezinta(
+                $client,
+                $abonamente->get($client->id),
+                $this->recomandarea($client->id, $primite->get($client->id), $facute->get($client->id), $denumiri)
+            );
         });
 
         return response()->json([
@@ -294,7 +305,7 @@ class AdministrareController extends Controller
              */
             $this->potriveasteModulele($user, $client, $date['module'] ?? ['spv']);
 
-            $zile = $date['proba_zile'] ?? 30;
+            $zile = $date['proba_zile'] ?? 90;
 
             AbonamentClient::create([
                 'company_id' => $client->id,
@@ -737,6 +748,188 @@ class AdministrareController extends Controller
     }
 
     /**
+     * Cine l-a adus pe clientul acesta, pe cine a adus el, și ce luni gratuite
+     * i se cuvin sau i s-au dat deja.
+     *
+     * Primește, când sunt la îndemână, datele citite o singură dată pentru toți
+     * clienții; altfel le caută el, pentru un singur client.
+     *
+     * @param  mixed  $primita  recomandarea prin care a venit clientul
+     * @param  mixed  $facute   recomandările pe care le-a făcut el
+     * @param  mixed  $denumiri numele firmelor, pe id
+     */
+    protected function recomandarea(int $companyId, $primita = null, $facute = null, $denumiri = null): array
+    {
+        $primita = $primita ?: RecomandareClient::where('company_id', $companyId)->first();
+        $facute = $facute ?: RecomandareClient::where('recomandat_de_id', $companyId)->get();
+        $denumiri = $denumiri ?: Company::pluck('denumire', 'id');
+
+        $aduse = collect($facute)->map(function (RecomandareClient $r) use ($denumiri) {
+            return [
+                'id' => $r->id,
+                'client_id' => $r->company_id,
+                'client' => $denumiri[$r->company_id] ?? '(firmă ștearsă)',
+                'acordata_recomandantului_la' => optional($r->acordata_recomandantului_la)->format('Y-m-d'),
+                'acordata_recomandatului_la' => optional($r->acordata_recomandatului_la)->format('Y-m-d'),
+            ];
+        })->values()->all();
+
+        return [
+            // Cel care l-a adus, daca a fost adus de cineva.
+            'id' => $primita ? $primita->id : null,
+            'recomandat_de_id' => $primita ? $primita->recomandat_de_id : null,
+            'recomandat_de' => $primita ? ($denumiri[$primita->recomandat_de_id] ?? '(firmă ștearsă)') : null,
+            'luna_primita_la' => $primita ? optional($primita->acordata_recomandatului_la)->format('Y-m-d') : null,
+            'observatii' => $primita ? $primita->observatii : null,
+
+            // Pe cine a adus el si cate luni i se mai cuvin pentru ele.
+            'aduse' => $aduse,
+            'luni_de_dat' => collect($facute)->filter(function (RecomandareClient $r) {
+                return $r->acordata_recomandantului_la === null;
+            })->count(),
+        ];
+    }
+
+    /**
+     * Scrie cine l-a recomandat pe acest client, sau șterge legătura.
+     *
+     * Legătura se scrie o singură dată, pe clientul adus: de aici se vede și
+     * cui i se cuvine luna, și cine a adus pe cine. Nimeni nu se poate recomanda
+     * pe sine, iar ștergerea legăturii nu ia înapoi lunile deja date — ele s-au
+     * consumat, iar istoria lor rămâne în jurnal.
+     */
+    public function salveazaRecomandare(Request $request, Company $client)
+    {
+        $date = $request->validate([
+            'recomandat_de_id' => 'nullable|integer|exists:companies,id',
+            'observatii' => 'nullable|string|max:500',
+        ]);
+
+        $recomandantId = $date['recomandat_de_id'] ?? null;
+
+        if ($recomandantId !== null && (int) $recomandantId === (int) $client->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Un client nu se poate recomanda pe el însuși.',
+            ], 422);
+        }
+
+        $recomandare = RecomandareClient::where('company_id', $client->id)->first();
+
+        if ($recomandantId === null) {
+            if ($recomandare) {
+                $recomandare->delete();
+
+                Jurnal::scrie(
+                    'administrare_recomandare',
+                    'A șters recomandarea clientului „' . $client->denumire . '”',
+                    ['company_id' => $client->id]
+                );
+            }
+
+            return $this->raspundeCuClientul($client);
+        }
+
+        $recomandare = $recomandare ?: new RecomandareClient(['company_id' => $client->id]);
+        $recomandare->company_id = $client->id;
+        $recomandare->recomandat_de_id = (int) $recomandantId;
+
+        if (array_key_exists('observatii', $date)) {
+            $recomandare->observatii = $date['observatii'];
+        }
+
+        $recomandare->save();
+
+        Jurnal::scrie(
+            'administrare_recomandare',
+            'A scris că „' . $client->denumire . '” a fost adus de „'
+                . optional(Company::find($recomandantId))->denumire . '”',
+            $date
+        );
+
+        return $this->raspundeCuClientul($client);
+    }
+
+    /**
+     * Dă luna gratuită cuvenită pe o recomandare.
+     *
+     * „cui" spune cui: celui care a adus („recomandant") sau celui adus
+     * („recomandat"). Luna se dă o singură dată fiecăruia — a doua apăsare nu
+     * mai face nimic — și se așază la coada dreptului de lucru, niciodată în
+     * trecut. Clientul trebuie să aibă un abonament; fără el n-ar avea unde
+     * să i se adauge luna.
+     */
+    public function acordaLunaRecomandare(Request $request, RecomandareClient $recomandare)
+    {
+        $date = $request->validate([
+            'cui' => 'required|in:recomandant,recomandat',
+            'luni' => 'nullable|integer|min:1|max:12',
+        ]);
+
+        $luni = (int) ($date['luni'] ?? 1);
+        $catreRecomandant = $date['cui'] === 'recomandant';
+
+        $camp = $catreRecomandant ? 'acordata_recomandantului_la' : 'acordata_recomandatului_la';
+
+        if ($recomandare->$camp !== null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Luna a fost deja acordată, la '
+                    . $recomandare->$camp->format('d.m.Y') . '.',
+            ], 422);
+        }
+
+        $companieId = $catreRecomandant ? $recomandare->recomandat_de_id : $recomandare->company_id;
+        $companie = Company::find($companieId);
+
+        if ($companie === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Firma căreia i se cuvine luna nu mai există.',
+            ], 422);
+        }
+
+        $abonament = AbonamentClient::alClientului($companieId);
+
+        if ($abonament === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Clientul „' . $companie->denumire . '” nu are abonament,'
+                    . ' așa că luna n-are unde fi adăugată. Faceți-i întâi abonamentul.',
+            ], 422);
+        }
+
+        $panaLa = $abonament->adaugaLuniGratuite($luni);
+
+        $recomandare->$camp = now()->toDateString();
+        $recomandare->save();
+
+        Jurnal::scrie(
+            'administrare_recomandare',
+            'A dat ' . $luni . ($luni === 1 ? ' lună gratuită' : ' luni gratuite') . ' clientului „'
+                . $companie->denumire . '” pentru recomandare; are acces până la '
+                . Carbon::parse($panaLa)->format('d.m.Y'),
+            ['recomandare_id' => $recomandare->id, 'cui' => $date['cui'], 'luni' => $luni]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Clientul „' . $companie->denumire . '” are acces până la '
+                . Carbon::parse($panaLa)->format('d.m.Y') . '.',
+            'data' => $this->prezinta($companie->fresh('users'), $abonament->fresh()),
+        ]);
+    }
+
+    /** Raspunsul obisnuit dupa o schimbare pe un client: clientul, cum arata acum. */
+    protected function raspundeCuClientul(Company $client)
+    {
+        return response()->json([
+            'success' => true,
+            'data' => $this->prezinta($client->fresh('users'), AbonamentClient::alClientului($client->id)),
+        ]);
+    }
+
+    /**
      * Scrie modulele date contului si intoarce numele lor.
      *
      * Sunt doua scrieri, pentru ca sunt doua feluri de a le arata:
@@ -860,12 +1053,13 @@ class AdministrareController extends Controller
         return $cate;
     }
 
-    protected function prezinta(Company $client, ?AbonamentClient $abonament): array
+    protected function prezinta(Company $client, ?AbonamentClient $abonament, ?array $recomandare = null): array
     {
         return [
             'id' => $client->id,
             'denumire' => $client->denumire,
             'cui' => $client->cui,
+            'recomandare' => $recomandare ?? $this->recomandarea($client->id),
             'abonament' => $abonament ? [
                 'tarif_lunar' => $abonament->tarif_lunar,
                 'proba_zile' => $abonament->proba_zile,

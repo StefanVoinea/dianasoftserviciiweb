@@ -228,6 +228,24 @@
               >
                 Abonament
               </b-button>
+              <!-- Cine l-a adus și pe cine a adus el, cu lunile gratuite cuvenite -->
+              <b-button
+                size="sm"
+                :variant="rand.item.recomandare && rand.item.recomandare.luni_de_dat > 0
+                  ? 'outline-warning'
+                  : 'outline-primary'"
+                class="d-block butoane-actiuni mb-50"
+                title="Cine l-a recomandat, pe cine a recomandat și lunile gratuite cuvenite"
+                @click="deschideRecomandare(rand.item)"
+              >
+                Recomandări
+                <b-badge
+                  v-if="rand.item.recomandare && rand.item.recomandare.luni_de_dat > 0"
+                  variant="warning"
+                >
+                  {{ rand.item.recomandare.luni_de_dat }}
+                </b-badge>
+              </b-button>
               <!-- Periodicitățile declarațiilor, aduse din programul vechi al clientului -->
               <b-button
                 size="sm"
@@ -1001,6 +1019,34 @@
         </b-col>
       </b-row>
 
+      <!-- Proba din ofertă, la o apăsare: 90 de zile, fără card. -->
+      <div class="mt-50 mb-2">
+        <b-button
+          size="sm"
+          variant="outline-primary"
+          class="mr-50"
+          title="Proba din ofertă: 90 de zile, socotite de azi"
+          @click="dauProba(90)"
+        >
+          90 de zile, de azi
+        </b-button>
+        <b-button
+          size="sm"
+          variant="outline-secondary"
+          class="mr-50"
+          @click="prelungesteProba(30)"
+        >
+          +30 de zile
+        </b-button>
+        <b-button
+          size="sm"
+          variant="outline-secondary"
+          @click="prelungesteProba(90)"
+        >
+          +90 de zile
+        </b-button>
+      </div>
+
       <label class="mt-2">Abonament plătit până la</label>
       <b-form-input
         v-model="abonament.platit_pana_la"
@@ -1052,6 +1098,141 @@
         v-model="abonament.observatii"
         rows="2"
       />
+    </b-modal>
+
+    <!-- Cine l-a adus, pe cine a adus el, si lunile gratuite cuvenite -->
+    <b-modal
+      v-model="recomandareVizibil"
+      :title="'Recomandări — ' + (clientCurent.denumire || '')"
+      size="lg"
+      ok-only
+      ok-title="Închide"
+    >
+      <b-alert
+        v-if="eroareFormular"
+        show
+        variant="danger"
+        class="py-1 px-2 small"
+      >
+        {{ eroareFormular }}
+      </b-alert>
+      <b-alert
+        v-if="mesajRecomandare"
+        show
+        variant="success"
+        class="py-1 px-2 small"
+      >
+        {{ mesajRecomandare }}
+      </b-alert>
+
+      <p class="small text-muted mb-1">
+        Clientul care recomandă primește o lună gratuită, și tot o lună primește și cel recomandat.
+        Luna se adaugă la coada dreptului de lucru, niciodată în trecut, și se dă o singură dată fiecăruia.
+      </p>
+
+      <h6 class="mt-2">
+        Cine l-a adus
+      </h6>
+      <b-row>
+        <b-col cols="7">
+          <b-form-select
+            v-model="recomandare.recomandat_de_id"
+            :options="clientiDeAles"
+          />
+        </b-col>
+        <b-col cols="5">
+          <b-button
+            size="sm"
+            variant="primary"
+            @click="salveazaRecomandare"
+          >
+            Salvează
+          </b-button>
+        </b-col>
+      </b-row>
+      <b-form-input
+        v-model="recomandare.observatii"
+        placeholder="Observații (de unde se știe, când)"
+        class="mt-1"
+      />
+
+      <div
+        v-if="recomandare.id"
+        class="mt-1 small"
+      >
+        <span v-if="recomandare.luna_primita_la">
+          Luna cuvenită acestui client a fost acordată la
+          {{ dataRo(recomandare.luna_primita_la) }}.
+        </span>
+        <b-button
+          v-else
+          size="sm"
+          variant="outline-success"
+          @click="acordaLuna(recomandare.id, 'recomandat')"
+        >
+          Acordă luna gratuită acestui client
+        </b-button>
+      </div>
+
+      <hr>
+
+      <h6>
+        Pe cine a adus
+      </h6>
+      <p
+        v-if="!recomandare.aduse || !recomandare.aduse.length"
+        class="small text-muted mb-0"
+      >
+        Încă n-a adus pe nimeni.
+      </p>
+      <b-table-simple
+        v-else
+        small
+        responsive
+        class="mb-0"
+      >
+        <b-thead>
+          <b-tr>
+            <b-th>Clientul adus</b-th>
+            <b-th>Luna lui {{ clientCurent.denumire }}</b-th>
+            <b-th>Luna clientului adus</b-th>
+          </b-tr>
+        </b-thead>
+        <b-tbody>
+          <b-tr
+            v-for="adus in recomandare.aduse"
+            :key="adus.id"
+          >
+            <b-td>{{ adus.client }}</b-td>
+            <b-td>
+              <span v-if="adus.acordata_recomandantului_la">
+                acordată la {{ dataRo(adus.acordata_recomandantului_la) }}
+              </span>
+              <b-button
+                v-else
+                size="sm"
+                variant="outline-success"
+                @click="acordaLuna(adus.id, 'recomandant')"
+              >
+                Acordă
+              </b-button>
+            </b-td>
+            <b-td>
+              <span v-if="adus.acordata_recomandatului_la">
+                acordată la {{ dataRo(adus.acordata_recomandatului_la) }}
+              </span>
+              <b-button
+                v-else
+                size="sm"
+                variant="outline-success"
+                @click="acordaLuna(adus.id, 'recomandat')"
+              >
+                Acordă
+              </b-button>
+            </b-td>
+          </b-tr>
+        </b-tbody>
+      </b-table-simple>
     </b-modal>
   </div>
 </template>
@@ -1133,6 +1314,11 @@ export default {
       abonamentVizibil: false,
       abonament: {},
 
+      // Cine pe cine a adus, și lunile gratuite cuvenite
+      recomandareVizibil: false,
+      recomandare: {},
+      mesajRecomandare: '',
+
       notificareVizibila: false,
       notificare: {},
       trimitereInCurs: false,
@@ -1158,6 +1344,14 @@ export default {
     optiuniClienti() {
       return this.clienti.map(client => ({ value: client.id, text: client.denumire }))
     },
+    /** Cine poate fi trecut drept cel care a adus clientul deschis: oricine, afară de el. */
+    clientiDeAles() {
+      return [{ value: null, text: '— nu a fost recomandat de nimeni —' }].concat(
+        this.clienti
+          .filter(client => client.id !== this.clientCurent.id)
+          .map(client => ({ value: client.id, text: client.denumire })),
+      )
+    },
   },
   watch: {
     // Alt fisier inseamna alti ani: ce era citit pentru cel vechi nu mai e bun.
@@ -1182,7 +1376,8 @@ export default {
       })
   },
   methods: {
-    incarca() {
+    /** Lista clienților. „Apoi" se cheamă după ce lista e proaspătă, dacă e dat. */
+    incarca(apoi) {
       this.listaInCurs = true
       this.eroare = ''
 
@@ -1190,6 +1385,10 @@ export default {
         .then(({ data }) => {
           this.clienti = data.data
           this.moduleAplicatie = data.module || []
+
+          if (typeof apoi === 'function') {
+            apoi()
+          }
         })
         .catch(err => {
           this.eroare = this.mesajEroare(err, 'Lista clienților nu a putut fi încărcată')
@@ -1235,7 +1434,7 @@ export default {
     deschideClientNou() {
       this.eroareFormular = ''
       this.clientNou = {
-        denumire: '', cui: '', nume: '', email: '', parola: '', proba_zile: 30,
+        denumire: '', cui: '', nume: '', email: '', parola: '', proba_zile: 90,
       }
       this.clientVizibil = true
     },
@@ -1500,7 +1699,7 @@ export default {
         ? { ...client.abonament }
         : {
           tarif_lunar: 0,
-          proba_zile: 30,
+          proba_zile: 90,
           proba_pana_la: null,
           platit_pana_la: null,
           blocat: false,
@@ -1511,6 +1710,82 @@ export default {
           observatii: '',
         }
       this.abonamentVizibil = true
+    },
+    /** Proba din ofertă: atâtea zile, socotite de azi. */
+    dauProba(zile) {
+      const pana = new Date()
+      pana.setDate(pana.getDate() + zile)
+
+      this.$set(this.abonament, 'proba_zile', zile)
+      this.$set(this.abonament, 'proba_pana_la', pana.toISOString().slice(0, 10))
+    },
+    /**
+     * Mai adaugă zile la probă, de la capătul ei.
+     *
+     * Dacă proba s-a încheiat deja, zilele se socotesc de azi: o prelungire
+     * trebuie să însemne zile de acum, nu zile consumate demult.
+     */
+    prelungesteProba(zile) {
+      const azi = new Date()
+      const capat = this.abonament.proba_pana_la ? new Date(this.abonament.proba_pana_la) : azi
+      const deLa = capat > azi ? capat : azi
+
+      deLa.setDate(deLa.getDate() + zile)
+
+      this.$set(this.abonament, 'proba_pana_la', deLa.toISOString().slice(0, 10))
+    },
+    /** O dată, pe românește. */
+    dataRo(data) {
+      if (!data) return ''
+
+      const [an, luna, zi] = data.split('-')
+
+      return `${zi}.${luna}.${an}`
+    },
+    deschideRecomandare(client) {
+      this.eroareFormular = ''
+      this.mesajRecomandare = ''
+      this.clientCurent = client
+      this.recomandare = { ...(client.recomandare || { recomandat_de_id: null, aduse: [] }) }
+      this.recomandareVizibil = true
+    },
+    salveazaRecomandare() {
+      this.eroareFormular = ''
+      this.mesajRecomandare = ''
+
+      this.$http.put(`/administrare/clienti/${this.clientCurent.id}/recomandare`, {
+        recomandat_de_id: this.recomandare.recomandat_de_id,
+        observatii: this.recomandare.observatii,
+      })
+        .then(raspuns => {
+          this.mesajRecomandare = 'Legătura a fost salvată.'
+          this.recomandare = { ...(raspuns.data.data.recomandare || {}) }
+          this.incarca()
+        })
+        .catch(err => {
+          this.eroareFormular = this.mesajEroare(err, 'Legătura nu a putut fi salvată')
+        })
+    },
+    /** Dă luna gratuită celui căruia i se cuvine pe recomandarea asta. */
+    acordaLuna(recomandareId, cui) {
+      this.eroareFormular = ''
+      this.mesajRecomandare = ''
+
+      this.$http.post(`/administrare/recomandari/${recomandareId}/acorda`, { cui })
+        .then(raspuns => {
+          this.mesajRecomandare = raspuns.data.message
+          this.incarca(() => {
+            const proaspat = this.clienti.find(client => client.id === this.clientCurent.id)
+
+            if (proaspat) {
+              this.clientCurent = proaspat
+              this.recomandare = { ...(proaspat.recomandare || {}) }
+            }
+          })
+        })
+        .catch(err => {
+          this.eroareFormular = this.mesajEroare(err, 'Luna nu a putut fi acordată')
+        })
     },
     salveazaAbonament() {
       this.eroareFormular = ''

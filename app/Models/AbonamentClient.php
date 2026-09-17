@@ -98,6 +98,33 @@ class AbonamentClient extends Model
             . ($this->platit_pana_la ? ' la ' . $this->platit_pana_la->format('d.m.Y') : '') . '.';
     }
 
+    /**
+     * Adaugă luni gratuite la coada dreptului de lucru.
+     *
+     * Se pornește de la ziua până la care clientul are oricum acces — plata sau
+     * proba, care ține mai mult — și niciodată din trecut: o lună dată cuiva cu
+     * abonamentul expirat de un an trebuie să însemne o lună de acum, nu una
+     * consumată demult. Rezultatul se scrie la „platit_pana_la": luna e dăruită,
+     * dar e tot abonament, nu probă.
+     *
+     * @return string ziua până la care are acces după ce i s-a dat luna
+     */
+    public function adaugaLuniGratuite(int $luni = 1): string
+    {
+        $capat = now()->startOfDay();
+
+        foreach ([$this->platit_pana_la, $this->proba_pana_la] as $data) {
+            if ($data !== null && $data->greaterThan($capat)) {
+                $capat = $data->copy();
+            }
+        }
+
+        $this->platit_pana_la = $capat->addMonthsNoOverflow($luni)->toDateString();
+        $this->save();
+
+        return $this->platit_pana_la->format('Y-m-d');
+    }
+
     /** Abonamentul clientului, daca i s-a facut unul. */
     public static function alClientului($companieId): ?self
     {
