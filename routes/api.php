@@ -110,6 +110,9 @@ Route::middleware(['auth:api', 'administrator.serviciu'])->group(function () {
     Route::post('/marketing/trimite', 'Api\MarketingController@trimite');
     Route::post('/marketing/previzualizare', 'Api\MarketingController@previzualizare');
     Route::post('/marketing/sterge', 'Api\MarketingController@sterge');
+    // Datele firmei, de la ANAF, dupa codul fiscal
+    Route::get('/administrare/firma-anaf', 'Api\AdministrareController@firmaAnaf');
+
     Route::post('/administrare/clienti', 'Api\AdministrareController@creeazaClient');
     Route::post('/administrare/clienti/{client}/utilizatori', 'Api\AdministrareController@creeazaUtilizator');
     Route::post('/administrare/utilizatori/{utilizator}/impersoneaza', 'Api\AdministrareController@impersoneaza');

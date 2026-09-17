@@ -11,6 +11,7 @@ use App\Models\RecomandareClient;
 use App\Models\User;
 use App\Support\Modul;
 use App\Services\AccesIp;
+use App\Services\Anaf\DateFirma;
 use App\Services\Anaf\Format;
 use App\Services\Anaf\ImportVectorMf;
 use App\Services\Anaf\Jurnal;
@@ -255,11 +256,38 @@ class AdministrareController extends Controller
     }
 
     /** Client nou, cu primul lui cont de administrator. */
+    /**
+     * Ce știe ANAF despre firma cu acest cod fiscal.
+     *
+     * Se cheamă la apăsarea omului, nu la fiecare tastă: serviciul ANAF are
+     * limită de apeluri, iar un client nou se adaugă o dată.
+     */
+    public function firmaAnaf(Request $request, DateFirma $anaf)
+    {
+        $date = $request->validate(['cui' => 'required|string|max:20']);
+
+        $firma = $anaf->dupaCui($date['cui']);
+
+        if ($firma === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'ANAF nu are nicio firmă cu acest cod fiscal, sau serviciul lor nu răspunde acum.',
+            ], 404);
+        }
+
+        return response()->json(['success' => true, 'data' => $firma]);
+    }
+
     public function creeazaClient(Request $request)
     {
         $date = $request->validate([
             'denumire' => 'required|string|max:191',
             'cui' => 'nullable|string|max:20',
+            'regcom' => 'nullable|string|max:60',
+            'adresa' => 'nullable|string|max:300',
+            'localitate' => 'nullable|string|max:120',
+            'judet' => 'nullable|string|max:120',
+            'cod_caen' => 'nullable|string|max:10',
             'email' => 'required|email|max:191|unique:users,email',
             'nume' => 'required|string|max:191',
             'parola' => 'required|string|min:8|max:191',
@@ -270,9 +298,19 @@ class AdministrareController extends Controller
         ]);
 
         $client = DB::transaction(function () use ($date) {
+            /*
+             * Datele firmei vin de la ANAF, dupa codul fiscal. Se scriu aici
+             * fiindca de aici le ia mai departe contractul: adresa si numarul
+             * de la Registrul Comertului nu se mai cer inca o data.
+             */
             $client = Company::create([
                 'denumire' => $date['denumire'],
                 'cui' => $date['cui'] ?? null,
+                'regcom' => $date['regcom'] ?? null,
+                'adresa' => $date['adresa'] ?? null,
+                'localitate' => $date['localitate'] ?? null,
+                'judet' => $date['judet'] ?? null,
+                'cod_caen' => $date['cod_caen'] ?? null,
             ]);
 
             $user = User::create([
@@ -1200,6 +1238,10 @@ class AdministrareController extends Controller
             'id' => $client->id,
             'denumire' => $client->denumire,
             'cui' => $client->cui,
+            // Datele de la ANAF, din care se umple contractul fara sa fie cerute iar.
+            'regcom' => $client->regcom,
+            'adresa' => $client->adresa,
+            'telefon' => $client->telefon,
             'recomandare' => $recomandare ?? $this->recomandarea($client->id),
             'contract' => $contract ?? $this->contractul($client),
             'abonament' => $abonament ? [

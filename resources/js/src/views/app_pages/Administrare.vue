@@ -607,17 +607,56 @@
         {{ eroareFormular }}
       </b-alert>
 
+      <label>CUI</label>
+      <b-input-group class="mb-1">
+        <b-form-input
+          v-model="clientNou.cui"
+          placeholder="RO15208744"
+          @keyup.enter="preiaDeLaAnaf"
+          @blur="preiaDeLaAnaf"
+        />
+        <b-input-group-append>
+          <b-button
+            variant="outline-primary"
+            :disabled="anafInCurs"
+            @click="preiaDeLaAnaf(true)"
+          >
+            {{ anafInCurs ? 'Se întreabă ANAF…' : 'Preia de la ANAF' }}
+          </b-button>
+        </b-input-group-append>
+      </b-input-group>
+
+      <b-alert
+        v-if="mesajAnaf"
+        show
+        :variant="variantaAnaf"
+        class="py-50 px-1 small"
+      >
+        {{ mesajAnaf }}
+      </b-alert>
+
       <label>Denumirea firmei</label>
       <b-form-input
         v-model="clientNou.denumire"
-        class="mb-2"
+        class="mb-1"
       />
 
-      <label>CUI</label>
+      <label>Sediul</label>
       <b-form-input
-        v-model="clientNou.cui"
-        class="mb-2"
+        v-model="clientNou.adresa"
+        class="mb-1"
       />
+
+      <b-row class="mb-2">
+        <b-col cols="7">
+          <label>Reg. Comerțului</label>
+          <b-form-input v-model="clientNou.regcom" />
+        </b-col>
+        <b-col cols="5">
+          <label>Cod CAEN</label>
+          <b-form-input v-model="clientNou.cod_caen" />
+        </b-col>
+      </b-row>
 
       <hr>
       <p class="text-muted small">
@@ -1175,7 +1214,19 @@
         </b-col>
         <b-col cols="4">
           <label>CUI</label>
-          <b-form-input v-model="contract.beneficiar_cui" />
+          <b-input-group>
+            <b-form-input v-model="contract.beneficiar_cui" />
+            <b-input-group-append>
+              <b-button
+                variant="outline-secondary"
+                :disabled="anafInCurs"
+                title="Completează din datele ANAF ce a rămas gol"
+                @click="preiaContractDeLaAnaf"
+              >
+                ANAF
+              </b-button>
+            </b-input-group-append>
+          </b-input-group>
         </b-col>
       </b-row>
       <label class="mt-1">Sediul</label>
@@ -1446,6 +1497,12 @@ export default {
       clientVizibil: false,
       clientNou: {},
 
+      // Interogarea ANAF după codul fiscal
+      anafInCurs: false,
+      mesajAnaf: '',
+      variantaAnaf: 'success',
+      cuiIntrebat: '',
+
       // Importul vectorului din programul vechi (vector.mde)
       importVectorVizibil: false,
       importVectorInCurs: false,
@@ -1636,10 +1693,76 @@ export default {
     },
     deschideClientNou() {
       this.eroareFormular = ''
+      this.mesajAnaf = ''
+      this.cuiIntrebat = ''
       this.clientNou = {
-        denumire: '', cui: '', nume: '', email: '', parola: '', proba_zile: 90,
+        denumire: '',
+        cui: '',
+        regcom: '',
+        adresa: '',
+        localitate: '',
+        judet: '',
+        cod_caen: '',
+        nume: '',
+        email: '',
+        parola: '',
+        proba_zile: 90,
       }
       this.clientVizibil = true
+    },
+    /**
+     * Datele firmei, cerute de la ANAF după codul fiscal.
+     *
+     * Se întreabă la ieșirea din câmp sau la apăsarea butonului, nu la fiecare
+     * tastă: serviciul ANAF are limită de apeluri. Același cod nu se întreabă
+     * de două ori la rând — afară de cazul când omul cere el asta, apăsând.
+     *
+     * Ce vine de la ANAF nu calcă peste ce a scris omul: se completează doar
+     * câmpurile rămase goale.
+     */
+    preiaDeLaAnaf(cerutDeOm) {
+      const cui = (this.clientNou.cui || '').trim()
+
+      if (cui === '' || this.anafInCurs) return
+      if (cui === this.cuiIntrebat && cerutDeOm !== true) return
+
+      this.anafInCurs = true
+      this.cuiIntrebat = cui
+      this.mesajAnaf = ''
+
+      this.intreabaAnaf(cui)
+        .then(firma => {
+          this.clientNou = {
+            ...this.clientNou,
+            denumire: this.clientNou.denumire || firma.denumire,
+            regcom: this.clientNou.regcom || firma.reg_com,
+            adresa: this.clientNou.adresa || firma.adresa,
+            localitate: this.clientNou.localitate || firma.localitate,
+            judet: this.clientNou.judet || firma.judet,
+            cod_caen: this.clientNou.cod_caen || firma.cod_caen,
+          }
+
+          this.mesajAnaf = this.stareaFirmei(firma)
+          this.variantaAnaf = firma.radiata || firma.inactiva ? 'warning' : 'success'
+        })
+        .catch(err => {
+          this.mesajAnaf = this.mesajEroare(err, 'ANAF nu a răspuns. Datele se pot scrie și de mână.')
+          this.variantaAnaf = 'warning'
+        })
+        .finally(() => {
+          this.anafInCurs = false
+        })
+    },
+    intreabaAnaf(cui) {
+      return this.$http.get('/administrare/firma-anaf', { params: { cui } })
+        .then(raspuns => raspuns.data.data)
+    },
+    /** Ce merită spus despre firma găsită: mai ales când e ceva în neregulă cu ea. */
+    stareaFirmei(firma) {
+      if (firma.radiata) return `${firma.denumire} — atenție, firma e radiată (${firma.stare}).`
+      if (firma.inactiva) return `${firma.denumire} — atenție, firma e declarată inactivă.`
+
+      return `${firma.denumire}, ${firma.platitor_tva ? 'plătitoare de TVA' : 'neplătitoare de TVA'}.`
     },
     salveazaClient() {
       this.eroareFormular = ''
@@ -1962,12 +2085,12 @@ export default {
         durata: date.durata || 'de 12 luni',
         beneficiar_denumire: date.beneficiar_denumire || client.denumire || '',
         beneficiar_cui: date.beneficiar_cui || client.cui || '',
-        beneficiar_adresa: date.beneficiar_adresa || '',
-        beneficiar_reg_com: date.beneficiar_reg_com || '',
+        beneficiar_adresa: date.beneficiar_adresa || client.adresa || '',
+        beneficiar_reg_com: date.beneficiar_reg_com || client.regcom || '',
         beneficiar_iban: date.beneficiar_iban || '',
         beneficiar_banca: date.beneficiar_banca || '',
         beneficiar_email: date.beneficiar_email || '',
-        beneficiar_telefon: date.beneficiar_telefon || '',
+        beneficiar_telefon: date.beneficiar_telefon || client.telefon || '',
         beneficiar_reprezentant: date.beneficiar_reprezentant || '',
         beneficiar_functie: date.beneficiar_functie || 'administrator',
         plan: date.plan || null,
@@ -1979,6 +2102,35 @@ export default {
       }
 
       this.contractVizibil = true
+    },
+    /** Umple din datele ANAF câmpurile beneficiarului rămase goale. */
+    preiaContractDeLaAnaf() {
+      const cui = (this.contract.beneficiar_cui || '').trim()
+
+      if (cui === '' || this.anafInCurs) return
+
+      this.anafInCurs = true
+      this.eroareFormular = ''
+      this.mesajContract = ''
+
+      this.intreabaAnaf(cui)
+        .then(firma => {
+          this.contract = {
+            ...this.contract,
+            beneficiar_denumire: this.contract.beneficiar_denumire || firma.denumire,
+            beneficiar_adresa: this.contract.beneficiar_adresa || firma.adresa,
+            beneficiar_reg_com: this.contract.beneficiar_reg_com || firma.reg_com,
+            beneficiar_telefon: this.contract.beneficiar_telefon || firma.telefon,
+          }
+
+          this.mesajContract = this.stareaFirmei(firma)
+        })
+        .catch(err => {
+          this.eroareFormular = this.mesajEroare(err, 'ANAF nu a răspuns. Datele se pot scrie și de mână.')
+        })
+        .finally(() => {
+          this.anafInCurs = false
+        })
     },
     salveazaContract() {
       this.eroareFormular = ''
