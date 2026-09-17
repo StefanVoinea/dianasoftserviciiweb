@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AbonamentClient;
 use App\Models\Company;
+use App\Models\ContractClient;
 use App\Models\DianaSoftMenuOption;
 use App\Models\RecomandareClient;
 use App\Models\User;
@@ -39,14 +40,16 @@ class AdministrareController extends Controller
         $primite = $recomandari->keyBy('company_id');
         $facute = $recomandari->groupBy('recomandat_de_id');
         $denumiri = Company::pluck('denumire', 'id');
+        $contracte = ContractClient::all()->keyBy('company_id');
 
         $clienti = Company::with(['users' => function ($intrebare) {
             $intrebare->orderBy('name');
-        }])->orderBy('denumire')->get()->map(function (Company $client) use ($abonamente, $primite, $facute, $denumiri) {
+        }])->orderBy('denumire')->get()->map(function (Company $client) use ($abonamente, $primite, $facute, $denumiri, $contracte) {
             return $this->prezinta(
                 $client,
                 $abonamente->get($client->id),
-                $this->recomandarea($client->id, $primite->get($client->id), $facute->get($client->id), $denumiri)
+                $this->recomandarea($client->id, $primite->get($client->id), $facute->get($client->id), $denumiri),
+                $this->contractul($client, $contracte->get($client->id))
             );
         });
 
@@ -920,6 +923,140 @@ class AdministrareController extends Controller
         ]);
     }
 
+    /**
+     * Datele din care iese contractul clientului.
+     *
+     * Ce nu s-a scris încă se întoarce gol, dar cu numele lui: fereastra din
+     * Administrare arată exact ce mai trebuie cerut de la client înainte ca
+     * documentul să iasă întreg.
+     */
+    protected function contractul(Company $client, ?ContractClient $contract = null): array
+    {
+        $contract = $contract ?: ContractClient::alClientului($client->id);
+
+        if ($contract === null) {
+            return ['exista' => false, 'lipsesc' => null];
+        }
+
+        $date = [
+            'exista' => true,
+            'numar' => $contract->numar,
+            'data' => optional($contract->data)->format('Y-m-d'),
+            'plan' => $contract->plan,
+            'periodicitate' => $contract->periodicitate,
+            'durata' => $contract->durata,
+            'data_activare' => optional($contract->data_activare)->format('Y-m-d'),
+            'data_facturare' => optional($contract->data_facturare)->format('Y-m-d'),
+            'observatii' => $contract->observatii,
+            'lipsesc' => $contract->ceLipseste(),
+        ];
+
+        foreach (['denumire', 'adresa', 'reg_com', 'cui', 'iban', 'banca', 'email', 'telefon', 'reprezentant', 'functie'] as $camp) {
+            $date['beneficiar_' . $camp] = $contract->{'beneficiar_' . $camp};
+        }
+
+        return $date;
+    }
+
+    /**
+     * Scrie datele contractului unui client.
+     *
+     * Prima oară se pornește de la ce știe deja aplicația — denumirea și CUI-ul
+     * firmei —, ca omul să nu le mai scrie o dată.
+     */
+    public function salveazaContract(Request $request, Company $client)
+    {
+        $date = $request->validate([
+            'numar' => 'nullable|string|max:40',
+            'data' => 'nullable|date',
+            'beneficiar_denumire' => 'nullable|string|max:200',
+            'beneficiar_adresa' => 'nullable|string|max:300',
+            'beneficiar_reg_com' => 'nullable|string|max:60',
+            'beneficiar_cui' => 'nullable|string|max:40',
+            'beneficiar_iban' => 'nullable|string|max:60',
+            'beneficiar_banca' => 'nullable|string|max:120',
+            'beneficiar_email' => 'nullable|email|max:190',
+            'beneficiar_telefon' => 'nullable|string|max:60',
+            'beneficiar_reprezentant' => 'nullable|string|max:120',
+            'beneficiar_functie' => 'nullable|string|max:80',
+            'plan' => 'nullable|string|max:20',
+            'periodicitate' => 'nullable|in:lunar,anual',
+            'durata' => 'nullable|string|max:60',
+            'data_activare' => 'nullable|date',
+            'data_facturare' => 'nullable|date',
+            'observatii' => 'nullable|string|max:2000',
+        ]);
+
+        $contract = ContractClient::firstOrNew(['company_id' => $client->id]);
+        $contract->company_id = $client->id;
+
+        foreach ($date as $camp => $valoare) {
+            $contract->$camp = $valoare;
+        }
+
+        // Ce nu s-a scris se ia de unde se stie deja.
+        $contract->beneficiar_denumire = $contract->beneficiar_denumire ?: $client->denumire;
+        $contract->beneficiar_cui = $contract->beneficiar_cui ?: $client->cui;
+
+        $contract->save();
+
+        Jurnal::scrie(
+            'administrare_contract',
+            'A actualizat datele de contract ale clientului „' . $client->denumire . '”',
+            ['company_id' => $client->id]
+        );
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->contractul($client, $contract->fresh()),
+        ]);
+    }
+
+    /**
+     * Contractul, în PDF, gata de semnat electronic.
+     *
+     * Iese și neîntreg, cu liniile punctate acolo unde nu s-a scris nimic: de
+     * multe ori tocmai așa se duce la client, ca să se completeze împreună.
+     */
+    public function contractPdf(Company $client)
+    {
+        $contract = ContractClient::alClientului($client->id);
+
+        if ($contract === null) {
+            $contract = new ContractClient([
+                'company_id' => $client->id,
+                'beneficiar_denumire' => $client->denumire,
+                'beneficiar_cui' => $client->cui,
+            ]);
+        }
+
+        $contract->setRelation('client', $client);
+
+        $pdf = \Barryvdh\Snappy\Facades\SnappyPdf::loadView('contracte.spv-curier', [
+            'c' => $contract,
+            'prestator' => config('contract.prestator'),
+            'planuri' => config('contract.planuri'),
+            'serviciu' => config('contract.serviciu'),
+            'subimputerniciti' => config('contract.subimputerniciti'),
+        ])
+            ->setPaper('a4')
+            ->setOption('encoding', 'UTF-8')
+            ->setOption('margin-top', 16)
+            ->setOption('margin-bottom', 14)
+            ->setOption('margin-left', 14)
+            ->setOption('margin-right', 14)
+            ->setOption('footer-center', 'Contract SPV Curier — pagina [page] din [topage]')
+            ->setOption('footer-font-size', 7);
+
+        Jurnal::scrie(
+            'administrare_contract',
+            'A scos contractul clientului „' . $client->denumire . '”',
+            ['company_id' => $client->id]
+        );
+
+        return $pdf->download($contract->numeFisier());
+    }
+
     /** Raspunsul obisnuit dupa o schimbare pe un client: clientul, cum arata acum. */
     protected function raspundeCuClientul(Company $client)
     {
@@ -1053,13 +1190,18 @@ class AdministrareController extends Controller
         return $cate;
     }
 
-    protected function prezinta(Company $client, ?AbonamentClient $abonament, ?array $recomandare = null): array
-    {
+    protected function prezinta(
+        Company $client,
+        ?AbonamentClient $abonament,
+        ?array $recomandare = null,
+        ?array $contract = null
+    ): array {
         return [
             'id' => $client->id,
             'denumire' => $client->denumire,
             'cui' => $client->cui,
             'recomandare' => $recomandare ?? $this->recomandarea($client->id),
+            'contract' => $contract ?? $this->contractul($client),
             'abonament' => $abonament ? [
                 'tarif_lunar' => $abonament->tarif_lunar,
                 'proba_zile' => $abonament->proba_zile,

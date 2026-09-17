@@ -246,6 +246,16 @@
                   {{ rand.item.recomandare.luni_de_dat }}
                 </b-badge>
               </b-button>
+              <!-- Datele din care iese contractul de abonament, si contractul in PDF -->
+              <b-button
+                size="sm"
+                variant="outline-primary"
+                class="d-block butoane-actiuni mb-50"
+                title="Datele contractului de abonament și generarea lui în PDF"
+                @click="deschideContract(rand.item)"
+              >
+                Contract
+              </b-button>
               <!-- Periodicitățile declarațiilor, aduse din programul vechi al clientului -->
               <b-button
                 size="sm"
@@ -1100,6 +1110,181 @@
       />
     </b-modal>
 
+    <!-- Datele contractului de abonament, si contractul in PDF -->
+    <b-modal
+      v-model="contractVizibil"
+      :title="'Contract — ' + (clientCurent.denumire || '')"
+      size="lg"
+      ok-only
+      ok-title="Închide"
+    >
+      <b-alert
+        v-if="eroareFormular"
+        show
+        variant="danger"
+        class="py-1 px-2 small"
+      >
+        {{ eroareFormular }}
+      </b-alert>
+      <b-alert
+        v-if="mesajContract"
+        show
+        variant="success"
+        class="py-1 px-2 small"
+      >
+        {{ mesajContract }}
+      </b-alert>
+      <b-alert
+        v-if="contract.lipsesc && contract.lipsesc.length"
+        show
+        variant="warning"
+        class="py-1 px-2 small"
+      >
+        Contractul iese cu linii punctate acolo unde lipsesc:
+        {{ contract.lipsesc.join(', ') }}.
+      </b-alert>
+
+      <b-row>
+        <b-col cols="4">
+          <label>Număr contract</label>
+          <b-form-input v-model="contract.numar" />
+        </b-col>
+        <b-col cols="4">
+          <label>Data contractului</label>
+          <b-form-input
+            v-model="contract.data"
+            type="date"
+          />
+        </b-col>
+        <b-col cols="4">
+          <label>Durata</label>
+          <b-form-input
+            v-model="contract.durata"
+            placeholder="de 12 luni"
+          />
+        </b-col>
+      </b-row>
+
+      <h6 class="mt-2">
+        Beneficiarul
+      </h6>
+      <b-row>
+        <b-col cols="8">
+          <label>Denumire</label>
+          <b-form-input v-model="contract.beneficiar_denumire" />
+        </b-col>
+        <b-col cols="4">
+          <label>CUI</label>
+          <b-form-input v-model="contract.beneficiar_cui" />
+        </b-col>
+      </b-row>
+      <label class="mt-1">Sediul</label>
+      <b-form-input v-model="contract.beneficiar_adresa" />
+      <b-row class="mt-1">
+        <b-col cols="4">
+          <label>Reg. Comerțului</label>
+          <b-form-input
+            v-model="contract.beneficiar_reg_com"
+            placeholder="J13/1234/2015"
+          />
+        </b-col>
+        <b-col cols="4">
+          <label>Cont bancar (IBAN)</label>
+          <b-form-input v-model="contract.beneficiar_iban" />
+        </b-col>
+        <b-col cols="4">
+          <label>Banca</label>
+          <b-form-input v-model="contract.beneficiar_banca" />
+        </b-col>
+      </b-row>
+      <b-row class="mt-1">
+        <b-col cols="6">
+          <label>E-mail</label>
+          <b-form-input
+            v-model="contract.beneficiar_email"
+            type="email"
+          />
+        </b-col>
+        <b-col cols="6">
+          <label>Telefon</label>
+          <b-form-input v-model="contract.beneficiar_telefon" />
+        </b-col>
+      </b-row>
+      <b-row class="mt-1">
+        <b-col cols="7">
+          <label>Reprezentant legal</label>
+          <b-form-input v-model="contract.beneficiar_reprezentant" />
+        </b-col>
+        <b-col cols="5">
+          <label>În calitate de</label>
+          <b-form-input
+            v-model="contract.beneficiar_functie"
+            placeholder="administrator"
+          />
+        </b-col>
+      </b-row>
+
+      <h6 class="mt-2">
+        Planul și facturarea
+      </h6>
+      <b-row>
+        <b-col cols="4">
+          <label>Plan</label>
+          <b-form-select
+            v-model="contract.plan"
+            :options="optiuniPlan"
+          />
+        </b-col>
+        <b-col cols="4">
+          <label>Facturare</label>
+          <b-form-select
+            v-model="contract.periodicitate"
+            :options="optiuniPeriodicitate"
+          />
+        </b-col>
+        <b-col cols="4">
+          <label>Activarea contului</label>
+          <b-form-input
+            v-model="contract.data_activare"
+            type="date"
+          />
+        </b-col>
+      </b-row>
+      <label class="mt-1">Data de la care începe facturarea</label>
+      <b-form-input
+        v-model="contract.data_facturare"
+        type="date"
+      />
+
+      <label class="mt-2">Observații interne</label>
+      <b-form-textarea
+        v-model="contract.observatii"
+        rows="2"
+      />
+
+      <div class="mt-2">
+        <b-button
+          variant="primary"
+          class="mr-1"
+          @click="salveazaContract"
+        >
+          Salvează datele
+        </b-button>
+        <b-button
+          variant="outline-primary"
+          :disabled="contractInCurs"
+          @click="descarcaContract"
+        >
+          {{ contractInCurs ? 'Se face PDF-ul…' : 'Descarcă PDF' }}
+        </b-button>
+      </div>
+      <p class="small text-muted mt-1 mb-0">
+        PDF-ul se poate semna electronic cu certificatul de pe token, cu programul obișnuit de semnare.
+        Datele Prestatorului — contul bancar și reprezentantul — se scriu o singură dată, în
+        <code>config/contract.php</code>.
+      </p>
+    </b-modal>
+
     <!-- Cine l-a adus, pe cine a adus el, si lunile gratuite cuvenite -->
     <b-modal
       v-model="recomandareVizibil"
@@ -1319,6 +1504,12 @@ export default {
       recomandare: {},
       mesajRecomandare: '',
 
+      // Datele din care iese contractul de abonament
+      contractVizibil: false,
+      contract: {},
+      mesajContract: '',
+      contractInCurs: false,
+
       notificareVizibila: false,
       notificare: {},
       trimitereInCurs: false,
@@ -1343,6 +1534,18 @@ export default {
   computed: {
     optiuniClienti() {
       return this.clienti.map(client => ({ value: client.id, text: client.denumire }))
+    },
+    optiuniPlan() {
+      return [{ value: null, text: '— nealeas —' }].concat(
+        ['START', 'BIROU', 'CABINET', 'EXPERT', 'ENTERPRISE'].map(plan => ({ value: plan, text: plan })),
+      )
+    },
+    optiuniPeriodicitate() {
+      return [
+        { value: null, text: '— nealeasă —' },
+        { value: 'lunar', text: 'lunară' },
+        { value: 'anual', text: 'anuală (12 luni la prețul a 10)' },
+      ]
     },
     /** Cine poate fi trecut drept cel care a adus clientul deschis: oricine, afară de el. */
     clientiDeAles() {
@@ -1741,6 +1944,108 @@ export default {
       const [an, luna, zi] = data.split('-')
 
       return `${zi}.${luna}.${an}`
+    },
+    /**
+     * Datele contractului. Prima oară se pornește de la ce știe deja aplicația,
+     * ca denumirea și CUI-ul să nu fie scrise de două ori.
+     */
+    deschideContract(client) {
+      this.eroareFormular = ''
+      this.mesajContract = ''
+      this.clientCurent = client
+
+      const date = client.contract && client.contract.exista ? { ...client.contract } : {}
+
+      this.contract = {
+        numar: date.numar || '',
+        data: date.data || new Date().toISOString().slice(0, 10),
+        durata: date.durata || 'de 12 luni',
+        beneficiar_denumire: date.beneficiar_denumire || client.denumire || '',
+        beneficiar_cui: date.beneficiar_cui || client.cui || '',
+        beneficiar_adresa: date.beneficiar_adresa || '',
+        beneficiar_reg_com: date.beneficiar_reg_com || '',
+        beneficiar_iban: date.beneficiar_iban || '',
+        beneficiar_banca: date.beneficiar_banca || '',
+        beneficiar_email: date.beneficiar_email || '',
+        beneficiar_telefon: date.beneficiar_telefon || '',
+        beneficiar_reprezentant: date.beneficiar_reprezentant || '',
+        beneficiar_functie: date.beneficiar_functie || 'administrator',
+        plan: date.plan || null,
+        periodicitate: date.periodicitate || null,
+        data_activare: date.data_activare || '',
+        data_facturare: date.data_facturare || '',
+        observatii: date.observatii || '',
+        lipsesc: date.lipsesc || [],
+      }
+
+      this.contractVizibil = true
+    },
+    salveazaContract() {
+      this.eroareFormular = ''
+      this.mesajContract = ''
+
+      this.$http.put(`/administrare/clienti/${this.clientCurent.id}/contract`, this.contract)
+        .then(raspuns => {
+          this.mesajContract = 'Datele au fost salvate.'
+          this.contract = { ...this.contract, lipsesc: raspuns.data.data.lipsesc || [] }
+          this.incarca()
+        })
+        .catch(err => {
+          this.eroareFormular = this.mesajEroare(err, 'Datele contractului nu au putut fi salvate')
+        })
+    },
+    /** Scoate contractul în PDF și îl dă spre salvare. */
+    descarcaContract() {
+      this.eroareFormular = ''
+      this.mesajContract = ''
+      this.contractInCurs = true
+
+      this.$store.dispatch('app/api_blob_Request', {
+        requestUrl: `/administrare/clienti/${this.clientCurent.id}/contract/pdf`,
+        requestType: 'GET',
+      })
+        .then(continut => {
+          const adresa = window.URL.createObjectURL(new Blob([continut], { type: 'application/pdf' }))
+          const legatura = document.createElement('a')
+          const numeFisier = [
+            'Contract SPV Curier',
+            this.contract.numar ? `nr ${this.contract.numar}` : null,
+            this.contract.beneficiar_denumire || this.clientCurent.denumire,
+          ].filter(bucata => bucata).join(' - ')
+
+          legatura.href = adresa
+          // Semnele care supara sistemele de fisiere ies afara.
+          legatura.download = `${numeFisier.replace(/[\\/:*?"<>|]+/g, ' ')}.pdf`
+          document.body.appendChild(legatura)
+          legatura.click()
+          document.body.removeChild(legatura)
+          window.URL.revokeObjectURL(adresa)
+
+          this.mesajContract = 'PDF-ul a fost descărcat.'
+        })
+        .catch(raspuns => {
+          // Cererea cere un blob, așa că și eroarea vine tot blob: o citim ca text.
+          if (raspuns && raspuns.data instanceof Blob) {
+            raspuns.data.text().then(text => {
+              let mesaj = ''
+
+              try {
+                mesaj = JSON.parse(text).message || ''
+              } catch (e) {
+                mesaj = ''
+              }
+
+              this.eroareFormular = mesaj || 'Contractul nu a putut fi generat'
+            })
+
+            return
+          }
+
+          this.eroareFormular = 'Contractul nu a putut fi generat'
+        })
+        .finally(() => {
+          this.contractInCurs = false
+        })
     },
     deschideRecomandare(client) {
       this.eroareFormular = ''
