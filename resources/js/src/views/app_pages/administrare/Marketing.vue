@@ -49,9 +49,9 @@
             Fișier Excel din listele CECCAR — de societăți (județ, denumire firmă, CUI,
             telefon, e-mail) sau de experți contabili și consultanți fiscali (județ, nume,
             telefon, e-mail). Se citesc toate foile din fișier; cele fără adrese nu aduc
-            nimic. Rândurile fără e-mail se lasă deoparte, iar contactele care există deja
-            își înnoiesc datele — dar <strong>nu</strong> și dezabonarea: aceea e hotărârea
-            lor. Adresele pe care fișierul le dă drept probabile intră însemnate ca atare.
+            nimic. Rândurile fără e-mail se lasă deoparte, iar adresele care sunt deja în
+            listă se sar cu totul: <strong>nimic nu se scrie peste un contact știut</strong>.
+            Adresele pe care fișierul le dă drept probabile intră însemnate ca atare.
           </small>
 
           <b-form-file

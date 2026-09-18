@@ -27,12 +27,10 @@ use Illuminate\Support\Collection;
  * Randurile fara email se lasa deoparte: lista aceasta e pentru scris, iar un
  * rand fara adresa n-are ce cauta in ea. Cate au fost, se spune la sfarsit.
  *
- * Contactele care exista deja isi pastreaza starea de abonare. Cine s-a
- * dezabonat o data ramane dezabonat, oricat de des s-ar reincarca lista —
- * altfel un import nou ar sterge o hotarare a omului, si asta nu se face.
- *
- * Tot asa, un import nu goleste ce stia dinainte: o lista fara coloana CUI nu
- * are de ce sa stearga CUI-urile scrise de alta. Se scrie doar ce aduce.
+ * Adresele care exista deja in evidenta se sar cu totul: nu se scrie nimic
+ * peste ele. Asa, o lista mai saraca nu poate strica una mai bogata, si nici
+ * dezabonarea cuiva nu are cum sa fie desfacuta de un fisier. Cine vrea date
+ * noi pentru un contact vechi il sterge intai din fila.
  */
 class FirmeContabilitateImport implements ToCollection, WithHeadingRow, WithEvents
 {
@@ -52,7 +50,7 @@ class FirmeContabilitateImport implements ToCollection, WithHeadingRow, WithEven
     protected $foaia = '';
 
     public $adaugate = 0;
-    public $innoite = 0;
+    public $existente = 0;
     public $fara_email = 0;
     public $repetate = 0;
 
@@ -116,6 +114,23 @@ class FirmeContabilitateImport implements ToCollection, WithHeadingRow, WithEven
 
         $this->vazute[$email] = true;
 
+        /*
+         * Adresa cunoscuta se lasa cum e.
+         *
+         * Un contact intrat o data nu se mai atinge de niciun import: nici ca sa
+         * i se innoiasca datele. Asa, o lista mai saraca nu poate strica una mai
+         * bogata — lista expertilor n-are coloana CUI, iar cele doua liste se
+         * intalnesc des pe aceeasi adresa, fiindca emailul expertului e de multe
+         * ori chiar cutia firmei.
+         *
+         * Cine vrea date noi pentru un contact vechi il sterge intai din fila.
+         */
+        if (MarketingContact::where('email', $email)->exists()) {
+            $this->existente++;
+
+            return;
+        }
+
         // „Nume" e ultimul cautat: in listele de firme denumirea are numele ei.
         $denumire = $this->camp($rand, ['denumire_firma', 'denumire', 'firma', 'nume']);
 
@@ -140,34 +155,9 @@ class FirmeContabilitateImport implements ToCollection, WithHeadingRow, WithEven
         /*
          * Cum am aflat adresa: goala cand e scrisa in sursa, plina cand fisierul
          * spune ca a dedus-o — dintr-un telefon comun cu o firma, dintr-un nume
-         * potrivit in alt registru. Se scrie si goala, dinadins: o adresa care
-         * era ghicita si acum vine declarata nu mai are de ce sa poarte semnul.
+         * potrivit in alt registru.
          */
         $date['email_dedus'] = $declarata !== null ? null : $this->camp($rand, ['sursa_email']);
-
-        $contact = MarketingContact::where('email', $email)->first();
-
-        if ($contact) {
-            /*
-             * Starea de abonare nu se atinge la reincarcare: ea e hotararea
-             * omului, nu a fisierului.
-             *
-             * Si nici campurile goale nu se scriu peste cele stiute: lista
-             * expertilor n-are coloana CUI, iar scrisa peste o firma adusa din
-             * lista de firme i-ar sterge CUI-ul degeaba. Face exceptie tocmai
-             * felul in care s-a aflat adresa, care trebuie sa poata fi si sters.
-             */
-            $deScris = array_filter($date, function ($valoare) {
-                return $valoare !== null && $valoare !== '';
-            });
-
-            $deScris['email_dedus'] = $date['email_dedus'];
-
-            $contact->update($deScris);
-            $this->innoite++;
-
-            return;
-        }
 
         MarketingContact::create($date + ['email' => $email]);
         $this->adaugate++;

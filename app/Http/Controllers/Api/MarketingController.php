@@ -175,14 +175,15 @@ class MarketingController extends Controller
         return response()->json([
             'success' => true,
             'message' => sprintf(
-                '%d firme adăugate, %d actualizate. Lăsate deoparte: %d fără adresă de e-mail, %d cu adresa repetată.',
+                '%d contacte adăugate, %d sărite (adresa era deja în listă).'
+                . ' Lăsate deoparte: %d fără adresă de e-mail, %d cu adresa repetată în fișier.',
                 $import->adaugate,
-                $import->innoite,
+                $import->existente,
                 $import->fara_email,
                 $import->repetate
             ),
             'adaugate' => $import->adaugate,
-            'innoite' => $import->innoite,
+            'existente' => $import->existente,
         ]);
     }
 

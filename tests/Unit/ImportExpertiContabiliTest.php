@@ -16,8 +16,9 @@ use Tests\TestCase;
  * sau dintr-un nume potrivit în alt registru.
  *
  * Deosebirea contează la trimitere, de aceea se păstrează lângă contact. Și mai
- * contează un lucru: o listă care n-are coloana CUI n-are voie să șteargă
- * CUI-urile aduse de alta.
+ * contează o regulă: o adresă care e deja în evidență se sare cu totul. Așa, o
+ * listă mai săracă nu poate strica una mai bogată, iar dezabonarea cuiva nu are
+ * cum să fie desfăcută de un fișier.
  */
 class ImportExpertiContabiliTest extends TestCase
 {
@@ -112,7 +113,7 @@ class ImportExpertiContabiliTest extends TestCase
     }
 
     /**
-     * Miezul: o listă fără CUI nu golește CUI-ul adus de alta.
+     * Miezul: o adresă știută nu se mai atinge de niciun import.
      *
      * Cele două liste se întâlnesc des pe aceeași adresă — emailul expertului e
      * de multe ori chiar cutia firmei. Scrisă peste, lista experților ar șterge
@@ -120,34 +121,36 @@ class ImportExpertiContabiliTest extends TestCase
      *
      * @test
      */
-    public function lista_fara_cui_nu_sterge_cui_ul_stiut_dinainte()
+    public function adresa_stiuta_se_sare_si_nimic_nu_se_scrie_peste()
     {
         $this->importa([$this->randDeFirma()]);
 
-        $this->importa([$this->randDeExpert(['email_probabil' => 'birou@proba-import.ro'])]);
+        $import = $this->importa([$this->randDeExpert(['email_probabil' => 'birou@proba-import.ro'])]);
+
+        $this->assertSame(0, $import->adaugate);
+        $this->assertSame(1, $import->existente);
 
         $contact = MarketingContact::where('email', 'birou@proba-import.ro')->first();
 
         $this->assertSame('12345678', $contact->cui, 'CUI-ul trebuia să rămână');
         $this->assertSame('2026', $contact->viza);
-        $this->assertSame('Aftenie Anda Eliza', $contact->denumire, 'denumirea adusă acum se scrie');
+        $this->assertSame('Contabil Priceput SRL', $contact->denumire, 'denumirea veche rămâne');
+        $this->assertNull($contact->email_dedus, 'adresa era declarată și rămâne declarată');
     }
 
-    /**
-     * Invers: o adresă care era dedusă și acum vine declarată nu mai poartă
-     * semnul. Altfel el ar rămâne pe veci, deși între timp am aflat adevărul.
-     *
-     * @test
-     */
-    public function adresa_ajunsa_declarata_nu_mai_e_dedusa()
+    /** Același fișier încărcat de două ori nu adaugă nimic a doua oară. */
+    /** @test */
+    public function acelasi_fisier_incarcat_iar_nu_mai_adauga_nimic()
     {
-        $this->importa([$this->randDeExpert(['email_probabil' => 'birou@proba-import.ro'])]);
+        $intai = $this->importa([$this->randDeExpert(), $this->randDeFirma()]);
 
-        $this->assertNotNull(MarketingContact::where('email', 'birou@proba-import.ro')->first()->email_dedus);
+        $this->assertSame(2, $intai->adaugate);
 
-        $this->importa([$this->randDeFirma()]);
+        $adoua = $this->importa([$this->randDeExpert(), $this->randDeFirma()]);
 
-        $this->assertNull(MarketingContact::where('email', 'birou@proba-import.ro')->first()->email_dedus);
+        $this->assertSame(0, $adoua->adaugate);
+        $this->assertSame(2, $adoua->existente);
+        $this->assertSame(2, MarketingContact::where('email', 'like', '%@proba-import.ro')->count());
     }
 
     /** Rândurile fără adresă nu intră: lista asta e pentru scris. */
@@ -186,8 +189,9 @@ class ImportExpertiContabiliTest extends TestCase
 
         $this->importa([$this->randDeExpert()]);
 
-        $this->assertFalse(
-            (bool) MarketingContact::where('email', 'aftenie@proba-import.ro')->first()->abonat
-        );
+        $contact = MarketingContact::where('email', 'aftenie@proba-import.ro')->first();
+
+        $this->assertFalse((bool) $contact->abonat);
+        $this->assertNotNull($contact->dezabonat_la, 'nici clipa dezabonării nu se șterge');
     }
 }
