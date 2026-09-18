@@ -7,6 +7,7 @@ use App\Services\Anaf\Bridge\Punte;
 use App\Services\Anaf\Spv\CertificatService;
 use App\Services\Anaf\Spv\Contracts\SpvTransport;
 use App\Services\Anaf\Spv\ProgramLocalVechiException;
+use App\Services\Anaf\Spv\SesiuneStinsa;
 use App\Services\Anaf\Spv\SpvException;
 use App\Support\Aplicatia;
 use App\Support\ContextUtilizator;
@@ -89,6 +90,16 @@ class BridgeTransport implements SpvTransport
             throw new ProgramLocalVechiException(
                 'Programul local de pe calculatorul clientului nu cunoaște descărcarea direct în arhivă.'
             );
+        }
+
+        /*
+         * Sesiunea securizata cu ANAF s-a stins in mijlocul raspunsului, fiindca
+         * driverul tokenului a cerut PIN-ul tocmai atunci. Cand vorba asta
+         * ajunge aici, codul e deja scris: se mai incearca o data, in loc sa se
+         * intoarca o eroare pentru ceva ce s-a si dezlegat intre timp.
+         */
+        if ($raspuns->failed() && SesiuneStinsa::da(json_decode($raspuns->body(), true), $raspuns->body())) {
+            $raspuns = $this->cereDinArhiva($intrebare);
         }
 
         if ($raspuns->failed()) {

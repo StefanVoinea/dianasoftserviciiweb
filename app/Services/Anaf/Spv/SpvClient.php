@@ -6,6 +6,7 @@ use App\Services\Anaf\Spv\Contracts\SpvTransport;
 use App\Support\Aplicatia;
 use App\Support\ContextUtilizator;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Log;
 
 class SpvClient
 {
@@ -354,6 +355,27 @@ class SpvClient
              * o usa inchisa.
              */
             if (!$reluat && $this->codulTocmaiSAScris($inceputul)) {
+                return $this->call($path, $query, true);
+            }
+
+            /*
+             * Aceeasi patanie, vazuta de partea cealalta.
+             *
+             * Cand PIN-ul se scrie in fereastra driverului, aplicatia nu afla:
+             * codul nu trece pe aici, deci „pin_verificat_la" ramane neatins si
+             * reluarea de mai sus nu se face niciodata. Ramane vorba programului
+             * local, care spune limpede ca legatura s-a rupt in timp ce se
+             * primea raspunsul.
+             *
+             * Se reia tot o singura data. Daca si a doua oara cade la fel,
+             * atunci chiar e altceva si eroarea merge la om, cu indreptarea ei
+             * — „Enable single logon" in driverul tokenului.
+             */
+            if (!$reluat && SesiuneStinsa::da($payload, $response->body())) {
+                Log::info('Sesiunea securizată cu ANAF s-a stins în mijlocul răspunsului; se încearcă din nou.', [
+                    'cale' => $path,
+                ]);
+
                 return $this->call($path, $query, true);
             }
 
