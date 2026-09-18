@@ -54,6 +54,20 @@ return [
             'days' => 14,
         ],
 
+        /*
+         * Cererile de demonstratie care n-au putut pleca prin email.
+         *
+         * Stau separat de jurnalul general — acela e un singur fisier care nu
+         * se curata niciodata — ca sa poata fi sterse la termenul anuntat in
+         * politica de confidentialitate: 12 luni de la ultimul contact.
+         */
+        'cereri_demo' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/cereri-demo.log'),
+            'level' => 'info',
+            'days' => 370,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

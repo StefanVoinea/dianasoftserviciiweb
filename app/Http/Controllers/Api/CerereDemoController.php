@@ -58,6 +58,16 @@ class CerereDemoController extends Controller
         } catch (\Throwable $e) {
             Log::error('Cerere demo netrimisă: ' . $e->getMessage(), ['exception' => get_class($e)]);
 
+            /*
+             * Scrisoarea n-a plecat, dar omul a scris-o: se pastreaza intreaga,
+             * intr-un jurnal al ei. Altfel, cat tine defectiunea serverului de
+             * email, fiecare cerere s-ar pierde fara urma, iar cel care a
+             * cerut-o ar ramane cu „incercati din nou in cateva minute".
+             */
+            Log::channel('cereri_demo')->error(
+                "Cerere netrimisă, de recuperat cu mâna:\n" . $this->mesaj($date, $request)
+            );
+
             return response()->json([
                 'message' => 'Cererea nu a putut fi trimisă acum. Încercați din nou în câteva minute.',
             ], 502);
