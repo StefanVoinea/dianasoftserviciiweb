@@ -46,9 +46,12 @@
           </h6>
 
           <small class="text-muted d-block mb-1">
-            Fișier Excel cu coloanele listelor CECCAR: județ, denumire firmă, CUI, telefon,
-            e-mail. Rândurile fără adresă se lasă deoparte. Firmele care există deja își
-            înnoiesc datele, dar <strong>nu</strong> și dezabonarea: aceea e hotărârea lor.
+            Fișier Excel din listele CECCAR — de societăți (județ, denumire firmă, CUI,
+            telefon, e-mail) sau de experți contabili și consultanți fiscali (județ, nume,
+            telefon, e-mail). Se citesc toate foile din fișier; cele fără adrese nu aduc
+            nimic. Rândurile fără e-mail se lasă deoparte, iar contactele care există deja
+            își înnoiesc datele — dar <strong>nu</strong> și dezabonarea: aceea e hotărârea
+            lor. Adresele pe care fișierul le dă drept probabile intră însemnate ca atare.
           </small>
 
           <b-form-file
@@ -210,6 +213,14 @@
             {{ rand.item.denumire }}
           </div>
           <small class="text-muted">{{ rand.item.email }}</small>
+          <b-badge
+            v-if="rand.item.email_dedus"
+            variant="light-secondary"
+            class="ml-50"
+            :title="'Adresă dedusă: ' + rand.item.email_dedus"
+          >
+            adresă dedusă
+          </b-badge>
         </template>
 
         <template #cell(trimise)="rand">
@@ -473,6 +484,7 @@ export default {
         { cheie: 'dezabonati', eticheta: 'dezabonați', culoare: 'text-secondary' },
         { cheie: 'demo', eticheta: 'au cerut demo', culoare: 'text-warning' },
         { cheie: 'fara_raspuns', eticheta: 'fără răspuns', culoare: 'text-muted' },
+        { cheie: 'email_dedus', eticheta: 'adresă dedusă', culoare: 'text-muted' },
       ],
     }
   },
@@ -486,6 +498,8 @@ export default {
         { value: 'abonati', text: 'Doar abonați' },
         { value: 'nescrisi', text: 'Doar cărora nu li s-a scris' },
         { value: 'dezabonati', text: 'Doar dezabonați' },
+        { value: 'email_dedus', text: 'Doar cu adresă dedusă' },
+        { value: 'email_declarat', text: 'Doar cu adresă declarată' },
       ]
     },
     /**

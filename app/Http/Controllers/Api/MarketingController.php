@@ -76,6 +76,11 @@ class MarketingController extends Controller
         } elseif ($stare === 'fara_raspuns') {
             // Li s-a scris si n-au apasat: acolo e de insistat, sau de lasat.
             $intrebare->whereNotNull('ultima_trimitere_la')->whereNull('demo_cerut_la');
+        } elseif ($stare === 'email_dedus') {
+            // Adresa n-a fost scrisa de om, ci ghicita de cel care a facut lista.
+            $intrebare->whereNotNull('email_dedus');
+        } elseif ($stare === 'email_declarat') {
+            $intrebare->whereNull('email_dedus');
         }
 
         return $intrebare;
@@ -128,6 +133,7 @@ class MarketingController extends Controller
                 'fara_raspuns' => MarketingContact::whereNotNull('ultima_trimitere_la')
                     ->whereNull('demo_cerut_la')
                     ->count(),
+                'email_dedus' => MarketingContact::whereNotNull('email_dedus')->count(),
             ],
             /*
              * Cate scrisori stau si cate au plecat cu adevarat.
