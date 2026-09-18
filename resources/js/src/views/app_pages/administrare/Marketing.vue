@@ -22,6 +22,18 @@
       {{ eroare }}
     </b-alert>
 
+    <!-- Scrisori care au intrat in coada si n-au plecat de acolo -->
+    <b-alert
+      :show="scrisoriInAsteptare"
+      variant="warning"
+      class="py-1"
+    >
+      <strong>{{ scrisori.in_coada }}</strong> scrisori stau în coadă și n-au plecat încă{{ deCandStau }}.
+      Pe server, lucrătorul cozii trebuie să fie pornit
+      (<code>php artisan queue:work</code>), iar furnizorul de e-mail trebuie să le primească.
+      Ce cade se vede cu <code>php artisan queue:failed</code>.
+    </b-alert>
+
     <b-row class="mb-1">
       <!-- Aducerea listei -->
       <b-col md="5">
@@ -423,6 +435,7 @@ export default {
       contacte: [],
       judete: [],
       sumar: {},
+      scrisori: {},
       total: 0,
       pagina: 1,
       pagini: 1,
@@ -489,6 +502,42 @@ export default {
       return Math.round(((this.sumar.demo || 0) / scrisi) * 1000) / 10
     },
 
+    /**
+     * Stau scrisori pe loc?
+     *
+     * Câteva, chiar acum puse, sunt firești — coada le ia pe rând. Peste zece,
+     * sau vechi de un sfert de oră, înseamnă că nu le ia nimeni.
+     */
+    scrisoriInAsteptare() {
+      const cate = this.scrisori.in_coada || 0
+
+      if (!cate) return false
+
+      const deCand = this.scrisori.cea_mai_veche_in_coada
+
+      if (!deCand) return cate > 10
+
+      const clipa = new Date(String(deCand).replace(' ', 'T'))
+
+      return cate > 10 || (Date.now() - clipa.getTime()) > 15 * 60 * 1000
+    },
+    deCandStau() {
+      const deCand = this.scrisori.cea_mai_veche_in_coada
+
+      if (!deCand) return ''
+
+      const clipa = new Date(String(deCand).replace(' ', 'T'))
+
+      if (Number.isNaN(clipa.getTime())) return ''
+
+      const minute = Math.round((Date.now() - clipa.getTime()) / 60000)
+
+      if (minute < 90) return `, cea mai veche de ${minute} de minute`
+
+      const ore = Math.round(minute / 60)
+
+      return ore < 36 ? `, cea mai veche de ${ore} ore` : `, cea mai veche de ${Math.round(ore / 24)} zile`
+    },
     optiuniSabloane() {
       return [{ value: '', text: '— scriu eu textul —' }]
         .concat(this.sabloane.map(sablon => ({ value: sablon.cheie, text: sablon.nume })))
@@ -558,6 +607,7 @@ export default {
           this.contacte = date.data || []
           this.judete = date.judete || []
           this.sumar = date.sumar || {}
+          this.scrisori = date.scrisori || {}
           this.total = date.total || 0
           this.pagini = date.pagini || 1
         })

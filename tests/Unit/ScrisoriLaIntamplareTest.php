@@ -210,7 +210,7 @@ class ScrisoriLaIntamplareTest extends TestCase
 
     /** Trimiterea la întâmplare se scrie în evidență ca oricare alta. */
     /** @test */
-    public function ce_a_plecat_ramane_scris()
+    public function ce_s_a_pus_in_coada_ramane_scris()
     {
         $this->contact();
 
@@ -219,6 +219,110 @@ class ScrisoriLaIntamplareTest extends TestCase
         $scris = MarketingTrimitere::where('campanie', 'proba-intamplare')->get();
 
         $this->assertCount(1, $scris);
-        $this->assertTrue((bool) $scris->first()->reusit);
+    }
+
+    /**
+     * Pusă în coadă nu înseamnă plecată.
+     *
+     * Aici e miezul: cât timp scrisoarea stă în coadă, evidența nu are voie să
+     * spună „reușit". Altfel fila arată campanii trimise în vreme ce lucrătorul
+     * cozii e oprit și nu pleacă nimic nicăieri — fără email și fără eroare.
+     *
+     * @test
+     */
+    public function scrisoarea_pusa_in_coada_nu_se_scrie_ca_plecata()
+    {
+        $this->contact();
+
+        $raspuns = $this->trimite(['cati' => 1, 'filtre' => []]);
+        $date = $raspuns->getData(true);
+
+        $randul = MarketingTrimitere::latest('id')->first();
+
+        $this->assertSame('in_coada', $randul->stare);
+        $this->assertFalse((bool) $randul->reusit);
+        $this->assertNull($randul->plecat_la);
+        $this->assertSame(0, $date['plecate'], 'nimic n-a plecat: coada e falsă în probe');
+        $this->assertStringContainsString('puse în coadă', $date['message']);
+    }
+
+    /** Scrisoarea își poartă numărul din evidență, ca să se știe ce a plecat. */
+    /** @test */
+    public function scrisoarea_isi_poarta_numarul_din_evidenta()
+    {
+        $this->contact();
+
+        $this->trimite(['cati' => 1, 'filtre' => []]);
+
+        $randul = MarketingTrimitere::latest('id')->first();
+
+        Mail::assertQueued(ScrisoareMarketing::class, function ($scrisoare) use ($randul) {
+            return $scrisoare->trimitereaId === $randul->id;
+        });
+    }
+
+    /**
+     * Când serverul de email o primește cu adevărat, rândul se însemnează.
+     *
+     * @test
+     */
+    public function plecarea_adevarata_se_insemneaza_in_evidenta()
+    {
+        $contact = $this->contact();
+
+        $randul = MarketingTrimitere::create([
+            'contact_id' => $contact->id,
+            'campanie' => 'proba-plecare',
+            'subiect' => 'Proba',
+            'reusit' => false,
+            'stare' => 'in_coada',
+        ]);
+
+        $mesaj = new \Swift_Message('Proba');
+        $mesaj->getHeaders()->addTextHeader(ScrisoareMarketing::ANTETUL, (string) $randul->id);
+
+        (new \App\Listeners\InsemneazaScrisoareaPlecata())
+            ->handle(new \Illuminate\Mail\Events\MessageSent($mesaj));
+
+        $randul->refresh();
+
+        $this->assertSame('plecat', $randul->stare);
+        $this->assertTrue((bool) $randul->reusit);
+        $this->assertNotNull($randul->plecat_la);
+    }
+
+    /** Orice alt email trece pe la ascultător: el nu are voie să se atingă de nimic. */
+    /** @test */
+    public function un_email_oarecare_nu_atinge_evidenta()
+    {
+        $contact = $this->contact();
+
+        $randul = MarketingTrimitere::create([
+            'contact_id' => $contact->id,
+            'subiect' => 'Proba',
+            'reusit' => false,
+            'stare' => 'in_coada',
+        ]);
+
+        (new \App\Listeners\InsemneazaScrisoareaPlecata())
+            ->handle(new \Illuminate\Mail\Events\MessageSent(new \Swift_Message('Alt email')));
+
+        $this->assertSame('in_coada', $randul->refresh()->stare);
+    }
+
+    /** Fila trebuie să poată spune câte stau pe loc. */
+    /** @test */
+    public function fila_afla_cate_scrisori_stau_in_coada()
+    {
+        $this->contact();
+        $this->trimite(['cati' => 1, 'filtre' => []]);
+
+        $date = (new MarketingController())
+            ->index(Request::create('/api/marketing/contacte', 'GET'))
+            ->getData(true);
+
+        $this->assertArrayHasKey('scrisori', $date);
+        $this->assertGreaterThanOrEqual(1, $date['scrisori']['in_coada']);
+        $this->assertNotNull($date['scrisori']['cea_mai_veche_in_coada']);
     }
 }

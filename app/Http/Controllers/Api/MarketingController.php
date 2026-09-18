@@ -129,6 +129,21 @@ class MarketingController extends Controller
                     ->whereNull('demo_cerut_la')
                     ->count(),
             ],
+            /*
+             * Cate scrisori stau si cate au plecat cu adevarat.
+             *
+             * Fara randurile astea, o coada oprita nu se vede nicaieri: fila
+             * spune „puse la trimitere", si atat. Cea mai veche dintre cele
+             * ramase spune de cat timp sta pe loc.
+             */
+            'scrisori' => [
+                'in_coada' => MarketingTrimitere::where('stare', 'in_coada')->count(),
+                'plecate' => MarketingTrimitere::where('stare', 'plecat')->count(),
+                'cazute' => MarketingTrimitere::where('stare', 'cazut')->count(),
+                'cea_mai_veche_in_coada' => optional(
+                    MarketingTrimitere::where('stare', 'in_coada')->min('created_at')
+                ) ?: null,
+            ],
         ]);
     }
 
@@ -217,52 +232,72 @@ class MarketingController extends Controller
         }
 
         $omul = ContextUtilizator::curent();
+        $pornit = now()->startOfSecond();
         $trimise = 0;
         $cazute = 0;
 
         foreach ($contacte as $contact) {
+            /*
+             * Randul se scrie inainte de a pune scrisoarea in coada, si se scrie
+             * „in coada", nu „reusit": de aici incolo ea nu mai e in mana noastra.
+             * Plecarea adevarata o insemneaza InsemneazaScrisoareaPlecata, cand
+             * serverul de email o primeste.
+             */
+            $randul = MarketingTrimitere::create([
+                'contact_id' => $contact->id,
+                'campanie' => $date['campanie'] ?? null,
+                'subiect' => $date['subiect'],
+                'reusit' => false,
+                'stare' => 'in_coada',
+                'user_id' => optional($omul)->id,
+                'user_nume' => optional($omul)->name,
+            ]);
+
             try {
-                Mail::to($contact->email)->queue(
-                    new ScrisoareMarketing($contact, $date['subiect'], $date['text'], $date['campanie'] ?? '')
-                );
+                Mail::to($contact->email)->queue(new ScrisoareMarketing(
+                    $contact,
+                    $date['subiect'],
+                    $date['text'],
+                    $date['campanie'] ?? '',
+                    $randul->id
+                ));
 
                 $contact->update([
                     'ultima_trimitere_la' => now(),
                     'cate_trimiteri' => $contact->cate_trimiteri + 1,
                 ]);
 
-                MarketingTrimitere::create([
-                    'contact_id' => $contact->id,
-                    'campanie' => $date['campanie'] ?? null,
-                    'subiect' => $date['subiect'],
-                    'reusit' => true,
-                    'user_id' => optional($omul)->id,
-                    'user_nume' => optional($omul)->name,
-                ]);
-
                 $trimise++;
             } catch (\Exception $e) {
-                MarketingTrimitere::create([
-                    'contact_id' => $contact->id,
-                    'campanie' => $date['campanie'] ?? null,
-                    'subiect' => $date['subiect'],
-                    'reusit' => false,
+                $randul->update([
+                    'stare' => 'cazut',
                     'eroare' => mb_substr($e->getMessage(), 0, 500),
-                    'user_id' => optional($omul)->id,
-                    'user_nume' => optional($omul)->name,
                 ]);
 
                 $cazute++;
             }
         }
 
+        /*
+         * Cand coada lucreaza pe loc — „sync", cum se intampla la probe si pe
+         * unele instalari —, scrisorile au si plecat pana aici. Se numara din
+         * evidenta, nu se presupune.
+         */
+        $plecate = MarketingTrimitere::whereIn('contact_id', $contacte->pluck('id'))
+            ->where('stare', 'plecat')
+            ->where('created_at', '>=', $pornit)
+            ->count();
+
         $sarite = $laIntamplare ? 0 : $cerute - $contacte->count();
 
         return response()->json([
             'success' => true,
             'message' => sprintf(
-                '%d mesaje puse la trimitere.%s%s%s',
+                '%d scrisori puse în coadă, %s.%s%s%s',
                 $trimise,
+                $plecate === $trimise
+                    ? 'toate au și plecat'
+                    : $plecate . ' au plecat până acum — restul pleacă pe rând, dacă lucrătorul cozii e pornit',
                 $cazute ? ' ' . $cazute . ' nu au putut fi puse.' : '',
                 $sarite ? ' ' . $sarite . ' sărite (dezabonate).' : '',
                 $laIntamplare && $contacte->count() < $cerute
@@ -270,6 +305,7 @@ class MarketingController extends Controller
                     : ''
             ),
             'trimise' => $trimise,
+            'plecate' => $plecate,
             'cazute' => $cazute,
             'sarite' => $sarite,
         ]);

@@ -24,14 +24,34 @@ class ScrisoareMarketing extends Mailable
     use Queueable;
     use SerializesModels;
 
+    /** Antetul prin care scrisoarea isi spune numarul din evidenta. */
+    public const ANTETUL = 'X-Trimitere';
+
     public $contact;
     public $subiectul;
     public $textul;
     public $legaturaDezabonare;
     public $legaturaDemo;
 
-    public function __construct(MarketingContact $contact, string $subiect, string $text, string $campanie = '')
-    {
+    /**
+     * Numarul randului din evidenta, purtat pana la plecare.
+     *
+     * Scrisoarea pleaca mai tarziu, din coada, si de-acolo nu se mai stie carui
+     * rand ii apartine. Numarul merge cu ea, intr-un antet al ei, iar cand
+     * serverul de email o primeste cu adevarat, randul se insemneaza.
+     *
+     * @var int|null
+     */
+    public $trimitereaId;
+
+    public function __construct(
+        MarketingContact $contact,
+        string $subiect,
+        string $text,
+        string $campanie = '',
+        ?int $trimitereaId = null
+    ) {
+        $this->trimitereaId = $trimitereaId;
         $this->contact = $contact;
         $this->subiectul = $subiect;
 
@@ -89,6 +109,11 @@ class ScrisoareMarketing extends Mailable
                  */
                 $mesaj->getHeaders()->addTextHeader('List-Unsubscribe', '<' . $this->legaturaDezabonare . '>');
                 $mesaj->getHeaders()->addTextHeader('List-Unsubscribe-Post', 'List-Unsubscribe=One-Click');
+
+                // Numarul randului din evidenta, ca sa se stie ce a plecat cu adevarat.
+                if ($this->trimitereaId) {
+                    $mesaj->getHeaders()->addTextHeader(self::ANTETUL, (string) $this->trimitereaId);
+                }
             })
             ->view('emails.marketing');
     }

@@ -3,7 +3,9 @@
 namespace App\Providers;
 
 use App\Events\ChatEvents;
+use App\Listeners\InsemneazaScrisoareaPlecata;
 use Illuminate\Auth\Events\Registered;
+use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Auth\Listeners\SendEmailVerificationNotification;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
 use Illuminate\Support\Facades\Event;
@@ -19,6 +21,14 @@ class EventServiceProvider extends ServiceProvider
     protected $listen = [
         Registered::class => [
             SendEmailVerificationNotification::class,
+        ],
+
+        /*
+         * Scrisorile de marketing se insemneaza ca plecate abia cand serverul de
+         * email le-a primit cu adevarat, nu cand au intrat in coada.
+         */
+        MessageSent::class => [
+            InsemneazaScrisoareaPlecata::class,
         ],
 
     ];
