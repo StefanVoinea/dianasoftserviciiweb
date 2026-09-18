@@ -35,13 +35,23 @@ class MarketingController extends Controller
     /** Cate contacte se dau deodata filei. */
     protected const PE_PAGINA = 100;
 
-    public function index(Request $request)
+    /**
+     * Cautarea si filtrele din fila, puse pe o intrebare.
+     *
+     * Stau deoparte fiindca nu le foloseste numai lista: cand se trimite la
+     * intamblare, firmele se iau din aceleasi filtre pe care le are omul in
+     * fata. Altfel „la intamplare" ar insemna din toata evidenta, iar el crede
+     * ca alege dintre cele pe care le vede.
+     *
+     * @param array{cauta?: string, judet?: string, stare?: string} $filtre
+     */
+    protected function filtrate(array $filtre)
     {
-        $cautare = trim((string) $request->query('cauta'));
-        $judet = trim((string) $request->query('judet'));
-        $stare = trim((string) $request->query('stare'));
+        $cautare = trim((string) ($filtre['cauta'] ?? ''));
+        $judet = trim((string) ($filtre['judet'] ?? ''));
+        $stare = trim((string) ($filtre['stare'] ?? ''));
 
-        $intrebare = MarketingContact::query()->orderBy('denumire');
+        $intrebare = MarketingContact::query();
 
         if ($cautare !== '') {
             $intrebare->where(function ($q) use ($cautare) {
@@ -62,11 +72,39 @@ class MarketingController extends Controller
         } elseif ($stare === 'nescrisi') {
             $intrebare->where('abonat', true)->whereNull('ultima_trimitere_la');
         } elseif ($stare === 'demo') {
-            $intrebare->whereNotNull('demo_cerut_la')->reorder('demo_cerut_la', 'desc');
+            $intrebare->whereNotNull('demo_cerut_la');
         } elseif ($stare === 'fara_raspuns') {
             // Li s-a scris si n-au apasat: acolo e de insistat, sau de lasat.
             $intrebare->whereNotNull('ultima_trimitere_la')->whereNull('demo_cerut_la');
         }
+
+        return $intrebare;
+    }
+
+    /** Sabloanele de scrisori, din care porneste omul cand scrie o campanie. */
+    public function sabloane()
+    {
+        return response()->json([
+            'success' => true,
+            'data' => array_values(config('marketing.sabloane', [])),
+            'cat_la_intamplare' => (int) config('marketing.cat_la_intamplare', 500),
+        ]);
+    }
+
+    public function index(Request $request)
+    {
+        $filtre = [
+            'cauta' => $request->query('cauta'),
+            'judet' => $request->query('judet'),
+            'stare' => $request->query('stare'),
+        ];
+
+        $intrebare = $this->filtrate($filtre);
+
+        // Cei care au cerut demonstratia se citesc de la cea mai proaspata cerere.
+        $intrebare = trim((string) $filtre['stare']) === 'demo'
+            ? $intrebare->orderBy('demo_cerut_la', 'desc')
+            : $intrebare->orderBy('denumire');
 
         $pagina = $intrebare->paginate(self::PE_PAGINA);
 
@@ -138,26 +176,43 @@ class MarketingController extends Controller
     public function trimite(Request $request)
     {
         $date = $request->validate([
-            'contacte' => 'required|array|min:1',
+            'contacte' => 'nullable|array',
             'contacte.*' => 'integer',
+            'cati' => 'nullable|integer|min:1|max:' . (int) config('marketing.cat_la_intamplare', 500),
+            'filtre' => 'nullable|array',
+            'filtre.cauta' => 'nullable|string|max:190',
+            'filtre.judet' => 'nullable|string|max:120',
+            'filtre.stare' => 'nullable|string|max:40',
             'subiect' => 'required|string|max:200',
             'text' => 'required|string|max:20000',
             'campanie' => 'nullable|string|max:100',
         ]);
+
+        $laIntamplare = !empty($date['cati']);
+        $cerute = $laIntamplare ? (int) $date['cati'] : count($date['contacte'] ?? []);
+
+        if ($cerute === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Alegeți firmele din listă sau spuneți către câte să se scrie la întâmplare.',
+            ], 422);
+        }
 
         /*
          * Cine s-a dezabonat se scoate aici, nu se lasa in seama celui care a
          * ales: o lista aleasa acum cinci minute poate cuprinde pe cineva care
          * intre timp s-a dezabonat.
          */
-        $contacte = MarketingContact::whereIn('id', $date['contacte'])
-            ->caroraLiSePoateScrie()
-            ->get();
+        $contacte = $laIntamplare
+            ? $this->aleseLaIntamplare($cerute, $date['filtre'] ?? [])
+            : MarketingContact::whereIn('id', $date['contacte'])->caroraLiSePoateScrie()->get();
 
         if ($contacte->isEmpty()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Niciunul dintre contactele alese nu mai poate primi mesaje.',
+                'message' => $laIntamplare
+                    ? 'În filtrul de acum nu e nicio firmă căreia să i se poată scrie.'
+                    : 'Niciunul dintre contactele alese nu mai poate primi mesaje.',
             ], 422);
         }
 
@@ -201,20 +256,44 @@ class MarketingController extends Controller
             }
         }
 
-        $sarite = count($date['contacte']) - $contacte->count();
+        $sarite = $laIntamplare ? 0 : $cerute - $contacte->count();
 
         return response()->json([
             'success' => true,
             'message' => sprintf(
-                '%d mesaje puse la trimitere.%s%s',
+                '%d mesaje puse la trimitere.%s%s%s',
                 $trimise,
                 $cazute ? ' ' . $cazute . ' nu au putut fi puse.' : '',
-                $sarite ? ' ' . $sarite . ' sărite (dezabonate).' : ''
+                $sarite ? ' ' . $sarite . ' sărite (dezabonate).' : '',
+                $laIntamplare && $contacte->count() < $cerute
+                    ? ' Atâtea s-au găsit în filtrul de acum, nu ' . $cerute . '.'
+                    : ''
             ),
             'trimise' => $trimise,
             'cazute' => $cazute,
             'sarite' => $sarite,
         ]);
+    }
+
+    /**
+     * Cateva firme luate la intamplare din filtrul de acum.
+     *
+     * Asa se scrie putin si des, fara sa aleaga cineva cu mana o suta de randuri
+     * in fiecare zi — si fara sa se scrie mereu aceloreasi, cum s-ar intampla
+     * daca s-ar lua de fiecare data primele din lista.
+     *
+     * Se aleg numai dintre cei carora li se poate scrie: cine s-a dezabonat nu
+     * intra in sac, deci nu are cum sa iasa din el.
+     *
+     * @param array{cauta?: string, judet?: string, stare?: string} $filtre
+     */
+    protected function aleseLaIntamplare(int $cati, array $filtre)
+    {
+        return $this->filtrate($filtre)
+            ->caroraLiSePoateScrie()
+            ->inRandomOrder()
+            ->limit($cati)
+            ->get();
     }
 
     /** Cum arata scrisoarea pentru un anume contact, inainte de a pleca. */

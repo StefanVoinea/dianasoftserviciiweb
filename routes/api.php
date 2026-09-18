@@ -106,6 +106,7 @@ Route::middleware(['auth:api', 'administrator.serviciu'])->group(function () {
      * Tot aici, sub aceeasi paza: e lista noastra, nu a vreunui client.
      */
     Route::get('/marketing/contacte', 'Api\MarketingController@index');
+    Route::get('/marketing/sabloane', 'Api\MarketingController@sabloane');
     Route::post('/marketing/import', 'Api\MarketingController@importa');
     Route::post('/marketing/trimite', 'Api\MarketingController@trimite');
     Route::post('/marketing/previzualizare', 'Api\MarketingController@previzualizare');

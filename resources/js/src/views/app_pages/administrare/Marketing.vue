@@ -154,10 +154,9 @@
           <b-button
             variant="primary"
             size="sm"
-            :disabled="!alesi.length"
             @click="deschideScrisoarea"
           >
-            Scrie celor {{ alesi.length }} aleși
+            {{ alesi.length ? 'Scrie celor ' + alesi.length + ' aleși' : 'Scrie o scrisoare' }}
           </b-button>
         </b-col>
       </b-row>
@@ -275,9 +274,57 @@
       size="lg"
       ok-title="Trimite"
       cancel-title="Renunță"
-      :ok-disabled="!scrisoare.subiect || !scrisoare.text || trimiteInCurs"
+      :ok-disabled="!scrisoare.subiect || !scrisoare.text || !cateScrisori || trimiteInCurs"
       @ok.prevent="trimite"
     >
+      <b-form-group label="Pornește de la un șablon">
+        <b-form-select
+          v-model="sablonAles"
+          :options="optiuniSabloane"
+          @change="iaSablonul"
+        />
+        <small
+          v-if="descriereaSablonului"
+          class="text-muted"
+        >{{ descriereaSablonului }}</small>
+      </b-form-group>
+
+      <b-form-group label="Cui se trimite">
+        <b-form-radio-group
+          v-model="scrisoare.cui"
+          stacked
+        >
+          <b-form-radio
+            value="alesi"
+            :disabled="!alesi.length"
+          >
+            Celor <strong>{{ alesi.length }}</strong> aleși din listă
+          </b-form-radio>
+          <b-form-radio value="intamplare">
+            La întâmplare, către
+            <b-form-input
+              v-model.number="scrisoare.cati"
+              type="number"
+              min="1"
+              :max="catLaIntamplare"
+              size="sm"
+              class="d-inline-block mx-50"
+              style="width: 90px;"
+              @focus="scrisoare.cui = 'intamplare'"
+            />
+            firme din filtrul de acum
+          </b-form-radio>
+        </b-form-radio-group>
+        <small
+          v-if="scrisoare.cui === 'intamplare'"
+          class="text-muted d-block mt-50"
+        >
+          Se aleg numai dintre cele care pot primi mesaje, din
+          {{ filtrulInVorbe }}. Așa se scrie puțin și des, fără să ajungă
+          scrisorile mereu la aceleași firme.
+        </small>
+      </b-form-group>
+
       <b-form-group label="Subiect">
         <b-form-input
           v-model="scrisoare.subiect"
@@ -320,15 +367,15 @@
       <b-button
         variant="flat-secondary"
         size="sm"
-        :disabled="!scrisoare.text || !alesi.length"
+        :disabled="!scrisoare.text || !contactDePrivit"
         @click="vezi"
       >
-        Vezi cum arată pentru primul ales
+        Vezi cum arată pentru o firmă din listă
       </b-button>
 
       <div class="mt-1">
         <small class="text-muted">
-          Se trimit <strong>{{ alesi.length }}</strong> scrisori. Cei care s-au dezabonat
+          Se trimit <strong>{{ cateScrisori }}</strong> scrisori. Cei care s-au dezabonat
           între timp sunt săriți fără să întrebe nimeni.
         </small>
       </div>
@@ -340,6 +387,7 @@
 import {
   BRow, BCol, BCard, BTable, BBadge, BButton, BFormInput, BFormSelect, BFormFile,
   BFormCheckbox, BFormGroup, BFormTextarea, BModal, BAlert, BSpinner, BPagination,
+  BFormRadio, BFormRadioGroup,
 } from 'bootstrap-vue'
 
 /**
@@ -367,6 +415,8 @@ export default {
     BAlert,
     BSpinner,
     BPagination,
+    BFormRadio,
+    BFormRadioGroup,
   },
   data() {
     return {
@@ -385,8 +435,13 @@ export default {
       alesi: [],
       filtre: { cauta: '', judet: '', stare: '' },
       scrisoareaVizibila: false,
-      scrisoare: { subiect: '', text: '', campanie: '' },
+      scrisoare: {
+        subiect: '', text: '', campanie: '', cui: 'alesi', cati: 25,
+      },
       previzualizare: null,
+      sabloane: [],
+      sablonAles: '',
+      catLaIntamplare: 500,
       campuri: [
         { key: 'alege', label: '', thStyle: { width: '40px' } },
         { key: 'denumire', label: 'Firma' },
@@ -434,6 +489,42 @@ export default {
       return Math.round(((this.sumar.demo || 0) / scrisi) * 1000) / 10
     },
 
+    optiuniSabloane() {
+      return [{ value: '', text: '— scriu eu textul —' }]
+        .concat(this.sabloane.map(sablon => ({ value: sablon.cheie, text: sablon.nume })))
+    },
+    descriereaSablonului() {
+      const sablon = this.sabloane.find(s => s.cheie === this.sablonAles)
+
+      return sablon ? sablon.descriere : ''
+    },
+    /** Câte scrisori pleacă, după felul ales de trimitere. */
+    cateScrisori() {
+      return this.scrisoare.cui === 'intamplare'
+        ? (this.scrisoare.cati || 0)
+        : this.alesi.length
+    },
+    /** Filtrul de acum, spus în cuvinte, ca omul să știe din ce se alege. */
+    filtrulInVorbe() {
+      const bucati = []
+
+      if (this.filtre.judet) bucati.push(`județul ${this.filtre.judet}`)
+      if (this.filtre.cauta) bucati.push(`cele care conțin „${this.filtre.cauta}"`)
+
+      const stare = this.optiuniStare.find(o => o.value === this.filtre.stare)
+
+      if (stare && stare.value) bucati.push(stare.text.toLowerCase())
+
+      return bucati.length ? bucati.join(', ') : 'toată lista'
+    },
+    /** Pe cine se arată previzualizarea: cel dintâi ales, altfel cel dintâi din filă. */
+    contactDePrivit() {
+      if (this.alesi.length) return this.alesi[0]
+
+      const intai = this.contactePotFiAlese[0]
+
+      return intai ? intai.id : null
+    },
     /** Numai cei abonați pot fi aleși; ceilalți nici nu se bifează. */
     contactePotFiAlese() {
       return this.contacte.filter(c => c.abonat)
@@ -445,6 +536,7 @@ export default {
   },
   created() {
     this.incarca()
+    this.iaSabloanele()
   },
   methods: {
     incarca(pagina) {
@@ -536,14 +628,68 @@ export default {
       }
     },
 
+    iaSabloanele() {
+      return this.$http.get('/marketing/sabloane')
+        .then(raspuns => {
+          this.sabloane = raspuns.data.data || []
+          this.catLaIntamplare = raspuns.data.cat_la_intamplare || 500
+        })
+        .catch(() => {
+          // Fără șabloane se poate scrie și de mână: nu e motiv de alarmă.
+          this.sabloane = []
+        })
+    },
+
+    /**
+     * Textul șablonului ales intră în formular, de unde se poate schimba.
+     *
+     * Ce a scris omul nu se pierde fără să știe: dacă are text în față, e
+     * întrebat întâi.
+     */
+    iaSablonul() {
+      const sablon = this.sabloane.find(s => s.cheie === this.sablonAles)
+
+      if (!sablon) return
+
+      const scris = (this.scrisoare.subiect || '').trim() || (this.scrisoare.text || '').trim()
+
+      const pune = () => {
+        this.scrisoare = {
+          ...this.scrisoare,
+          subiect: sablon.subiect,
+          text: sablon.text,
+          campanie: sablon.campanie || this.scrisoare.campanie,
+        }
+        this.previzualizare = null
+      }
+
+      if (!scris) {
+        pune()
+
+        return
+      }
+
+      this.$bvModal.msgBoxConfirm('Textul scris până acum se pierde. Punem șablonul în locul lui?', {
+        title: 'Șablon peste ce ați scris',
+        okTitle: 'Pune șablonul',
+        cancelTitle: 'Lasă cum e',
+        okVariant: 'primary',
+      })
+        .then(daNu => {
+          if (daNu) pune()
+          else this.sablonAles = ''
+        })
+    },
+
     deschideScrisoarea() {
       this.previzualizare = null
+      this.scrisoare.cui = this.alesi.length ? 'alesi' : 'intamplare'
       this.scrisoareaVizibila = true
     },
 
     vezi() {
       this.$http.post('/marketing/previzualizare', {
-        contact_id: this.alesi[0],
+        contact_id: this.contactDePrivit,
         text: this.scrisoare.text,
       })
         .then(raspuns => {
@@ -558,8 +704,12 @@ export default {
       this.trimiteInCurs = true
       this.eroare = ''
 
+      const laIntamplare = this.scrisoare.cui === 'intamplare'
+
       this.$http.post('/marketing/trimite', {
-        contacte: this.alesi,
+        contacte: laIntamplare ? [] : this.alesi,
+        cati: laIntamplare ? this.scrisoare.cati : null,
+        filtre: laIntamplare ? this.filtre : null,
         subiect: this.scrisoare.subiect,
         text: this.scrisoare.text,
         campanie: this.scrisoare.campanie,
