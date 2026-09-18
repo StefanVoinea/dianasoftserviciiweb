@@ -82,6 +82,38 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Cache-ul celulelor
+    |--------------------------------------------------------------------------
+    |
+    | PhpSpreadsheet tine celulele in memorie. La listele CECCAR — aproape
+    | douazeci de mii de randuri pe treisprezece coloane — asta trecea de cei
+    | 128 MB ai serverului, iar importul murea fara sa scrie niciun contact.
+    |
+    | Rezolvarea a fost alta: fisierul se citeste pe transe (vezi chunkSize in
+    | FirmeContabilitateImport), asa ca in memorie nu intra niciodata mai mult
+    | decat o transa. Cu transe de 5000 de randuri, varful masurat e de 78 MB.
+    |
+    | „batch" se pune aici daca vreodata nici atat nu incape: el lasa in memorie
+    | doar ultimele celule si da restul in cache-ul aplicatiei. La proba n-a
+    | adus nimic — timpul a ramas acelasi —, deci nu se plateste degeaba.
+    |
+    | Drivere: memory|illuminate|batch
+    |
+    */
+    'cache' => [
+        'driver' => 'memory',
+
+        'batch' => [
+            'memory_limit' => 60000,
+        ],
+
+        'illuminate' => [
+            'store' => null,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Extension detector
     |--------------------------------------------------------------------------
     |

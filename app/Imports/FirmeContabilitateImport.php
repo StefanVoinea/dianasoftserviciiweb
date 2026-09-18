@@ -4,6 +4,7 @@ namespace App\Imports;
 
 use App\Models\MarketingContact;
 use Maatwebsite\Excel\Concerns\ToCollection;
+use Maatwebsite\Excel\Concerns\WithChunkReading;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Events\BeforeSheet;
@@ -32,7 +33,7 @@ use Illuminate\Support\Collection;
  * dezabonarea cuiva nu are cum sa fie desfacuta de un fisier. Cine vrea date
  * noi pentru un contact vechi il sterge intai din fila.
  */
-class FirmeContabilitateImport implements ToCollection, WithHeadingRow, WithEvents
+class FirmeContabilitateImport implements ToCollection, WithHeadingRow, WithEvents, WithChunkReading
 {
     /** Din ce fisier a venit lista; se scrie pe fiecare contact. */
     protected $sursa;
@@ -60,6 +61,19 @@ class FirmeContabilitateImport implements ToCollection, WithHeadingRow, WithEven
     public function __construct(string $sursa)
     {
         $this->sursa = $sursa;
+    }
+
+    /**
+     * Cate randuri se citesc deodata.
+     *
+     * Fisierul intreg nu incape in memoria serverului: listele CECCAR au
+     * aproape douazeci de mii de randuri, iar importul murea cu „Allowed memory
+     * size exhausted" fara sa scrie niciun contact. Citit pe transe, fiecare
+     * transa se da la o parte inainte de urmatoarea.
+     */
+    public function chunkSize(): int
+    {
+        return 5000;
     }
 
     /** @return array<string, callable> */

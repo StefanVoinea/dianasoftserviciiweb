@@ -160,6 +160,13 @@ class MarketingController extends Controller
             'fisier' => 'required|file|mimes:xlsx,xls,csv,txt|max:20480',
         ]);
 
+        /*
+         * Un fisier de douazeci de mii de randuri tine mai mult decat rabdarea
+         * obisnuita a unei cereri web: citit pe transe, dureaza vreo douazeci
+         * si cinci de secunde. Se cere ragaz dinadins, o singura data, aici.
+         */
+        set_time_limit(300);
+
         $fisier = $request->file('fisier');
         $import = new FirmeContabilitateImport($fisier->getClientOriginalName());
 
