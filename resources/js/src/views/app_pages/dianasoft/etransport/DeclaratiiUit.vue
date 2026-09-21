@@ -2073,6 +2073,22 @@ export default {
         ? ` Fișierul e de retur: declarația a trecut pe „${operatiune || this.declaratia.tip_operatiune}"; verificați traseul.`
         : ''
       this.info = `${linii.length} linii importate.${schimbare}${avertismente.length ? ` ${avertismente.join(' ')}` : ''}`
+
+      /*
+       * Cursul e al zilei facturii, nu al zilei transportului.
+       *
+       * Valoarea în lei se socotește la cursul din ziua documentului, iar
+       * fișierul tocmai a spus care e ziua aceea. Fără asta cursul rămânea gol
+       * — sau rămânea cel de ieri — și valorile în lei ieșeau toate goale.
+       */
+      if (antet.document_data && this.declaratia.valuta !== 'RON') {
+        this.iaCursulBnr(true, antet.document_data)
+          .then(() => {
+            if (!this.declaratia.curs) {
+              this.info += ` Nu am găsit curs BNR pentru ${antet.document_data}; scrieți-l de mână.`
+            }
+          })
+      }
     },
     cautaCodVamal(termen) {
       if (!termen || termen.length < 2) return
@@ -2093,19 +2109,35 @@ export default {
         linie.denumire = gasit.denumire
       }
     },
-    iaCursulBnr(tacut) {
-      if (!this.declaratia || !this.editabila) return
+    /** Ziua facturii, dacă declarația poartă una. */
+    ziuaFacturii() {
+      const document = (this.declaratia.documente || []).find(d => d && d.data)
+
+      return document ? document.data : null
+    },
+    /**
+     * Cursul BNR, pe o anumită zi.
+     *
+     * Fără zi anume se ia cea a facturii, fiindcă valoarea în lei se socotește
+     * la cursul documentului; abia când declarația n-are încă factură se cade
+     * pe ziua transportului.
+     */
+    iaCursulBnr(tacut, ziua) {
+      if (!this.declaratia || !this.editabila) return Promise.resolve()
 
       if (this.declaratia.valuta === 'RON') {
         this.declaratia.curs = 1
         this.recalculeazaLeii()
 
-        return
+        return Promise.resolve()
       }
 
-      const data = this.declaratia.data_transport || new Date().toISOString().slice(0, 10)
+      const data = ziua
+        || this.ziuaFacturii()
+        || this.declaratia.data_transport
+        || new Date().toISOString().slice(0, 10)
 
-      this.$http.get('/anaf-etransport/declaratii/curs', { params: { valuta: this.declaratia.valuta, data } })
+      return this.$http.get('/anaf-etransport/declaratii/curs', { params: { valuta: this.declaratia.valuta, data } })
         .then(raspuns => {
           if (raspuns.data.curs) {
             this.declaratia.curs = raspuns.data.curs
