@@ -245,6 +245,86 @@ class EtransportArhivaTest extends TestCase
     }
 
     /**
+     * [2026-09-21] Aceleași fișiere, dar închise într-o arhivă.
+     *
+     * Furnizorul le trimite și așa: arhiva zilnică ține acum „TARIC ....dat" în
+     * loc de „T01_...". Recunoașterea după conținut se făcea numai pentru
+     * fișierele lăsate de-a dreptul în dosar, iar în arhivă se căuta tot după
+     * nume: distincta intra, lista pe articole nu, și ieșea o ciornă fără nicio
+     * linie de marfă.
+     */
+    public function test_taricurile_dintr_o_arhiva_se_recunosc_si_ele_din_continut()
+    {
+        $cale = tempnam(sys_get_temp_dir(), 'arh') . '.zip';
+        $arhiva = new \ZipArchive();
+        $arhiva->open($cale, \ZipArchive::CREATE);
+        $arhiva->addFromString('TARIC 01 ACC SH 10076193.dat', $this->articoleDat());
+        $arhiva->addFromString('236203000002.txt', $this->distinctaDat());
+        $arhiva->close();
+
+        $this->magazinulCunoscut();
+
+        $rezultat = (new ImportArhiva())->importaFisiere(
+            [['nume' => 'zilnica.zip', 'cale' => $cale]],
+            '15196216',
+            null,
+            true
+        );
+
+        @unlink($cale);
+
+        $spuse = implode(' | ', $rezultat['avertismente']);
+        $this->assertStringNotContainsString('nu are fișiere', $spuse);
+
+        $ttn = EtransportDeclaratie::where('referinta_interna', 'Retur 10076193 (TTN)')->first();
+
+        $this->assertNotNull($ttn, 'ciorna trebuia făcută');
+        $this->assertCount(1, $ttn->linii, 'ciorna a ieșit fără linii de marfă');
+        $this->assertSame('61046200', $ttn->linii[0]['cod_tarifar']);
+        $this->assertSame('BAIA MARE', $ttn->loc_start['localitate']);
+    }
+
+    /** Lista pe articole, așa cum o trimite furnizorul în „.dat". */
+    protected function articoleDat(): string
+    {
+        return implode("
+", [
+            '     Sender.............: TEDDY S.P.A.',
+            '                          Italy                                          Vat N: 00953910403',
+            '     Documents..........:  10076193 of 07.09.2026',
+            '     Item_________ Lot Description_of_clotMade In__________________ Taric____ ____    Net_weight Quantity__ Val_Unit_price__ Price__________',
+            '     SAB0066865001   1 Pants              BD   Bangladesh           61046200  Pantaloni,tute con bretelle         9,730         70 EUR         2,45          171,48',
+            '     Total gross weight.:    KG              11,500',
+        ]);
+    }
+
+    /** Distinta ei, cu numărul facturii și magazinul. */
+    protected function distinctaDat(): string
+    {
+        return implode("
+", [
+            '    DISTINTA CON LISTINI VENDITA',
+            '    Document ....:  01 ACC SH CREDIT NOTE',
+            '    Number ......:   10076193     del  7/09/2026',
+            '    Destinazione.:  0000004 000 TEDDY S.P.A.',
+            '                                 From  S.C. EMPORIO COM SRL                     NEG0002521',
+        ]);
+    }
+
+    /** Magazinul are o declarație anterioară, din care își ia adresa. */
+    protected function magazinulCunoscut(): void
+    {
+        EtransportDeclaratie::create([
+            'stare' => 'validata', 'tip_operatiune' => 10, 'referinta_interna' => 'Livrare veche',
+            'loc_start' => ['tip' => 'ptf', 'cod_ptf' => 38],
+            'loc_final' => [
+                'tip' => 'adresa', 'cod_judet' => 25, 'localitate' => 'BAIA MARE', 'strada' => 'BD UNIRII',
+                'numar' => '1', 'magazin_cod' => 'NEG0002521', 'magazin_denumire' => '2521 Baia Mare',
+            ],
+        ]);
+    }
+
+    /**
      * [2026-09-16] Fișierele al căror nume nu spune nimic se recunosc din ce scrie în ele.
      *
      * Furnizorul le mai trimite și dezarhivate, botezate altfel și cu altă

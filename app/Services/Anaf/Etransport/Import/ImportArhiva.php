@@ -215,8 +215,10 @@ class ImportArhiva
     /**
      * Desface o arhivă în fișierele ei, adăugându-le la grupurile de facturi.
      *
-     * Ce nu e T02, T01 sau D01 se lasă acolo: arhiva mai poartă și facturi PDF,
-     * detalii de articole și alte fișiere care nu ne trebuie.
+     * Se citesc numai rapoartele la imprimantă — „.txt", „.prn", „.dat" —, iar
+     * fiecare se recunoaște ca și cum ar fi stat singur în dosar: întâi după
+     * nume, apoi după ce scrie în el. Restul rămâne acolo: arhiva mai poartă și
+     * facturi PDF și alte fișiere care nu ne trebuie.
      */
     protected function desfaArhiva(array $fisier, array &$grupuri, array &$rezultat): void
     {
@@ -233,19 +235,26 @@ class ImportArhiva
         for ($i = 0; $i < $arhiva->numFiles; $i++) {
             $nume = basename($arhiva->getNameIndex($i));
 
-            if (!preg_match(self::TIPAR_FISIER, $nume, $gasit)) {
+            /*
+             * [2026-09-21] Si din arhiva se citeste tot dupa continut, nu doar
+             * dupa nume: furnizorul a inceput sa puna in ea „TARIC ....dat" in
+             * loc de „T01_...". Cand se cautau doar numele, distinta intra si
+             * lista pe articole nu, iar ciorna iesea fara nicio linie de marfa.
+             */
+            if (!in_array($this->extensia($nume), ['txt', 'text', 'prn', 'dat'], true)) {
                 continue;
             }
 
-            $grupuri[$gasit[2]][strtoupper($gasit[1])] = $arhiva->getFromIndex($i);
-            $gasiteAici++;
+            if ($this->aseazaContinut($nume, (string) $arhiva->getFromIndex($i), $grupuri, $rezultat)) {
+                $gasiteAici++;
+            }
         }
 
         $arhiva->close();
 
         if ($gasiteAici === 0) {
             $rezultat['avertismente'][] = 'Arhiva „' . basename($fisier['nume'])
-                . '" nu are fișiere T02_*, T01_* sau D01_*; sărită.';
+                . '" nu are niciun raport de citit; sărită.';
         }
     }
 
@@ -495,13 +504,28 @@ class ImportArhiva
      */
     protected function aseazaRaportul(array $fisier, array &$grupuri, array &$rezultat): void
     {
-        $nume = basename($fisier['nume']);
-        $continut = (string) file_get_contents($fisier['cale']);
+        $this->aseazaContinut(
+            basename($fisier['nume']),
+            (string) file_get_contents($fisier['cale']),
+            $grupuri,
+            $rezultat
+        );
+    }
 
+    /**
+     * Pune un raport la factura lui, oriunde ar fi fost găsit.
+     *
+     * Trece pe aici și ce vine dintr-o arhivă, și ce stă de-a dreptul în dosar:
+     * amândouă se recunosc la fel, întâi după nume, apoi după ce scrie în ele.
+     *
+     * @return bool  s-a așezat undeva
+     */
+    protected function aseazaContinut(string $nume, string $continut, array &$grupuri, array &$rezultat): bool
+    {
         if (preg_match(self::TIPAR_FISIER, $nume, $gasit)) {
             $grupuri[$gasit[2]][strtoupper($gasit[1])] = $continut;
 
-            return;
+            return true;
         }
 
         $fel = $this->felulRaportului($continut);
@@ -509,7 +533,7 @@ class ImportArhiva
         if ($fel === null) {
             $rezultat['avertismente'][] = '„' . $nume . '" nu e T02, T01 sau D01; sărit.';
 
-            return;
+            return false;
         }
 
         $factura = $this->numarulDinContinut($continut);
@@ -518,10 +542,18 @@ class ImportArhiva
             $rezultat['avertismente'][] = '„' . $nume . '" e ' . $fel
                 . ', dar nu-i găsesc numărul facturii în antet; sărit.';
 
-            return;
+            return false;
         }
 
         $grupuri[$factura][$fel] = $continut;
+
+        return true;
+    }
+
+    /** Extensia, cu litere mici. */
+    protected function extensia(string $nume): string
+    {
+        return strtolower(pathinfo($nume, PATHINFO_EXTENSION));
     }
 
     /**
