@@ -802,15 +802,28 @@
               v-model="declaratia.transportator_cod"
               size="sm"
               :disabled="!editabila"
+              @keyup.enter="iaTransportatorulDeLaAnaf"
+              @blur="iaTransportatorulDeLaAnaf"
             />
           </b-col>
           <b-col md="7">
             <label class="small mb-0">Denumire transportator*</label>
-            <b-form-input
-              v-model="declaratia.transportator_denumire"
-              size="sm"
-              :disabled="!editabila"
-            />
+            <b-input-group size="sm">
+              <b-form-input
+                v-model="declaratia.transportator_denumire"
+                :disabled="!editabila"
+              />
+              <b-input-group-append>
+                <b-button
+                  variant="outline-primary"
+                  :disabled="!editabila || transportatorInCurs"
+                  title="Ia denumirea de la ANAF, după CIF"
+                  @click="iaTransportatorulDeLaAnaf(true)"
+                >
+                  {{ transportatorInCurs ? 'ANAF…' : 'ANAF' }}
+                </b-button>
+              </b-input-group-append>
+            </b-input-group>
           </b-col>
         </b-row>
       </b-card>
@@ -1630,6 +1643,10 @@ export default {
         tari: {},
       },
       coduriVamaleGasite: [],
+
+      // Denumirea transportatorului, cerută de la ANAF după CIF
+      transportatorInCurs: false,
+      cifTransportatorIntrebat: '',
       importPermis: false,
       cifImplicit: '',
       fisiereDeImportat: [],
@@ -2108,6 +2125,48 @@ export default {
         // eslint-disable-next-line no-param-reassign
         linie.denumire = gasit.denumire
       }
+    },
+    /**
+     * Denumirea transportatorului, luată de la ANAF după CIF.
+     *
+     * Se cheamă la ieșirea din câmp sau la apăsarea butonului, nu la fiecare
+     * tastă: serviciul ANAF are limită de apeluri. Același cod nu se întreabă de
+     * două ori la rând, afară de cazul când omul cere el asta, apăsând.
+     *
+     * Numai pentru firmele românești: ANAF nu știe de transportatori străini.
+     * Pe aceia îi scrie omul, cum i-a scris și până acum.
+     */
+    iaTransportatorulDeLaAnaf(cerutDeOm) {
+      if (!this.declaratia || !this.editabila) return
+      if (this.declaratia.transportator_tara !== 'RO') return
+
+      const cui = (this.declaratia.transportator_cod || '').trim()
+
+      if (cui === '' || this.transportatorInCurs) return
+      if (cui === this.cifTransportatorIntrebat && cerutDeOm !== true) return
+
+      this.transportatorInCurs = true
+      this.cifTransportatorIntrebat = cui
+
+      this.$http.get('/anaf-etransport/declaratii/firma', { params: { cui } })
+        .then(raspuns => {
+          const firma = raspuns.data.data
+
+          this.declaratia.transportator_denumire = firma.denumire
+
+          if (firma.radiata) {
+            this.eroare = `${firma.denumire} e radiată la ANAF (${firma.stare}); verificați transportatorul.`
+          } else if (firma.inactiva) {
+            this.eroare = `${firma.denumire} e declarată inactivă la ANAF; verificați transportatorul.`
+          }
+        })
+        .catch(err => {
+          // Nu oprim nimic: denumirea se poate scrie si de mana.
+          this.info = this.mesajEroare(err, 'ANAF nu a răspuns; scrieți denumirea transportatorului de mână.')
+        })
+        .finally(() => {
+          this.transportatorInCurs = false
+        })
     },
     /** Ziua facturii, dacă declarația poartă una. */
     ziuaFacturii() {

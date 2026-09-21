@@ -298,6 +298,8 @@ Route::middleware(['auth:api', 'companie', 'modul:etransport'])->group(function 
     Route::get('/anaf-etransport/declaratii/nomenclatoare', 'Api\EtransportDeclaratiiController@nomenclatoare');
     Route::get('/anaf-etransport/declaratii/coduri-vamale', 'Api\EtransportDeclaratiiController@coduriVamale');
     Route::get('/anaf-etransport/declaratii/curs', 'Api\EtransportDeclaratiiController@curs');
+    // Denumirea firmei dupa CIF, de la ANAF (transportatorul)
+    Route::get('/anaf-etransport/declaratii/firma', 'Api\EtransportDeclaratiiController@firma');
     Route::post('/anaf-etransport/declaratii/importa', 'Api\EtransportDeclaratiiController@importa');
     Route::post('/anaf-etransport/declaratii/intrastat', 'Api\EtransportDeclaratiiController@intrastat');
     Route::post('/anaf-etransport/declaratii/intrastat/centralizator', 'Api\EtransportDeclaratiiController@centralizatorIntrastat');

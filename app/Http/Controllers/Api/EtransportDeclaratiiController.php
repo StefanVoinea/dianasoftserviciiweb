@@ -12,6 +12,7 @@ use App\Services\Anaf\Etransport\EtransportException;
 use App\Services\Anaf\Etransport\Import\ImportFisiere;
 use App\Services\Anaf\Etransport\Nomenclatoare;
 use App\Services\Anaf\Etransport\StareDeclaratie;
+use App\Services\Anaf\DateFirma;
 use App\Services\Anaf\Format;
 use App\Services\Anaf\Jurnal;
 use Illuminate\Http\Request;
@@ -100,6 +101,29 @@ class EtransportDeclaratiiController extends Controller
     }
 
     /** Cursul BNR pentru valuta si ziua ceruta (cel mai recent pana la acea zi). */
+    /**
+     * Denumirea unei firme românești, după codul ei fiscal.
+     *
+     * Se cheamă din formular, când omul scrie CIF-ul transportatorului: ANAF
+     * știe denumirea, deci n-are rost să fie scrisă de mână și, mai ales, să fie
+     * scrisă altfel decât o are ANAF — declarația s-ar întoarce.
+     */
+    public function firma(Request $request, DateFirma $anaf)
+    {
+        $date = $request->validate(['cui' => 'required|string|max:20']);
+
+        $firma = $anaf->dupaCui($date['cui']);
+
+        if ($firma === null) {
+            return response()->json([
+                'success' => false,
+                'message' => 'ANAF nu are nicio firmă cu acest cod fiscal, sau serviciul lor nu răspunde acum.',
+            ], 404);
+        }
+
+        return response()->json(['success' => true, 'data' => $firma]);
+    }
+
     public function curs(Request $request)
     {
         $date = $request->validate([
