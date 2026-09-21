@@ -245,6 +245,41 @@ class EtransportArhivaTest extends TestCase
     }
 
     /**
+     * [2026-09-21] Arhiva încărcată din buton ajunge fără nume, și tot trebuie citită.
+     *
+     * Laravel pune fișierul încărcat într-un fișier trecător — „/tmp/phpA1B2C3"
+     * —, care n-are nicio extensie. Felul fișierului se alegea numai după
+     * extensie, așa că arhiva nu mai era recunoscută ca arhivă: importul se
+     * oprea cu „Nu s-a găsit nimic de citit", deși înăuntru erau toate
+     * rapoartele.
+     */
+    public function test_arhiva_fara_extensie_in_nume_se_citeste_dupa_continut()
+    {
+        $cale = tempnam(sys_get_temp_dir(), 'incarcat');
+
+        $arhiva = new \ZipArchive();
+        $arhiva->open($cale, \ZipArchive::OVERWRITE);
+        $arhiva->addFromString('TARIC 01 ACC SH 10076193.dat', $this->articoleDat());
+        $arhiva->addFromString('236203000002.txt', $this->distinctaDat());
+        $arhiva->close();
+
+        $this->magazinulCunoscut();
+
+        // Exact cum cheama controlerul: calea fisierului trecator, fara extensie.
+        $rezultat = (new ImportArhiva())->importa($cale, '15196216', null, true);
+
+        @unlink($cale);
+
+        $spuse = implode(' | ', $rezultat['avertismente']);
+        $this->assertStringNotContainsString('fel de fișier necunoscut', $spuse);
+
+        $ttn = EtransportDeclaratie::where('referinta_interna', 'Retur 10076193 (TTN)')->first();
+
+        $this->assertNotNull($ttn, 'arhiva trebuia citită și fără extensie în nume');
+        $this->assertCount(1, $ttn->linii);
+    }
+
+    /**
      * [2026-09-21] Aceleași fișiere, dar închise într-o arhivă.
      *
      * Furnizorul le trimite și așa: arhiva zilnică ține acum „TARIC ....dat" în

@@ -84,10 +84,15 @@ class ImportArhiva
      *
      * @return array{ciorne: array<int, array{id: int, factura: string, magazin: ?string}>, avertismente: array<int, string>, gestiuni_noi: array<int, array{cod_furnizor: string, denumire_furnizor: ?string}>}
      */
-    public function importa(string $caleArhiva, ?string $cifDeclarant, ?int $userId = null, bool $marfaRetur = false): array
-    {
+    public function importa(
+        string $caleArhiva,
+        ?string $cifDeclarant,
+        ?int $userId = null,
+        bool $marfaRetur = false,
+        ?string $nume = null
+    ): array {
         return $this->importaFisiere(
-            [['nume' => basename($caleArhiva), 'cale' => $caleArhiva]],
+            [['nume' => $nume ?: basename($caleArhiva), 'cale' => $caleArhiva]],
             $cifDeclarant,
             $userId,
             $marfaRetur
@@ -119,7 +124,7 @@ class ImportArhiva
             $nume = basename($fisier['nume']);
             $extensie = strtolower(pathinfo($nume, PATHINFO_EXTENSION));
 
-            if ($extensie === 'zip') {
+            if ($extensie === 'zip' || $this->esteArhiva($fisier['cale'])) {
                 $this->desfaArhiva($fisier, $grupuri, $rezultat);
             } elseif (in_array($extensie, ['txt', 'text', 'prn', 'dat'], true)) {
                 $this->aseazaRaportul($fisier, $grupuri, $rezultat);
@@ -554,6 +559,23 @@ class ImportArhiva
     protected function extensia(string $nume): string
     {
         return strtolower(pathinfo($nume, PATHINFO_EXTENSION));
+    }
+
+    /**
+     * E o arhivă ZIP, orice ar spune numele?
+     *
+     * Fișierul încărcat din buton ajunge aici sub numele unuia trecător —
+     * „/tmp/phpA1B2C3" —, care n-are nicio extensie. Judecat numai după nume,
+     * nu mai era recunoscut ca arhivă, iar importul se oprea cu „Nu s-a găsit
+     * nimic de citit", deși înăuntru erau toate rapoartele.
+     *
+     * Semnul unei arhive stă în primii patru octeți ai ei, si nu minte.
+     */
+    protected function esteArhiva(string $cale): bool
+    {
+        $capat = @file_get_contents($cale, false, null, 0, 4);
+
+        return $capat !== false && strncmp($capat, "PK", 4) === 0;
     }
 
     /**

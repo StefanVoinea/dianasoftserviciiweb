@@ -452,7 +452,9 @@ class EtransportDeclaratiiController extends Controller
                 $fisier->getRealPath(),
                 $this->cifClientului(),
                 optional($request->user())->id,
-                $request->boolean('marfa_retur')
+                $request->boolean('marfa_retur'),
+                // Numele dat de om, nu al fisierului trecator in care a fost pus.
+                $fisier->getClientOriginalName()
             );
         } catch (EtransportException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
