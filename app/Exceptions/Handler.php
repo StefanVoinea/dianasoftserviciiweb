@@ -6,6 +6,7 @@ use App\Services\Anaf\AlertaEroare;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Validation\ValidationException;
+use League\OAuth2\Server\Exception\OAuthServerException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
@@ -76,6 +77,24 @@ class Handler extends ExceptionHandler
     {
         if ($e instanceof ValidationException || $e instanceof AuthenticationException) {
             return false;
+        }
+
+        /*
+         * [2026-09-23] Jetonul care nu mai e bun: expirat, revocat, semnat
+         * altfel.
+         *
+         * Passport nu lasa poticnirea sa iasa afara — o prinde —, dar o da
+         * raportorului inainte s-o inghita (TokenGuard::getPsrRequestViaBearerToken).
+         * Asa, o fila lasata deschisa peste noapte, care intreaba din minut in
+         * minut daca s-a deschis fereastra de PIN, trimitea cate o instiintare
+         * de eroare la fiecare intrebare de dupa expirarea jetonului.
+         *
+         * Ele spun doar ca cine a batut la usa n-avea cheia potrivita, nu ca
+         * s-a stricat ceva la noi, si se judeca dupa raspunsul pe care il cer —
+         * ca oricare alta eroare HTTP de mai jos.
+         */
+        if ($e instanceof OAuthServerException) {
+            return $e->getHttpStatusCode() >= 500;
         }
 
         if ($e instanceof HttpExceptionInterface) {
