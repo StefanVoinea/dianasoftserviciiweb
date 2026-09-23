@@ -6,7 +6,7 @@ use App\Models\AnafCertificat;
 use App\Models\CertificatUtilizator;
 use App\Services\Anaf\Bridge\Licente;
 use App\Services\Anaf\Bridge\Punte;
-use Illuminate\Support\Facades\Auth;
+use App\Support\ContextUtilizator;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -235,20 +235,16 @@ class CertificatService
     protected function alUtilizatorului(): ?AnafCertificat
     {
         /*
-         * Nu orice cerere poarta un token al aplicatiei: agentul de la client
-         * vine cu codul lui de instalare, iar Passport, incercand sa-l citeasca
-         * drept JWT, se opreste cu „The JWT string must have two dots" si
-         * darama toata cererea. Orice poticnire a autentificarii inseamna aici
-         * doar „nimeni conectat" — nu e treaba rezolvarii certificatului sa
-         * pice lucrarea.
+         * Cine e omul se intreaba intr-un singur loc, si acolo se stie cand nu
+         * are rost sa fie intrebat Passport.
+         *
+         * [2026-09-23] Aici se prindea poticnirea, dar tot se ajungea la
+         * Passport — iar el o raporteaza inainte s-o inghita (vezi
+         * TokenGuard::getPsrRequestViaBearerToken). Asa pleca cate o instiintare
+         * de eroare la fiecare inrolare a unui calculator nou, desi inrolarea se
+         * facea cum trebuie.
          */
-        try {
-            $user = Auth::guard('api')->user();
-        } catch (\Throwable $e) {
-            $user = null;
-        }
-
-        $user = $user ?: Auth::user();
+        $user = ContextUtilizator::curent();
 
         if (!$user) {
             return null;

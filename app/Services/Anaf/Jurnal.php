@@ -175,6 +175,17 @@ class Jurnal
      * Un token Passport e un JWT: trei parti despartite prin doua puncte. Codul
      * de instalare al agentului nu seamana cu asa ceva, iar fara cerere (in
      * comenzile din consola) nu e nimeni de cautat.
+     *
+     * Numai forma nu e de ajuns, si asta s-a vazut in productie. Jetonul nostru
+     * de inrolare — „i1.<date>.<semnatura>", vezi Licente::jetonInrolare — are
+     * si el doua puncte, deci arata intocmai ca un JWT. Passport il lua drept
+     * token al aplicatiei, nu-i recunostea semnatura si RAPORTA „acces refuzat"
+     * inainte sa taca (vezi TokenGuard::getPsrRequestViaBearerToken, care prinde
+     * exceptia dupa ce o da mai departe raportorului). Iesea cate o instiintare
+     * de eroare la fiecare inrolare, desi inrolarea se facuse cum trebuie.
+     *
+     * De aceea se intreaba intai unde bate cererea: pe caile puntii nu vine
+     * niciodata un token al aplicatiei — nici de la agent, nici de la server.
      */
     protected static function pareTokenulAplicatiei(): bool
     {
@@ -182,7 +193,16 @@ class Jurnal
             return false;
         }
 
+        if (request()->is('api/punte/*')) {
+            return false;
+        }
+
         $token = (string) request()->bearerToken();
+
+        // Jetoanele noastre isi spun felul in fata; ale lui Passport, nu.
+        if (strpos($token, 'i1.') === 0) {
+            return false;
+        }
 
         return $token !== '' && substr_count($token, '.') === 2;
     }
