@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\URL;
  * O scrisoare catre o firma din lista de marketing.
  *
  * Textul vine de la om, din fila; aici se potriveste pe fiecare destinatar si i
- * se pune legatura de dezabonare — fara ea, scrisoarea nu pleaca deloc.
+ * se pun cele doua legaturi — cererea de demonstratie si pagina de prezentare —
+ * plus dezabonarea, fara de care scrisoarea nu pleaca deloc.
  *
  * Legatura merge si in antetul „List-Unsubscribe": asa o arata si programele de
  * posta, cu un buton al lor, iar omul care nu vrea sa mai primeasca nimic nu e
@@ -32,6 +33,13 @@ class ScrisoareMarketing extends Mailable
     public $textul;
     public $legaturaDezabonare;
     public $legaturaDemo;
+
+    /** Pagina de prezentare, pentru cine vrea sa se uite intai singur. */
+    public $legaturaPrezentare;
+
+    /** Cine scrie: numele si adresa casei, aceleasi si in antet, si in subsol. */
+    public $expeditorNume;
+    public $expeditorAdresa;
 
     /**
      * Numarul randului din evidenta, purtat pana la plecare.
@@ -63,6 +71,12 @@ class ScrisoareMarketing extends Mailable
          */
         $this->legaturaDemo = URL::to('/demo/' . $contact->jeton)
             . ($campanie !== '' ? '?c=' . urlencode($campanie) : '');
+
+        $this->legaturaPrezentare = (string) config('prezentare.site');
+
+        $expeditor = config('marketing.expeditor', []);
+        $this->expeditorAdresa = trim((string) ($expeditor['adresa'] ?? '')) ?: config('mail.from.address');
+        $this->expeditorNume = trim((string) ($expeditor['nume'] ?? '')) ?: config('mail.from.name');
 
         $this->textul = self::potriveste($text, $contact);
     }
@@ -98,6 +112,19 @@ class ScrisoareMarketing extends Mailable
 
         if ($copia !== '') {
             $this->bcc($copia);
+        }
+
+        /*
+         * Cine scrie se spune aici, nu se lasa pe seama expeditorului obisnuit
+         * al aplicatiei.
+         *
+         * MAIL_FROM_NAME e bun pentru o instiintare tehnica si poate fi orice
+         * pe serverul unde se intampla sa ruleze aplicatia — numele omului care
+         * a pus-o acolo, de pilda. Intr-o scrisoare catre cineva care nu ne
+         * cunoaste, in cutia lui trebuie sa scrie numele casei.
+         */
+        if ($this->expeditorAdresa) {
+            $this->from($this->expeditorAdresa, $this->expeditorNume ?: null);
         }
 
         return $this->subject($this->subiectul)

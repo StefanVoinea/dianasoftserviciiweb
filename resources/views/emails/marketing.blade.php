@@ -20,12 +20,16 @@
                     </td>
                 </tr>
 
-                {{-- Butonul, la vedere si mare cat sa se apese si de pe telefon.
-                     Apasarea lui e singurul semn cinstit de interes pe care il
-                     putem avea: deschiderile se numara prost, o fapta nu. --}}
+                {{-- Cele doua butoane, la vedere si mari cat sa se apese si de pe
+                     telefon. Apasarea e singurul semn cinstit de interes pe care
+                     il putem avea: deschiderile se numara prost, o fapta nu.
+
+                     Cel plin cere demonstratia; cel gol duce la pagina de
+                     prezentare, pentru cine vrea sa se uite intai singur, fara
+                     sa ceara nimanui nimic. --}}
                 <tr>
                     <td style="padding:6px 30px 4px;" align="center">
-                        <table role="presentation" cellpadding="0" cellspacing="0">
+                        <table role="presentation" cellpadding="0" cellspacing="0" align="center">
                             <tr>
                                 <td style="background:#22406f; border-radius:8px;">
                                     <a href="{{ $legaturaDemo }}"
@@ -33,8 +37,23 @@
                                         Solicită o demonstrație
                                     </a>
                                 </td>
+                                <td style="width:12px; font-size:0; line-height:0;">&nbsp;</td>
+                                <td style="border:1px solid #22406f; border-radius:8px;">
+                                    <a href="{{ $legaturaPrezentare }}"
+                                       style="display:inline-block; padding:12px 26px; font-size:15px; font-weight:600; color:#22406f; text-decoration:none;">
+                                        Prezentarea aplicației
+                                    </a>
+                                </td>
                             </tr>
                         </table>
+
+                        {{-- Adresa scrisa la vedere: unele programe de posta nu
+                             arata unde duce un buton, iar o legatura pe care n-o
+                             poti citi inainte s-o apesi nu inspira incredere. --}}
+                        <div style="margin-top:10px; font-size:12px; color:#8a8a8a;">
+                            sau intrați singur pe
+                            <a href="{{ $legaturaPrezentare }}" style="color:#22406f;">{{ preg_replace('#^https?://#', '', $legaturaPrezentare) }}</a>
+                        </div>
                     </td>
                 </tr>
 
@@ -45,9 +64,9 @@
                         {{-- Cine scrie. O scrisoare de la cineva care nu-si spune
                              numele si adresa n-ar trebui trimisa niciodata. --}}
                         <div style="font-size:12px; line-height:1.6; color:#8a8a8a;">
-                            {{ config('mail.from.name') }}
-                            @if (config('mail.from.address'))
-                                &middot; {{ config('mail.from.address') }}
+                            {{ $expeditorNume }}
+                            @if ($expeditorAdresa)
+                                &middot; {{ $expeditorAdresa }}
                             @endif
                             <br>
 

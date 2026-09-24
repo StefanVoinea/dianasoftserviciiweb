@@ -21,6 +21,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Cine scrie, asa cum se vede in cutia destinatarului
+    |--------------------------------------------------------------------------
+    |
+    | Scrisorile plecau cu expeditorul obisnuit al aplicatiei (MAIL_FROM_NAME),
+    | care e bun pentru o instiintare tehnica, dar nu si pentru o scrisoare
+    | catre cineva care nu ne cunoaste: acolo trebuie sa scrie numele casei, nu
+    | al omului care a apasat butonul sau al serverului.
+    |
+    | Lasate goale, se folosesc valorile din config/mail.php.
+    |
+    */
+
+    'expeditor' => [
+        'adresa' => env('MARKETING_FROM_ADDRESS', ''),
+        'nume' => env('MARKETING_FROM_NAME', 'Diana Soft'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Cate firme se pot lua deodata la intamplare
     |--------------------------------------------------------------------------
     |

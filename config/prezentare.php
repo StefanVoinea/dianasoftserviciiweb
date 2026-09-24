@@ -19,4 +19,16 @@ return [
 
     'email_demo' => env('CERERE_DEMO_EMAIL', 'office@dianasoft.ro'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Pagina de prezentare a aplicatiei
+    |--------------------------------------------------------------------------
+    |
+    | Spre ea duce butonul „Vezi prezentarea" din scrisorile de marketing, pentru
+    | cine vrea sa se uite intai singur, fara sa ceara nimanui nimic.
+    |
+    */
+
+    'site' => env('PREZENTARE_URL', 'https://spvcurier.ro'),
+
 ];
