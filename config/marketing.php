@@ -86,9 +86,9 @@ return [
             'campanie' => 'spv-curier-prezentare',
             'subiect' => 'Declarațiile întregului portofoliu, dintr-un singur ecran',
             'text' => "Bună ziua, {nume},\n\n"
-                . "Vă scriem de la Diana Soft, din Năvodari. Facem software la comandă din 2003, iar în"
-                . " ultimii ani mai ales pentru cabinetele de contabilitate: le-am făcut un program care"
-                . " ține legătura cu ANAF în locul lor.\n\n"
+                . "Vă scriem de la Diana Soft, din Năvodari. Facem software la comandă din 2003, iar cu"
+                . " experiența acumulată am făcut un program pentru cabinetele de contabilitate, care ține"
+                . " legătura cu ANAF în locul lor.\n\n"
                 . "Se numește SPV Curier. Citește Spațiul Privat Virtual pentru tot portofoliul de firme,"
                 . " validează declarațiile cu programul oficial ANAF, le semnează cu certificatul de pe"
                 . " token și le depune — apoi aduce recipisa și o pune în arhiva dumneavoastră.\n\n"
