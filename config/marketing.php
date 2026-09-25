@@ -144,7 +144,7 @@ return [
             'campanie' => 'token-stationar',
             'subiect' => 'Tokenul rămâne unde e, semnați de la orice calculator',
             'text' => "Bună ziua, {nume},\n\n"
-                . "Într-un cabinet cu mai mulți oameni, tokenul ajunge să se plimbe de la un birou la"
+                . "Într-un cabinet cu mai mulți salariați, tokenul ajunge să se plimbe de la un birou la"
                 . " altul — iar când e nevoie de el, e la cineva acasă.\n\n"
                 . "SPV Curier lucrează altfel: certificatul și declarațiile rămân pe calculatorul unde"
                 . " stă tokenul, iar semnarea și depunerea se cer de la orice stație autorizată. Nu"
