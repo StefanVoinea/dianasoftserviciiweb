@@ -147,11 +147,11 @@ return [
                 . "Într-un cabinet cu mai mulți salariați, tokenul ajunge să se plimbe de la un birou la"
                 . " altul — iar când e nevoie de el, e la cineva acasă.\n\n"
                 . "SPV Curier lucrează altfel: certificatul și declarațiile rămân pe calculatorul unde"
-                . " stă tokenul, iar semnarea și depunerea se cer de la orice stație autorizată. Nu"
-                . " mutați tokenul, autorizați stația.\n\n"
+                . " stă tokenul, iar semnarea și depunerea se cer de la orice calculator autorizat. Nu"
+                . " mutați tokenul, autorizați calculatorul.\n\n"
                 . "Mai multe tokenuri, mai multe calculatoare, o singură evidență: aplicația ține minte"
                 . " ce firme sunt înrolate la ANAF pe fiecare certificat și semnează cu cel potrivit.\n\n"
-                . "Utilizatori, tokenuri și stații de lucru nelimitate, în orice plan.\n\n"
+                . "Utilizatori, tokenuri și calculatoare nelimitate, în orice plan.\n\n"
                 . "Vă arătăm cum se așază la dumneavoastră, în 30 de minute. 90 de zile gratuit, fără"
                 . " card.",
         ],
