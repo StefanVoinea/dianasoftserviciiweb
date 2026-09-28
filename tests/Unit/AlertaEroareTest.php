@@ -152,6 +152,54 @@ class AlertaEroareTest extends TestCase
         $this->assertStringContainsString('Ce e de făcut', $scris);
     }
 
+    /**
+     * Numerele curl se scriu in doua feluri, dupa cine se plange.
+     *
+     * Programul local spune „[curl 56]", iar Guzzle „cURL error 28". Tiparele
+     * au fost scrise numai pentru cel dintai, asa ca toate erorile de retea
+     * venite din aplicatie ajungeau cu „Nu am o reteta pregatita".
+     *
+     * Si inca ceva: fara marginea de cuvant, „curl 6" inghitea si „curl 60",
+     * iar antivirusul care desface traficul era luat drept internet cazut.
+     */
+    public function test_numerele_curl_se_cunosc_in_amandoua_scrierile()
+    {
+        $perechi = [
+            'cURL error 28: Operation timed out after 60002 milliseconds' => 'așteptat',
+            'cURL error 7: Failed to connect' => 'internet',
+            'cURL error 6: Could not resolve host' => 'internet',
+            'cURL error 60: SSL certificate problem' => 'antivirus',
+            'Programul local nu a răspuns (curl 7)' => 'internet',
+        ];
+
+        foreach ($perechi as $eroare => $cuvant) {
+            $this->assertStringContainsString(
+                $cuvant,
+                AlertaEroare::rezolvarea($eroare),
+                'Pentru „' . $eroare . '" se spune altceva decât trebuie.'
+            );
+        }
+    }
+
+    /** Tiparele chiar sunt tipare: unul stricat n-ar mai potrivi nimic, in tacere. */
+    public function test_toate_tiparele_sunt_intregi()
+    {
+        $catalog = new \ReflectionClass(AlertaEroare::class);
+
+        foreach ($catalog->getConstant('REZOLVARI') as $i => $regula) {
+            $this->assertNotFalse(
+                @preg_match($regula['tipar'], 'ceva de probă'),
+                'Tiparul ' . $i . ' („' . $regula['tipar'] . '") nu e un tipar valid.'
+            );
+
+            $this->assertStringNotContainsString(
+                chr(8),
+                $regula['tipar'],
+                'Tiparul ' . $i . ' poartă un caracter de control în loc de „\b".'
+            );
+        }
+    }
+
     /** Ce nu se cunoaste nu ramane fara raspuns: se spune unde sa se caute. */
     public function test_eroarea_necunoscuta_trimite_la_jurnal()
     {

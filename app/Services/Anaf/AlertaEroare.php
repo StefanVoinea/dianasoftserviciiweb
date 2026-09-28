@@ -30,6 +30,12 @@ class AlertaEroare
      * Se cauta in ordine si se ia prima potrivire, deci tiparele anume trebuie
      * sa stea inaintea celor largi.
      *
+     * Numerele curl se scriu in doua feluri, dupa cine se plange: programul
+     * local spune „[curl 56]", iar Guzzle „cURL error 28". Tiparele le prind pe
+     * amandoua. Marginea de cuvant () nu e de prisos: fara ea, „curl 6" ar
+     * inghiti si „curl 60", iar antivirusul care desface traficul ar fi luat
+     * drept internet cazut.
+     *
      * @var array<int, array{tipar: string, fapt: string}>
      */
     protected const REZOLVARI = [
@@ -41,12 +47,19 @@ class AlertaEroare
                 . ' traficul — pe calculatorul clientului, rulați diagnoza.bat și priviți pașii 2, 3 și 5.',
         ],
         [
-            'tipar' => '/curl 7|curl 6|nu se poate deschide|dezlegat \(DNS\)/i',
+            'tipar' => '/curl (?:error )?28\b|Operation timed out|timed out after/i',
+            'fapt' => 'Cererea a așteptat până la capăt și n-a primit niciun răspuns. Cel mai des,'
+                . ' calculatorul clientului e închis ori programul local e oprit; mai rar, ANAF nu'
+                . ' răspunde. De verificat, în ordine: dacă acel calculator e pornit și programul'
+                . ' merge pe el, apoi dacă ANAF răspunde de la noi.',
+        ],
+        [
+            'tipar' => '/curl (?:error )?[67]\b|nu se poate deschide|dezlegat \(DNS\)/i',
             'fapt' => 'Calculatorul clientului nu poate ieși în internet către adresa cerută.'
                 . ' De verificat, în ordine: internetul de acolo, apoi ieșirea pe 443 în firewall.',
         ],
         [
-            'tipar' => '/curl 60|certificatul serverului nu este de încredere|SSL Filter/i',
+            'tipar' => '/curl (?:error )?60\b|certificatul serverului nu este de încredere|SSL Filter/i',
             'fapt' => 'Traficul e desfăcut de antivirus sau de un proxy. Certificatul de pe token nu mai'
                 . ' ajunge întreg la ANAF. Adresele ANAF trebuie scoase de sub scanarea HTTPS.',
         ],

@@ -182,7 +182,14 @@ class DeclaratiiController extends Controller
         $director = config('anaf.declaratii.storage_path');
         $calePdf = $incarcat->storeAs($director . '/pdf', uniqid('decl_', true) . '.pdf');
 
-        $info = $pdf->citeste(Storage::path($calePdf));
+        try {
+            $info = $pdf->citeste(Storage::path($calePdf));
+        } catch (DeclaratieException $e) {
+            // Fisierul abia pus pe disc n-are de ce sa ramana acolo.
+            Storage::delete($calePdf);
+
+            throw $e;
+        }
 
         if (empty($info['xml'])) {
             Storage::delete($calePdf);
