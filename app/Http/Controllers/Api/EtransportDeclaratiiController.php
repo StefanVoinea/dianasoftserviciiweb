@@ -74,6 +74,7 @@ class EtransportDeclaratiiController extends Controller
             'tipuri_operatiune' => Nomenclatoare::TIPURI_OPERATIUNE,
             'scopuri' => Nomenclatoare::SCOPURI,
             'scopuri_pe_operatiune' => Nomenclatoare::SCOPURI_PE_OPERATIUNE,
+            'scop_implicit_pe_operatiune' => Nomenclatoare::SCOP_IMPLICIT_PE_OPERATIUNE,
             'traseu_pe_operatiune' => Nomenclatoare::TRASEU_PE_OPERATIUNE,
             'judete' => Nomenclatoare::JUDETE,
             'ptf' => Nomenclatoare::PTF,

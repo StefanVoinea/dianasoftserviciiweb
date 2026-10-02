@@ -63,6 +63,26 @@ class Nomenclatoare
     ];
 
     /**
+     * Scopul cu care pornesc liniile la un tip de operațiune, până alege omul
+     * altceva. Unde nu scrie nimic, e primul scop permis la operațiune.
+     *
+     * [2026-10-02] La livrarea intracomunitară (20) e „Altele" (9901):
+     * clientul nu vinde în afara țării, pe drumul acesta merge doar marfa
+     * care se întoarce la furnizor, iar „Comercializare" trebuia schimbat
+     * linie cu linie.
+     */
+    public const SCOP_IMPLICIT_PE_OPERATIUNE = [
+        20 => 9901,
+    ];
+
+    /** Scopul implicit al unei linii la tipul de operațiune dat. */
+    public static function scopImplicit(int $tipOperatiune): int
+    {
+        return self::SCOP_IMPLICIT_PE_OPERATIUNE[$tipOperatiune]
+            ?? (self::SCOPURI_PE_OPERATIUNE[$tipOperatiune][0] ?? 9999);
+    }
+
+    /**
      * De unde pleacă și unde ajunge traseul rutier, după tipul operațiunii:
      *   ptf         — punct de trecere a frontierei
      *   birou_vamal — birou vamal de interior/frontieră

@@ -414,8 +414,11 @@ class ImportArhiva
          * asa ca scopul ei e „Altele" (9901). Se potriveste amandurora
          * drumurilor returului: si transportului national, si livrarii
          * intracomunitare.
+         *
+         * [2026-10-02] Si la returul recunoscut din fisiere (nota de credit),
+         * nu doar la cel bifat: altfel omul schimba scopul linie cu linie.
          */
-        $scop = $this->marfaRetur ? 9901 : 101;
+        $scop = $retur ? 9901 : 101;
 
         foreach ($citit['linii'] as $linie) {
             $linie['scop_operatiune'] = $scop;

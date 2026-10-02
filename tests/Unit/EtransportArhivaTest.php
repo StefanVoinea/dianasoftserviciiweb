@@ -158,7 +158,8 @@ class EtransportArhivaTest extends TestCase
         // Prin JSON, 44.0 iese inapoi 44.
         $this->assertEquals(44, $pantaloni['cantitate']);
         $this->assertEquals(10, round(array_sum(array_column($ciorna->linii, 'greutate_bruta')), 3));
-        $this->assertSame(101, $pantaloni['scop_operatiune']);
+        // Marfa se intoarce la furnizor, nu merge spre comercializare.
+        $this->assertSame(9901, $pantaloni['scop_operatiune']);
 
         // Un retur de la un magazin fara nicio declaratie anterioara: ciorna iese, cu avertisment.
         $cale = tempnam(sys_get_temp_dir(), 'arh') . '.zip';

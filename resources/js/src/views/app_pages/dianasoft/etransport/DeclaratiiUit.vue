@@ -1993,22 +1993,33 @@ export default {
         this.declaratia.loc_final = { tip: fel.final }
       }
 
-      // Scopul implicit al liniilor: primul permis la operatiunea aleasa.
+      // Liniile cu un scop nepermis la operatiunea aleasa trec pe cel implicit al ei.
       const permise = (this.nomenclatoare.scopuri_pe_operatiune || {})[this.declaratia.tip_operatiune] || []
+      const scop = this.scopImplicit(this.declaratia.tip_operatiune)
       this.declaratia.linii.forEach(linie => {
         if (!permise.includes(linie.scop_operatiune)) {
           // eslint-disable-next-line no-param-reassign
-          linie.scop_operatiune = permise[0] || 9999
+          linie.scop_operatiune = scop
         }
       })
     },
-    adaugaLinie() {
-      const permise = (this.nomenclatoare.scopuri_pe_operatiune || {})[this.declaratia.tip_operatiune] || []
+    /**
+     * Scopul cu care porneste o linie la tipul de operatiune dat: cel anume
+     * stabilit pentru operatiune (la livrarea intracomunitara, adica la
+     * retururi, „Altele"), altfel primul permis.
+     */
+    scopImplicit(tip) {
+      const anume = (this.nomenclatoare.scop_implicit_pe_operatiune || {})[tip]
+      if (anume) return anume
 
+      const permise = (this.nomenclatoare.scopuri_pe_operatiune || {})[tip] || []
+      return permise[0] || 9999
+    },
+    adaugaLinie() {
       this.declaratia.linii.push({
         cod_tarifar: '',
         denumire: '',
-        scop_operatiune: permise[0] || 9999,
+        scop_operatiune: this.scopImplicit(this.declaratia.tip_operatiune),
         cantitate: null,
         um: 'H87',
         greutate_neta: null,
@@ -2049,8 +2060,7 @@ export default {
         operatiuneSchimbata = true
       }
 
-      const permise = (this.nomenclatoare.scopuri_pe_operatiune || {})[this.declaratia.tip_operatiune] || []
-      const scop = permise[0] || 9999
+      const scop = this.scopImplicit(this.declaratia.tip_operatiune)
 
       // La declaratia cu valoare zero, sumele din fisier nu se preiau deloc.
       const linii = (rezultat.linii || []).map(linie => ({
