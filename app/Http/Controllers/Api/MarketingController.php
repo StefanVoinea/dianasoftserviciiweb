@@ -119,6 +119,17 @@ class MarketingController extends Controller
             'total' => $pagina->total(),
             'pagina' => $pagina->currentPage(),
             'pagini' => $pagina->lastPage(),
+            /*
+             * [2026-10-05] Din cate se alege la intamplare in filtrul de acum,
+             * spus inainte de trimitere: cu un filtru de 26 de firme, „50 la
+             * intamplare" a scris a doua oara acelorasi 25.
+             */
+            'in_filtru' => [
+                'pot_primi' => $this->filtrate($filtre)->caroraLiSePoateScrie()->count(),
+                'nescrisi' => $this->filtrate($filtre)->caroraLiSePoateScrie()
+                    ->whereNull('ultima_trimitere_la')
+                    ->count(),
+            ],
             'judete' => MarketingContact::query()
                 ->whereNotNull('judet')
                 ->distinct()
@@ -335,12 +346,19 @@ class MarketingController extends Controller
      * Se aleg numai dintre cei carora li se poate scrie: cine s-a dezabonat nu
      * intra in sac, deci nu are cum sa iasa din el.
      *
+     * [2026-10-05] Intai ies cei carora nu li s-a scris niciodata, apoi cei
+     * scrisi mai demult; la intamplare se alege doar intre cei deopotriva de
+     * vechi. Altfel, cu un filtru mic, a doua scrisoare ajungea la aceiasi
+     * oameni ca prima.
+     *
      * @param array{cauta?: string, judet?: string, stare?: string} $filtre
      */
     protected function aleseLaIntamplare(int $cati, array $filtre)
     {
         return $this->filtrate($filtre)
             ->caroraLiSePoateScrie()
+            ->orderByRaw('ultima_trimitere_la is not null')
+            ->orderByRaw('date(ultima_trimitere_la)')
             ->inRandomOrder()
             ->limit($cati)
             ->get();

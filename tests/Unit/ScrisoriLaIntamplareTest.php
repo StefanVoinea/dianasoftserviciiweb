@@ -146,6 +146,65 @@ class ScrisoriLaIntamplareTest extends TestCase
         $this->assertSame(1, $this->catePlecate(), 'din Cluj era una singură');
     }
 
+    /**
+     * Cu un filtru mic, a doua scrisoare ajungea la aceiași oameni ca prima.
+     * Cât timp mai sunt firme nescrise, din ele se alege.
+     *
+     * @test
+     */
+    public function cei_carora_nu_li_s_a_scris_ies_inaintea_celor_scrisi()
+    {
+        for ($i = 0; $i < 6; $i++) {
+            $this->contact(['ultima_trimitere_la' => now()->subDay(), 'cate_trimiteri' => 1]);
+        }
+
+        $nescrisi = [$this->contact()->id, $this->contact()->id, $this->contact()->id];
+
+        $this->trimite(['cati' => 3, 'filtre' => ['judet' => 'Constanța']]);
+
+        $alesi = Mail::queued(ScrisoareMarketing::class)->map(function ($scrisoare) {
+            return $scrisoare->contact->id;
+        })->sort()->values()->all();
+
+        $this->assertSame($nescrisi, $alesi);
+    }
+
+    /** Când nescrișii nu ajung, se completează cu cei scriși cel mai demult. */
+    /** @test */
+    public function dupa_nescrisi_vin_cei_scrisi_mai_demult()
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $this->contact(['ultima_trimitere_la' => now()->subDay(), 'cate_trimiteri' => 1]);
+        }
+
+        $demult = $this->contact(['ultima_trimitere_la' => now()->subMonth(), 'cate_trimiteri' => 1]);
+        $nescris = $this->contact();
+
+        $this->trimite(['cati' => 2, 'filtre' => ['judet' => 'Constanța']]);
+
+        $alesi = Mail::queued(ScrisoareMarketing::class)->map(function ($scrisoare) {
+            return $scrisoare->contact->id;
+        })->sort()->values()->all();
+
+        $this->assertSame([$demult->id, $nescris->id], $alesi);
+    }
+
+    /** Fila află dinainte din câte se alege, ca să poată spune înainte de trimitere. */
+    /** @test */
+    public function lista_spune_cate_firme_din_filtru_pot_primi_si_cate_sunt_nescrise()
+    {
+        $this->contact(['judet' => 'Județ de probă']);
+        $this->contact(['judet' => 'Județ de probă']);
+        $this->contact(['judet' => 'Județ de probă', 'ultima_trimitere_la' => now(), 'cate_trimiteri' => 1]);
+        $this->contact(['judet' => 'Județ de probă', 'abonat' => false, 'dezabonat_la' => now()]);
+
+        $date = (new MarketingController())->index(
+            Request::create('/api/marketing/contacte', 'GET', ['judet' => 'Județ de probă'])
+        )->getData(true);
+
+        $this->assertSame(['pot_primi' => 3, 'nescrisi' => 2], $date['in_filtru']);
+    }
+
     /** @test */
     public function se_spune_cand_s_au_gasit_mai_putine_decat_s_au_cerut()
     {

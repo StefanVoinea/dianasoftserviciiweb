@@ -343,9 +343,19 @@
           class="text-muted d-block mt-50"
         >
           Se aleg numai dintre cele care pot primi mesaje, din
-          {{ filtrulInVorbe }}. Așa se scrie puțin și des, fără să ajungă
-          scrisorile mereu la aceleași firme.
+          {{ filtrulInVorbe }}<span v-if="inFiltru.pot_primi !== undefined">:
+            <strong>{{ inFiltru.pot_primi }}</strong> firme, din care
+            <strong>{{ inFiltru.nescrisi }}</strong> cărora nu li s-a scris încă</span>.
+          Întâi se iau cele nescrise, apoi cele scrise mai demult.
         </small>
+        <!-- Se spune inainte de trimitere, nu dupa: filtrul poate fi mai mic decat cererea. -->
+        <b-alert
+          :show="!!avertismentIntamplare"
+          variant="warning"
+          class="mt-50 mb-0 p-1"
+        >
+          {{ avertismentIntamplare }}
+        </b-alert>
       </b-form-group>
 
       <b-form-group label="Subiect">
@@ -458,6 +468,8 @@ export default {
       eroare: '',
       alesi: [],
       filtre: { cauta: '', judet: '', stare: '' },
+      // Cate firme din filtrul de acum pot primi mesaje si cate n-au primit inca.
+      inFiltru: {},
       scrisoareaVizibila: false,
       scrisoare: {
         subiect: '', text: '', campanie: '', cui: 'alesi', cati: 25,
@@ -567,6 +579,32 @@ export default {
         ? (this.scrisoare.cati || 0)
         : this.alesi.length
     },
+    /**
+     * Ce e de știut înainte de o trimitere la întâmplare: că filtrul are mai
+     * puține firme decât s-au cerut, ori că o parte au mai primit scrisori.
+     */
+    avertismentIntamplare() {
+      if (this.scrisoare.cui !== 'intamplare') return ''
+
+      const cati = this.scrisoare.cati || 0
+      const potPrimi = this.inFiltru.pot_primi
+
+      if (!cati || potPrimi === undefined) return ''
+
+      const pleaca = Math.min(cati, potPrimi)
+      const repetate = Math.max(0, pleaca - (this.inFiltru.nescrisi || 0))
+      const bucati = []
+
+      if (cati > potPrimi) {
+        bucati.push(`În filtrul de acum sunt doar ${potPrimi} firme care pot primi mesaje, nu ${cati}: vor pleca ${potPrimi} scrisori.`)
+      }
+
+      if (repetate > 0) {
+        bucati.push(`${repetate} dintre ele ajung la firme cărora li s-a mai scris. Pentru firme noi, puneți filtrul pe „Doar cărora nu li s-a scris".`)
+      }
+
+      return bucati.join(' ')
+    },
     /** Filtrul de acum, spus în cuvinte, ca omul să știe din ce se alege. */
     filtrulInVorbe() {
       const bucati = []
@@ -623,6 +661,7 @@ export default {
           this.sumar = date.sumar || {}
           this.scrisori = date.scrisori || {}
           this.total = date.total || 0
+          this.inFiltru = date.in_filtru || {}
           this.pagini = date.pagini || 1
         })
         .catch(() => {
