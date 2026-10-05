@@ -43,6 +43,12 @@ Route::post('/registerAPI','Api\AuthController@register');
  * strunita la cateva cereri pe minut de la aceeasi adresa.
  */
 Route::post('/cerere-demo','Api\CerereDemoController@trimite')->middleware('throttle:5,1');
+/*
+ * Vizitele paginii de prezentare: cat e deschisa, pagina bate aici din cand in
+ * cand si spune cat a fost citita. Tot deschisa oricui, tot strunita — dar mai
+ * larg, fiindca dintr-un birou bat mai multi de la aceeasi adresa.
+ */
+Route::post('/vizita-site','Api\ViziteSiteController@inregistreaza')->middleware('throttle:120,1');
 // Reinnoirea tokenului pentru aplicatiile care nu pot pastra datele clientului OAuth (cea mobila)
 Route::post('/refresh','Api\AuthController@refresh')->middleware('throttle:60,1');
 /*
@@ -100,6 +106,8 @@ Route::any('/punte/{certificat}/{cale?}', 'Api\PunteController@proxy')
 Route::middleware(['auth:api', 'administrator.serviciu'])->group(function () {
     Route::get('/administrare/clienti', 'Api\AdministrareController@index');
     Route::get('/administrare/statistici', 'Api\AdministrareController@statistici');
+    // Cine a intrat pe pagina de prezentare, de la ce adresa si cat a stat
+    Route::get('/administrare/vizite-site', 'Api\ViziteSiteController@index');
 
     /*
      * Lista firmelor carora li se poate scrie despre aplicatiile noastre.

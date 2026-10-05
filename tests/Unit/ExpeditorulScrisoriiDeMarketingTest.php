@@ -110,6 +110,9 @@ class ExpeditorulScrisoriiDeMarketingTest extends TestCase
 
         // Adresa se vede și scrisă, nu doar ascunsă sub buton.
         $this->assertStringContainsString('spvcurier.ro</a>', $html);
+
+        // Butonul poartă codul firmei, ca vizita să se știe a cui e.
+        $this->assertStringContainsString('https://spvcurier.ro/?f=', $html);
     }
 
     /** Legătura de dezabonare rămâne în fiecare scrisoare, oricâte butoane s-ar adăuga. */

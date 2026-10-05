@@ -420,6 +420,14 @@
       >
         <marketing />
       </b-tab>
+
+      <!-- Cine a intrat pe spvcurier.ro, de la ce adresa si cat a stat -->
+      <b-tab
+        title="Vizite site"
+        lazy
+      >
+        <vizite-site />
+      </b-tab>
     </b-tabs>
 
     <!--
@@ -1480,11 +1488,13 @@
  * dar și meniul se ascunde, ca să nu apară butoane fără rost.
  */
 import Marketing from './administrare/Marketing.vue'
+import ViziteSite from './administrare/ViziteSite.vue'
 
 export default {
   name: 'Administrare',
   components: {
     Marketing,
+    ViziteSite,
   },
   data() {
     return {

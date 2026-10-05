@@ -37,6 +37,12 @@ class ScrisoareMarketing extends Mailable
     /** Pagina de prezentare, pentru cine vrea sa se uite intai singur. */
     public $legaturaPrezentare;
 
+    /**
+     * Aceeasi pagina, cu codul firmei in coada: asa se vede in fila „Vizite
+     * site" cine a intrat din scrisoare, nu doar de la ce adresa.
+     */
+    public $legaturaPrezentareCuCod;
+
     /** Cine scrie: numele si adresa casei, aceleasi si in antet, si in subsol. */
     public $expeditorNume;
     public $expeditorAdresa;
@@ -73,6 +79,7 @@ class ScrisoareMarketing extends Mailable
             . ($campanie !== '' ? '?c=' . urlencode($campanie) : '');
 
         $this->legaturaPrezentare = (string) config('prezentare.site');
+        $this->legaturaPrezentareCuCod = rtrim($this->legaturaPrezentare, '/') . '/?f=' . $contact->jeton;
 
         $expeditor = config('marketing.expeditor', []);
         $this->expeditorAdresa = trim((string) ($expeditor['adresa'] ?? '')) ?: config('mail.from.address');

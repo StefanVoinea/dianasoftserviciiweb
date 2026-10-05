@@ -39,7 +39,7 @@
                                 </td>
                                 <td style="width:12px; font-size:0; line-height:0;">&nbsp;</td>
                                 <td style="border:1px solid #22406f; border-radius:8px;">
-                                    <a href="{{ $legaturaPrezentare }}"
+                                    <a href="{{ $legaturaPrezentareCuCod }}"
                                        style="display:inline-block; padding:12px 26px; font-size:15px; font-weight:600; color:#22406f; text-decoration:none;">
                                         Prezentarea aplicației
                                     </a>
