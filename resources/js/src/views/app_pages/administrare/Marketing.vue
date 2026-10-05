@@ -73,6 +73,16 @@
             />
             <small class="text-muted">Se citește fișierul…</small>
           </div>
+
+          <!-- O firma, doua: nu merita un fisier -->
+          <b-button
+            size="sm"
+            variant="outline-primary"
+            class="mt-1"
+            @click="deschideAdaugarea"
+          >
+            Adaugă o firmă cu mâna
+          </b-button>
         </b-card>
       </b-col>
 
@@ -290,6 +300,73 @@
       </div>
     </b-card>
 
+    <!-- O firma adaugata cu mana -->
+    <b-modal
+      v-model="adaugareaVizibila"
+      title="Adaugă o firmă"
+      ok-title="Adaugă"
+      cancel-title="Renunță"
+      :ok-disabled="!firmaNoua.denumire.trim() || !firmaNoua.email.trim() || adaugareInCurs"
+      @ok.prevent="adauga"
+    >
+      <b-alert
+        :show="!!eroareAdaugare"
+        variant="danger"
+        class="py-1"
+      >
+        {{ eroareAdaugare }}
+      </b-alert>
+
+      <b-form-group label="Denumirea firmei">
+        <b-form-input
+          v-model="firmaNoua.denumire"
+          placeholder="De pildă: Cabinet Popescu SRL"
+          autofocus
+        />
+      </b-form-group>
+
+      <b-form-group
+        label="Adresa de e-mail"
+        description="La ea se scrie. O adresă care e deja în listă nu se adaugă a doua oară."
+      >
+        <b-form-input
+          v-model="firmaNoua.email"
+          type="email"
+          placeholder="office@firma.ro"
+        />
+      </b-form-group>
+
+      <b-row>
+        <b-col md="6">
+          <b-form-group label="Telefon">
+            <b-form-input v-model="firmaNoua.telefon" />
+          </b-form-group>
+        </b-col>
+        <b-col md="6">
+          <b-form-group label="CUI">
+            <b-form-input v-model="firmaNoua.cui" />
+          </b-form-group>
+        </b-col>
+      </b-row>
+
+      <b-form-group
+        label="Județ"
+        class="mb-0"
+      >
+        <b-form-input
+          v-model="firmaNoua.judet"
+          list="marketing-judete"
+        />
+        <datalist id="marketing-judete">
+          <option
+            v-for="judet in judete"
+            :key="judet"
+            :value="judet"
+          />
+        </datalist>
+      </b-form-group>
+    </b-modal>
+
     <!-- Scrisoarea -->
     <b-modal
       v-model="scrisoareaVizibila"
@@ -470,6 +547,12 @@ export default {
       filtre: { cauta: '', judet: '', stare: '' },
       // Cate firme din filtrul de acum pot primi mesaje si cate n-au primit inca.
       inFiltru: {},
+      adaugareaVizibila: false,
+      adaugareInCurs: false,
+      eroareAdaugare: '',
+      firmaNoua: {
+        denumire: '', email: '', telefon: '', cui: '', judet: '',
+      },
       scrisoareaVizibila: false,
       scrisoare: {
         subiect: '', text: '', campanie: '', cui: 'alesi', cati: 25,
@@ -669,6 +752,37 @@ export default {
         })
         .finally(() => {
           this.seIncarca = false
+        })
+    },
+
+    deschideAdaugarea() {
+      this.eroareAdaugare = ''
+      this.firmaNoua = {
+        denumire: '', email: '', telefon: '', cui: '', judet: '',
+      }
+      this.adaugareaVizibila = true
+    },
+
+    /** O firmă adăugată cu mâna; ce nu primește serverul se spune în fereastră. */
+    adauga() {
+      this.adaugareInCurs = true
+      this.eroareAdaugare = ''
+
+      this.$http.post('/marketing/contacte', this.firmaNoua)
+        .then(raspuns => {
+          this.mesaj = raspuns.data.message
+          this.adaugareaVizibila = false
+
+          return this.incarca(this.pagina)
+        })
+        .catch(err => {
+          const date = (err.response && err.response.data) || {}
+          const greseli = date.errors ? Object.values(date.errors)[0] : null
+
+          this.eroareAdaugare = (greseli && greseli[0]) || date.message || 'Firma nu a putut fi adăugată.'
+        })
+        .finally(() => {
+          this.adaugareInCurs = false
         })
     },
 

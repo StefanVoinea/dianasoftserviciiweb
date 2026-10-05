@@ -369,6 +369,66 @@ class ScrisoriLaIntamplareTest extends TestCase
         $this->assertSame('in_coada', $randul->refresh()->stare);
     }
 
+    /** @param array<string, mixed> $date */
+    protected function adauga(array $date)
+    {
+        return (new MarketingController())->adauga(
+            Request::create('/api/marketing/contacte', 'POST', $date)
+        );
+    }
+
+    /** @test */
+    public function o_firma_se_poate_adauga_cu_mana()
+    {
+        $raspuns = $this->adauga([
+            'denumire' => ' Cabinet Adăugat SRL ',
+            'email' => 'Office@Proba-Intamplare.ro',
+            'telefon' => '0722 000 111',
+            'cui' => 'RO 12345678',
+            'judet' => 'Brașov',
+        ]);
+
+        $this->assertSame(200, $raspuns->status());
+
+        $contact = MarketingContact::where('email', 'office@proba-intamplare.ro')->first();
+
+        $this->assertNotNull($contact, 'adresa se ține cu litere mici, ca la import');
+        $this->assertSame('Cabinet Adăugat SRL', $contact->denumire);
+        $this->assertSame('0722 000 111', $contact->telefon);
+        $this->assertSame('12345678', $contact->cui);
+        $this->assertSame('adăugat cu mâna', $contact->sursa);
+        $this->assertTrue($contact->abonat);
+        $this->assertNotEmpty($contact->jeton, 'fără jeton n-ar avea legătură de dezabonare');
+    }
+
+    /** Ca la import: peste un contact știut nu se scrie, mai ales peste unul dezabonat. */
+    /** @test */
+    public function adresa_care_e_deja_in_lista_nu_se_adauga_a_doua_oara()
+    {
+        $this->contact([
+            'denumire' => 'Firma Veche SRL',
+            'email' => 'veche@proba-intamplare.ro',
+            'abonat' => false,
+            'dezabonat_la' => now(),
+        ]);
+
+        $raspuns = $this->adauga(['denumire' => 'Firma Nouă SRL', 'email' => 'VECHE@proba-intamplare.ro']);
+
+        $this->assertSame(422, $raspuns->status());
+        $this->assertStringContainsString('Firma Veche SRL', $raspuns->getData(true)['message']);
+        $this->assertStringContainsString('dezabonat', $raspuns->getData(true)['message']);
+        $this->assertSame(1, MarketingContact::where('email', 'veche@proba-intamplare.ro')->count());
+        $this->assertFalse(MarketingContact::where('email', 'veche@proba-intamplare.ro')->first()->abonat);
+    }
+
+    /** @test */
+    public function fara_adresa_de_email_buna_firma_nu_se_adauga()
+    {
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+
+        $this->adauga(['denumire' => 'Firma Fără Adresă SRL', 'email' => 'nu-e-adresa']);
+    }
+
     /** Fila trebuie să poată spune câte stau pe loc. */
     /** @test */
     public function fila_afla_cate_scrisori_stau_in_coada()

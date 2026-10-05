@@ -116,6 +116,8 @@ Route::middleware(['auth:api', 'administrator.serviciu'])->group(function () {
     Route::get('/marketing/contacte', 'Api\MarketingController@index');
     Route::get('/marketing/sabloane', 'Api\MarketingController@sabloane');
     Route::post('/marketing/import', 'Api\MarketingController@importa');
+    // O firma adaugata cu mana, pe langa cele venite din fisiere
+    Route::post('/marketing/contacte', 'Api\MarketingController@adauga');
     Route::post('/marketing/trimite', 'Api\MarketingController@trimite');
     Route::post('/marketing/previzualizare', 'Api\MarketingController@previzualizare');
     Route::post('/marketing/sterge', 'Api\MarketingController@sterge');

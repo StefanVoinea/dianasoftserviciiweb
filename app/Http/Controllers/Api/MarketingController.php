@@ -164,6 +164,66 @@ class MarketingController extends Controller
         ]);
     }
 
+    /**
+     * [2026-10-05] O firma adaugata cu mana: cineva intalnit la un targ, o
+     * recomandare, un telefon primit. Nu merita un fisier pentru un rand.
+     *
+     * Tine aceeasi regula ca importul: adresa care e deja in lista nu se
+     * atinge. Mai ales una dezabonata — altfel omul ar primi din nou scrisori
+     * dupa ce a spus limpede ca nu vrea.
+     */
+    public function adauga(Request $request)
+    {
+        $date = $request->validate([
+            'denumire' => 'required|string|max:255',
+            'email' => 'required|email|max:190',
+            'telefon' => 'nullable|string|max:100',
+            'cui' => 'nullable|string|max:20',
+            'judet' => 'nullable|string|max:50',
+        ], [
+            'denumire.required' => 'Scrieți denumirea firmei.',
+            'email.required' => 'Scrieți adresa de e-mail: fără ea nu avem unde scrie.',
+            'email.email' => 'Adresa de e-mail nu e scrisă corect.',
+        ]);
+
+        $email = mb_strtolower(trim($date['email']));
+        $stiut = MarketingContact::where('email', $email)->first();
+
+        if ($stiut) {
+            return response()->json([
+                'success' => false,
+                'message' => sprintf(
+                    'Adresa %s e deja în listă, la „%s"%s.',
+                    $email,
+                    $stiut->denumire,
+                    $stiut->abonat ? '' : ', și s-a dezabonat'
+                ),
+            ], 422);
+        }
+
+        $curat = function ($valoare) {
+            $valoare = trim((string) $valoare);
+
+            return $valoare === '' ? null : $valoare;
+        };
+
+        $contact = MarketingContact::create([
+            'denumire' => trim($date['denumire']),
+            'email' => $email,
+            'telefon' => $curat($date['telefon'] ?? null),
+            'cui' => $curat(preg_replace('/^RO\s*/i', '', (string) ($date['cui'] ?? ''))),
+            'judet' => $curat($date['judet'] ?? null),
+            'sursa' => 'adăugat cu mâna',
+            'abonat' => true,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => '„' . $contact->denumire . '" a fost adăugată în listă.',
+            'data' => $contact,
+        ]);
+    }
+
     /** Aduce lista dintr-un fisier Excel. */
     public function importa(Request $request)
     {
