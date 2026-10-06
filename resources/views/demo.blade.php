@@ -33,9 +33,9 @@
                             <h1 style="margin:0 0 8px; font-size:20px; font-weight:600;">Solicitare demonstrație</h1>
 
                             <p style="margin:0 0 20px; font-size:15px; line-height:1.6; color:#4a4a4a;">
-                                Am notat solicitarea pentru <strong>{{ $contact->denumire }}</strong>.
-                                Dacă ne lăsați și un nume și un număr de telefon, știm pe cine să cerem
-                                când sunăm. Nu e obligatoriu.
+                                Pentru <strong>{{ $contact->denumire }}</strong>. Apăsați „Trimite solicitarea"
+                                și vă sunăm. Dacă ne lăsați și un nume și un număr de telefon, știm pe
+                                cine să cerem; nu e obligatoriu.
                             </p>
 
                             <form method="POST" action="{{ url('/demo/' . $contact->jeton) }}">

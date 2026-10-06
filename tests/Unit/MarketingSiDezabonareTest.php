@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Http\Controllers\DemoController;
+use App\Mail\CerereDemoDinScrisoare;
 use App\Http\Controllers\DezabonareController;
 use App\Mail\ScrisoareMarketing;
 use App\Models\MarketingContact;
@@ -190,13 +191,13 @@ class MarketingSiDezabonareTest extends TestCase
     }
 
     /**
-     * Apăsarea pe „Solicită demo" se însemnează pe loc.
+     * Deschiderea paginii „Solicită demo" se însemnează, dar nu e cerere.
      *
-     * Nu se așteaptă să completeze cineva un formular: mulți apasă, se uită și
-     * închid — dar au apăsat, și tocmai asta e semnul de interes. Deschiderile
-     * se numără prost; o faptă, nu.
+     * [2026-10-06] Legăturile din e-mail le deschid și filtrele de securitate
+     * ale cutiilor poștale, la un minut după trimitere: așa au apărut „cereri"
+     * fără nume și fără telefon, de la oameni care n-au cerut nimic.
      */
-    public function test_apasarea_pe_demo_se_insemneaza(): void
+    public function test_deschiderea_paginii_se_insemneaza_dar_nu_e_cerere(): void
     {
         $contact = $this->contact();
 
@@ -206,21 +207,48 @@ class MarketingSiDezabonareTest extends TestCase
         );
 
         $this->assertSame(200, $raspuns->status());
-        $this->assertNotNull($contact->fresh()->demo_cerut_la);
+        $this->assertNotNull($contact->fresh()->demo_deschis_la);
+        $this->assertNull($contact->fresh()->demo_cerut_la, 'un filtru de e-mail nu cere demonstrații');
     }
 
-    /** Clipa ținută minte e cea dintâi: atunci s-a aprins interesul. */
-    public function test_a_doua_apasare_nu_muta_clipa(): void
+    /** Clipa ținută minte e cea dintâi. */
+    public function test_a_doua_deschidere_nu_muta_clipa(): void
     {
         $contact = $this->contact();
         $jeton = $contact->jeton;
 
         (new DemoController())->arata(Request::create('/demo/' . $jeton, 'GET'), $jeton);
-        $intaia = $contact->fresh()->demo_cerut_la;
+        $intaia = $contact->fresh()->demo_deschis_la;
 
         (new DemoController())->arata(Request::create('/demo/' . $jeton, 'GET'), $jeton);
 
-        $this->assertEquals($intaia, $contact->fresh()->demo_cerut_la);
+        $this->assertEquals($intaia, $contact->fresh()->demo_deschis_la);
+    }
+
+    /** Cererea ne vine și pe e-mail, altfel ar sta în filă și n-ar suna nimeni. */
+    public function test_formularul_trimis_ne_vine_pe_email(): void
+    {
+        Mail::fake();
+        config(['prezentare.email_demo' => 'office@proba-marketing.ro, vanzari@proba-marketing.ro']);
+
+        $contact = $this->contact();
+
+        (new DemoController())->primeste(
+            Request::create('/demo/' . $contact->jeton, 'POST', ['persoana' => 'Maria', 'telefon' => '0722 123 456']),
+            $contact->jeton
+        );
+
+        Mail::assertSent(CerereDemoDinScrisoare::class, function ($scrisoare) use ($contact) {
+            return $scrisoare->contact->id === $contact->id
+                && $scrisoare->hasTo('office@proba-marketing.ro')
+                && $scrisoare->hasTo('vanzari@proba-marketing.ro');
+        });
+
+        $continut = (new CerereDemoDinScrisoare($contact->fresh()))->render();
+
+        $this->assertStringContainsString('Contabil Priceput SRL', $continut);
+        $this->assertStringContainsString('0722 123 456', $continut);
+        $this->assertStringContainsString('Maria', $continut);
     }
 
     /** Cine lasă și numele și telefonul, le găsim lângă firmă. */
@@ -240,7 +268,8 @@ class MarketingSiDezabonareTest extends TestCase
 
         $this->assertSame('Maria Ionescu', $proaspat->demo_persoana);
         $this->assertSame('0722 123 456', $proaspat->demo_telefon);
-        $this->assertNotNull($proaspat->demo_cerut_la, 'Trimiterea formularului e ea însăși o apăsare.');
+        $this->assertNotNull($proaspat->demo_cerut_la, 'Trimiterea formularului e cererea.');
+        $this->assertNotNull($proaspat->demo_deschis_la);
     }
 
     /** Un jeton născocit nu însemnează nimic la nimeni. */

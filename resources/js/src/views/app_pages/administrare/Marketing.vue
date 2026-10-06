@@ -257,6 +257,14 @@
               {{ [rand.item.demo_persoana, rand.item.demo_telefon].filter(Boolean).join(' · ') }}
             </small>
           </div>
+          <small
+            v-else-if="rand.item.demo_deschis_la"
+            v-b-tooltip.hover
+            class="text-muted"
+            title="A deschis pagina de demo, dar n-a trimis formularul. Pagina o deschid și filtrele de securitate ale e-mailului, deci nu e neapărat omul."
+          >
+            a deschis pagina {{ dataScurta(rand.item.demo_deschis_la) }}
+          </small>
           <span
             v-else
             class="text-muted"

@@ -23,6 +23,8 @@ class MarketingContact extends Model
         'ultima_trimitere_la' => 'datetime',
         'cate_trimiteri' => 'integer',
         'demo_cerut_la' => 'datetime',
+        // Deschiderea paginii de demo: semn slab, o deschid si filtrele de e-mail.
+        'demo_deschis_la' => 'datetime',
     ];
 
     /**
