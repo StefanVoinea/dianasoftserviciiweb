@@ -25,6 +25,9 @@ class SpvStorage
     /** Legatura cu programul local, pentru descarcarea de-a dreptul in arhiva. */
     protected $client;
 
+    /** Firmele carora li s-a cautat deja denumirea in documente, in lucrarea de acum. */
+    protected $denumiriCautate = [];
+
     public function __construct(
         ?CertificatService $certificate = null,
         ?ArhivaService $arhiva = null,
@@ -89,6 +92,10 @@ class SpvStorage
                 $rezultat['text'] = $this->textDinArhiva($rezultat['cale']);
             }
 
+            $this->invataDenumirea($mesaj, function () use ($rezultat) {
+                return $rezultat['text'] ?? $this->textDinArhiva($rezultat['cale']);
+            });
+
             return $rezultat + ['pe_server' => null];
         } catch (ProgramLocalVechiException $e) {
             // Drumul dinainte, mai jos.
@@ -117,12 +124,64 @@ class SpvStorage
             $peServer = $salvat['path'];
         }
 
+        $text = $vreaText ? $this->textul($fisier) : null;
+
+        $this->invataDenumirea($mesaj, function () use ($text, $fisier) {
+            return $text ?? $this->textul($fisier);
+        });
+
         return [
             'cale' => $cale,
-            'text' => $vreaText ? $this->textul($fisier) : null,
+            'text' => $text,
             'hash' => $fisier->hash(),
             'pe_server' => $peServer,
         ];
+    }
+
+    /**
+     * [2026-10-06] Denumirea firmei, din primul document descarcat care o spune.
+     *
+     * Pana acum denumirea venea numai din datele de identificare ori din
+     * vectorul fiscal, cerute anume cu „Solicita datele lipsa". Cine descarca
+     * doar mesajele ramanea cu firme fara nume, iar documentele lor intr-un
+     * dosar purtand doar codul fiscal. Acum, cat timp firma n-are nume, se
+     * citeste textul fiecarui document adus — o data pe firma intr-o lucrare —
+     * si, daca scrie „Denumire: …", de acolo se ia. Sursa e cea mai slaba:
+     * orice vine pe urma de la ANAF anume o inlocuieste.
+     *
+     * @param callable $text da textul documentului, abia cand e nevoie de el
+     */
+    protected function invataDenumirea(SpvMesaj $mesaj, callable $text): void
+    {
+        $cif = (string) $mesaj->cif;
+
+        if ($cif === '' || isset($this->denumiriCautate[$cif])) {
+            return;
+        }
+
+        $societate = AnafSocietate::where('cif', $cif)->first();
+
+        if (!$societate || trim((string) $societate->denumire) !== '') {
+            return;
+        }
+
+        $this->denumiriCautate[$cif] = true;
+
+        try {
+            $continut = (string) $text();
+        } catch (\Throwable $e) {
+            return;
+        }
+
+        if ($continut === '') {
+            return;
+        }
+
+        $denumire = (new VectorFiscalParser())->citesteDenumire($continut, $cif, false);
+
+        if ($denumire !== null) {
+            $societate->seteazaDenumire($denumire, 'document');
+        }
     }
 
     /** Textul unui document adus in memorie; null daca nu se poate citi. */
@@ -325,6 +384,10 @@ class SpvStorage
             ]);
 
             $this->copiazaLangaDeclaratie($mesaj, $iesit['cale']);
+
+            $this->invataDenumirea($mesaj, function () use ($iesit) {
+                return $this->textDinArhiva($iesit['cale']);
+            });
 
             yield ['mesaj' => $mesaj, 'reusit' => true, 'eroare' => null];
         }

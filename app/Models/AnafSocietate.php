@@ -42,7 +42,11 @@ class AnafSocietate extends Model
      *
      * Ce a scris omul ramane deasupra tuturor.
      */
-    public const PRIORITATE_SURSE = ['manual' => 3, 'date_identificare' => 2, 'vector' => 1];
+    /*
+     * „document" e denumirea citita din primul document descarcat — o recipisa,
+     * o fisa — cat timp nu se stie alta. O inlocuieste oricare dintre celelalte.
+     */
+    public const PRIORITATE_SURSE = ['manual' => 3, 'date_identificare' => 2, 'vector' => 1, 'document' => 0];
 
     public function certificat()
     {

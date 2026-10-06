@@ -152,8 +152,13 @@ class VectorFiscalParser
      * Denumirea contribuabilului. Vectorul fiscal o are in antet
      * ("DATE PRIVIND SOCIETATEA <nume> CE ARE CUI-ul <cif>"), iar documentul de
      * date identificare o listeaza pe un rand de forma "Denumire: <nume>".
+     *
+     * [2026-10-06] Se citeste si din documentele obisnuite — recipise, fise,
+     * decizii — unde randul e „Denumire/Nume: <nume>" ori „Nume/Denumire".
+     * Pentru ele $siDupaCui e fals: ghicitul „ce urmeaza dupa CUI" e bun pe
+     * antetul vectorului, dar pe o recipisa ar lua drept nume orice rand.
      */
-    public function citesteDenumire(string $text, ?string $cui = null): ?string
+    public function citesteDenumire(string $text, ?string $cui = null, bool $siDupaCui = true): ?string
     {
         /*
          * Vectorul fiscal: "DATE PRIVIND SOCIETATEA <nume> CE ARE CUI-ul <cif>".
@@ -210,8 +215,12 @@ class VectorFiscalParser
              * obisnuit. O firma numita „NUME NOU SRL" isi pierdea primul cuvant,
              * fiindca randul ei parea o eticheta urmata de valoare.
              */
-            if (preg_match('/^\s*denumire(?: contribuabil)?\s*[:\-]?\s+(\S.*)$/iu', $linie, $m)) {
-                return $this->curata($m[1]);
+            if (preg_match('/^\s*(?:denumire(?: contribuabil)?(?:\s*\/\s*nume)?|nume\s*\/\s*denumire)\s*[:\-]?\s+(\S.*)$/iu', $linie, $m)) {
+                $gasit = $this->curata($m[1]);
+
+                if ($gasit !== null && $this->pareDenumire($gasit)) {
+                    return $gasit;
+                }
             }
         }
 
@@ -247,7 +256,7 @@ class VectorFiscalParser
          * asa s-a si inregistrat o firma cu denumirea "SRL". De aceea ce se
          * gaseste aici trece prin aceeasi cantarire.
          */
-        if ($cui !== null && preg_match('/' . preg_quote($cui, '/') . '\s*([^
+        if ($siDupaCui && $cui !== null && preg_match('/' . preg_quote($cui, '/') . '\s*([^
 	]+)/u', $text, $m)) {
             $candidat = $this->curata($m[1]);
 
