@@ -99,6 +99,44 @@ return [
         ],
 
         [
+            'cheie' => 'tot',
+            'nume' => 'Tot ce face aplicația — toate facilitățile',
+            'descriere' => 'Le adună pe toate celelalte într-o singură scrisoare, mai lungă. Pentru cine vrea să vadă dintr-o privire tot ce primește.',
+            'campanie' => 'tot-ce-face',
+            'subiect' => 'SPV Curier: tot ce face pentru cabinetul dumneavoastră, pe scurt',
+            'text' => "Bună ziua, {nume},\n\n"
+                . "Vă scriem de la Diana Soft, din Năvodari. Facem software la comandă din 2003, iar"
+                . " pentru cabinetele de contabilitate am făcut SPV Curier: un program care ține"
+                . " legătura cu ANAF în locul lor. Iată, pe scurt, tot ce face.\n\n"
+                . "Spațiul Privat Virtual, pentru tot portofoliul. Citește SPV-ul tuturor firmelor"
+                . " deodată și aduce mesajele, recipisele și documentele în arhiva dumneavoastră."
+                . " 174 de tipuri de declarații și 35 de documente care se pot cere din SPV, pentru"
+                . " toate firmele dintr-un singur ecran.\n\n"
+                . "Validare, semnare, depunere. Declarațiile se validează cu programul oficial ANAF,"
+                . " se semnează cu certificatul de pe token și se depun; recipisa vine înapoi și se"
+                . " pune lângă declarație. Puse în folderul urmărit, trec prin toți pașii automat, dacă"
+                . " așa ați configurat.\n\n"
+                . "Ce a mai rămas de depus până pe 25. Din vectorul fiscal al fiecărei firme se deduce"
+                . " ce se datorează luna aceasta, ce s-a depus deja, cu indexul recipisei și data, și ce"
+                . " nu s-a depus încă. Pentru toate firmele deodată, în PDF sau în Excel.\n\n"
+                . "SAF-T față în față cu decontul de TVA. Unsprezece verificări de consistență pe"
+                . " fișierul SAF-T, iar decontul rând cu rând față de jurnale, cu suma din SAF-T alături"
+                . " de cea din D300. Neconcordanțele le vedeți dumneavoastră întâi, nu ANAF. Tot de"
+                . " acolo se poate genera și decontul, din jurnalele fișierului deja depus.\n\n"
+                . "Tokenul rămâne unde e. Certificatul stă pe calculatorul unde e tokenul, iar semnarea"
+                . " și depunerea se cer de la orice calculator autorizat. Mai multe tokenuri, mai multe"
+                . " calculatoare, o singură evidență: aplicația știe ce firme sunt înrolate pe fiecare"
+                . " certificat și semnează cu cel potrivit. Utilizatori, tokenuri și calculatoare"
+                . " nelimitate, în orice plan.\n\n"
+                . "Și pe telefon. Declarațiile depuse cu recipisa lor, mesajele din SPV și solicitările"
+                . " către ANAF, în buzunar. O declarație care așteaptă semnătura se autorizează de"
+                . " acolo. Face parte din același abonament.\n\n"
+                . "Dacă vi se pare de folos, vă arătăm în 30 de minute cum ar arăta pe firmele"
+                . " dumneavoastră, nu pe unele demonstrative. Primele 90 de zile sunt gratuite, fără"
+                . " card.",
+        ],
+
+        [
             'cheie' => 'saft-decont',
             'nume' => 'SAF-T ↔ decont de TVA',
             'descriere' => 'Pentru cabinetele cu clienți pe SAF-T. Cea mai bună scrisoare dacă știți că au D406.',
