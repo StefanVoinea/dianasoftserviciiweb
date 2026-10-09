@@ -80,6 +80,14 @@ class ImportArhiva
     protected $marfaRetur = false;
 
     /**
+     * [2026-10-09] Documentele de transport ale mărfii gratuite (DT1_*), găsite
+     * printre fișiere. Se așază la urmă, în ciorna facturii aceluiași magazin.
+     *
+     * @var array<int, array{nume: string, continut: string}>
+     */
+    protected $gratuite = [];
+
+    /**
      * Citește arhiva și face câte o ciornă pe fiecare factură din ea.
      *
      * @return array{ciorne: array<int, array{id: int, factura: string, magazin: ?string}>, avertismente: array<int, string>, gestiuni_noi: array<int, array{cod_furnizor: string, denumire_furnizor: ?string}>}
@@ -115,6 +123,7 @@ class ImportArhiva
     public function importaFisiere(array $fisiere, ?string $cifDeclarant, ?int $userId = null, bool $marfaRetur = false): array
     {
         $this->marfaRetur = $marfaRetur;
+        $this->gratuite = [];
 
         $rezultat = ['ciorne' => [], 'avertismente' => [], 'gestiuni_noi' => []];
         $grupuri = [];
@@ -135,7 +144,7 @@ class ImportArhiva
             }
         }
 
-        if ($grupuri === [] && $excele === []) {
+        if ($grupuri === [] && $excele === [] && $this->gratuite === []) {
             throw new EtransportException(
                 'Nu s-a găsit nimic de citit: se așteaptă arhive ZIP, fișiere T02_*, T01_* și D01_*, ori Excel'
                 . ' cu detaliile facturii.'
@@ -210,6 +219,10 @@ class ImportArhiva
 
         foreach ($excele as $excel) {
             $this->ciornaDinExcel($excel, $cifDeclarant, $userId, $rezultat);
+        }
+
+        foreach ($this->gratuite as $gratuit) {
+            $this->aseazaMarfaGratuita($gratuit, $cifDeclarant, $userId, $rezultat);
         }
 
         $rezultat['gestiuni_noi'] = array_values($rezultat['gestiuni_noi']);
@@ -530,6 +543,18 @@ class ImportArhiva
      */
     protected function aseazaContinut(string $nume, string $continut, array &$grupuri, array &$rezultat): bool
     {
+        // [2026-10-09] Marfa gratuita: se pune deoparte, se aseaza dupa facturi.
+        if (ImportDdtGratuit::recunoaste($nume, $continut)) {
+            $this->gratuite[] = ['nume' => $nume, 'continut' => $continut];
+
+            return true;
+        }
+
+        // Detaliul de articole al facturii: stim ce e si nu ne trebuie.
+        if (preg_match('/^FT1_/i', $nume)) {
+            return false;
+        }
+
         if (preg_match(self::TIPAR_FISIER, $nume, $gasit)) {
             $grupuri[$gasit[2]][strtoupper($gasit[1])] = $continut;
 
@@ -750,6 +775,155 @@ class ImportArhiva
         unset($adresa['tip']);
 
         return ['magazin_cod' => $cod] + $adresa;
+    }
+
+    /**
+     * [2026-10-09] Marfa gratuită dintr-un DT1 intră în ciorna facturii aceluiași
+     * magazin, din aceeași zi: pleacă în același camion, deci sub același UIT.
+     *
+     * Se adaugă liniile ei, cu valoare zero și scopul „Gratuități", iar
+     * documentul ei se trece al doilea pe declarație. Codul vamal rămâne gol:
+     * documentul nu-l are, îl completează omul.
+     *
+     * Fără o ciornă a magazinului — factura n-a venit, ori declarația ei a
+     * plecat deja —, marfa își face ciorna ei, cu valoare zero.
+     */
+    protected function aseazaMarfaGratuita(array $gratuit, ?string $cifDeclarant, ?int $userId, array &$rezultat): void
+    {
+        $ddt = (new ImportDdtGratuit())->citeste($gratuit['continut']);
+        $eticheta = 'Marfa gratuită ' . ($ddt['numar'] ?: $gratuit['nume']);
+
+        if ($ddt['linii'] === []) {
+            $rezultat['avertismente'][] = $eticheta . ': documentul nu are niciun articol de citit; sărit.';
+
+            return;
+        }
+
+        // Importul facut a doua oara nu dubleaza liniile.
+        if ($ddt['numar'] !== null && $this->ddtDejaAdus($ddt['numar'])) {
+            $rezultat['avertismente'][] = $eticheta . ' era deja adusă; sărită.';
+
+            return;
+        }
+
+        $document = [
+            'tip' => 30,
+            'numar' => (string) $ddt['numar'],
+            'data' => $ddt['data'] ?: '',
+            'observatii' => 'marfă gratuită',
+        ];
+
+        $ciorna = $this->ciornaMagazinului($ddt['magazin_cod'], $ddt['data'], $rezultat);
+        $cate = count($ddt['linii']);
+
+        if ($ciorna !== null) {
+            $ciorna->linii = array_merge($ciorna->linii ?: [], $ddt['linii']);
+            $ciorna->documente = array_merge($ciorna->documente ?: [], [$document]);
+            $ciorna->save();
+
+            $rezultat['avertismente'][] = sprintf(
+                '%s: %d %s cu valoare zero %s la %s (%s); completați codul vamal.',
+                $eticheta,
+                $cate,
+                $cate === 1 ? 'linie' : 'linii',
+                $cate === 1 ? 'adăugată' : 'adăugate',
+                $ciorna->referinta_interna,
+                $ciorna->loc_magazin['magazin_denumire'] ?? $ddt['magazin_cod']
+            );
+
+            return;
+        }
+
+        $this->note = [];
+        $magazin = $this->adresaMagazinului($ddt['magazin_cod']);
+        $gestiune = $ddt['magazin_cod'] ? ($this->gestiunile()[$ddt['magazin_cod']] ?? null) : null;
+
+        if ($gestiune !== null) {
+            $magazin['magazin_denumire'] = $gestiune->denumire;
+        }
+
+        $declaratie = EtransportDeclaratie::create([
+            'stare' => 'ciorna',
+            'cif_declarant' => $cifDeclarant,
+            'referinta_interna' => $eticheta,
+            'tip_operatiune' => 10,
+            'transportator_tara' => 'RO',
+            'partener_tara' => 'IT',
+            'partener_denumire' => 'TEDDY S.P.A.',
+            'loc_start' => ['tip' => 'ptf', 'cod_ptf' => self::PTF_IMPLICIT],
+            'loc_final' => ['tip' => 'adresa'] + $magazin,
+            'documente' => [$document],
+            'linii' => $ddt['linii'],
+            'valuta' => 'EUR',
+            'valoare_zero' => true,
+            'fisiere_importate' => [$gratuit['nume']],
+            'user_id' => $userId,
+        ]);
+
+        $rezultat['ciorne'][] = [
+            'id' => $declaratie->id,
+            'factura' => $declaratie->referinta_interna,
+            'magazin' => $magazin['magazin_denumire'] ?? $ddt['magazin_cod'],
+        ];
+
+        $rezultat['avertismente'][] = $eticheta . ': magazinul n-are o ciornă de factură din aceeași zi;'
+            . ' s-a făcut o ciornă a ei, cu valoare zero. Completați codul vamal.';
+
+        foreach ($this->note as $nota) {
+            $rezultat['avertismente'][] = $eticheta . ': ' . $nota;
+        }
+    }
+
+    /**
+     * Ciorna facturii pe care o primește același magazin în aceeași zi.
+     *
+     * Întâi printre ciornele făcute acum, apoi printre cele rămase nedepuse din
+     * zilele dinainte, cu factura din aceeași zi. La două facturi, prima.
+     */
+    protected function ciornaMagazinului(?string $cod, ?string $data, array $rezultat): ?EtransportDeclaratie
+    {
+        if ($cod === null) {
+            return null;
+        }
+
+        $acum = array_column($rezultat['ciorne'], 'id');
+
+        $candidate = EtransportDeclaratie::where('stare', 'ciorna')
+            ->where('tip_operatiune', 10)
+            ->where('loc_final->magazin_cod', $cod)
+            ->where('created_at', '>=', now()->subDays(30))
+            ->orderBy('id')
+            ->get()
+            ->filter(function (EtransportDeclaratie $d) use ($data) {
+                $prima = ($d->documente ?: [])[0] ?? [];
+
+                return $data === null || ($prima['data'] ?? null) === $data;
+            });
+
+        return $candidate->first(function (EtransportDeclaratie $d) use ($acum) {
+            return in_array($d->id, $acum, true);
+        }) ?: $candidate->first();
+    }
+
+    /** E documentul acesta deja pe vreo declarație, ca marfă gratuită? */
+    protected function ddtDejaAdus(string $numar): bool
+    {
+        return EtransportDeclaratie::where('created_at', '>=', now()->subDays(60))
+            ->where(function ($q) use ($numar) {
+                $q->where('referinta_interna', 'Marfa gratuită ' . $numar)
+                    ->orWhere('documente', 'like', '%"numar": "' . $numar . '"%')
+                    ->orWhere('documente', 'like', '%"numar":"' . $numar . '"%');
+            })
+            ->get()
+            ->contains(function (EtransportDeclaratie $d) use ($numar) {
+                foreach ($d->documente ?: [] as $document) {
+                    if ((string) ($document['numar'] ?? '') === $numar && (int) ($document['tip'] ?? 0) === 30) {
+                        return true;
+                    }
+                }
+
+                return $d->referinta_interna === 'Marfa gratuită ' . $numar;
+            });
     }
 
     /** Gestiunile companiei curente, pe codul furnizorului (NEG*). */
