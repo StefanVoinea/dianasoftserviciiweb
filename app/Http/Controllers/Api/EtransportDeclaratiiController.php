@@ -69,6 +69,12 @@ class EtransportDeclaratiiController extends Controller
         return response()->json([
             'success' => true,
             'import_permis' => $this->importPermis($request),
+            /*
+             * [2026-10-09] Cate fisiere primeste serverul intr-o incarcare.
+             * Peste ele, PHP le arunca pe celelalte fara niciun semn; pagina
+             * trimite deci dosarul in transe de atat.
+             */
+            'fisiere_pe_incarcare' => max(1, (int) ini_get('max_file_uploads') ?: 20),
             // Declarantul e de obicei chiar clientul: CIF-ul lui se pune din prima.
             'cif_implicit' => $this->cifClientului(),
             'tipuri_operatiune' => Nomenclatoare::TIPURI_OPERATIUNE,
@@ -421,11 +427,35 @@ class EtransportDeclaratiiController extends Controller
             'fisiere.*' => 'file|max:51200',
             // Marfa de retur: cate doua declaratii pe factura, TTN si LIC
             'marfa_retur' => 'nullable|boolean',
+            // Cate fisiere a trimis pagina: daca au ajuns mai putine, nu se importa nimic.
+            'trimise' => 'nullable|integer|min:1',
         ]);
 
         $fisiere = array_map(function ($fisier) {
             return ['nume' => $fisier->getClientOriginalName(), 'cale' => $fisier->getRealPath()];
         }, $request->file('fisiere'));
+
+        /*
+         * [2026-10-09] PHP pastreaza cel mult „max_file_uploads" fisiere pe
+         * incarcare si le arunca pe celelalte fara eroare. Asa s-au facut
+         * ciorne fara linii: din 37 de fisiere au ajuns 20, iar recapitulatiile
+         * T02 erau printre cele aruncate. O factura cu bucati lipsa e mai rea
+         * decat niciuna, deci atunci nu se importa nimic.
+         */
+        $trimise = (int) $request->input('trimise', 0);
+
+        if ($trimise > count($fisiere)) {
+            return response()->json([
+                'success' => false,
+                'message' => sprintf(
+                    'Au ajuns la server %d din cele %d fișiere trimise (serverul primește cel mult %d deodată).'
+                    . ' Nu s-a importat nimic; reîncărcați pagina și încercați din nou.',
+                    count($fisiere),
+                    $trimise,
+                    (int) ini_get('max_file_uploads')
+                ),
+            ], 422);
+        }
 
         try {
             $rezultat = $import->importaFisiere(

@@ -2363,7 +2363,50 @@ export default {
      * aduna pe facturi, iar fiecare Excel isi face ciorna lui. Ce nu se
      * potriveste se spune in raport, nu se pierde in tacere.
      */
-    importaDosarul(eveniment) {
+    /**
+     * [2026-10-09] Dosarul pleacă în tranșe.
+     *
+     * Serverul primește doar atâtea fișiere deodată, iar pe cele în plus le
+     * aruncă fără niciun semn: din 37 ajungeau 20, iar facturile ieșeau fără
+     * linii. Fișierele aceleiași facturi (T02, D01) pleacă în aceeași tranșă;
+     * marfa gratuită (DT1) pleacă la urmă, ca să-și găsească ciorna facturii.
+     * Detaliul de articole (FT1) și ce nu e raport nici nu se mai trimite.
+     */
+    transeleDosarului(fisiere) {
+      const pe = Math.max(1, Number(this.nomenclatoare.fisiere_pe_incarcare) || 20)
+      const deTrimis = fisiere.filter(f => !/^FT1_/i.test(f.name) && /\.(zip|txt|text|prn|dat|xlsx?|ods)$/i.test(f.name))
+      const grupuri = {}
+      const laUrma = []
+
+      deTrimis.forEach(fisier => {
+        if (/^DT1_/i.test(fisier.name)) {
+          laUrma.push([fisier])
+          return
+        }
+
+        const gasit = fisier.name.match(/^(?:T01|T02|D01)_(.+)\.[^.]+$/i)
+        const cheie = gasit ? gasit[1].toUpperCase() : `__${fisier.name}`
+
+        if (!grupuri[cheie]) grupuri[cheie] = []
+        grupuri[cheie].push(fisier)
+      })
+
+      const transe = []
+      let curenta = []
+
+      Object.values(grupuri).concat(laUrma).forEach(grup => {
+        if (curenta.length && curenta.length + grup.length > pe) {
+          transe.push(curenta)
+          curenta = []
+        }
+        curenta = curenta.concat(grup)
+      })
+
+      if (curenta.length) transe.push(curenta)
+
+      return transe
+    },
+    async importaDosarul(eveniment) {
       const fisiere = Array.from(eveniment.target.files || [])
 
       if (!fisiere.length) return
@@ -2372,27 +2415,46 @@ export default {
       this.arhivaRezultat = null
       this.dosarInCurs = true
 
-      const formular = new FormData()
-      fisiere.forEach(fisier => formular.append('fisiere[]', fisier))
-      formular.append('marfa_retur', this.marfaRetur ? '1' : '0')
+      const adunat = { ciorne: [], avertismente: [], gestiuni: {} }
+      const transe = this.transeleDosarului(fisiere)
 
-      this.$http.post('/anaf-etransport/declaratii/importa-dosar', formular, { headers: { 'Content-Type': 'multipart/form-data' } })
-        .then(raspuns => {
-          this.arhivaRezultat = { ciorne: raspuns.data.data || [], avertismente: raspuns.data.avertismente || [] }
-          this.arhivaVizibila = true
-          this.incarcaLista()
+      try {
+        if (!transe.length) {
+          throw new Error('În dosar nu e niciun fișier de citit (T02, T01, D01, DT1, arhivă ZIP sau Excel).')
+        }
 
-          this.gestiuniNoi = raspuns.data.gestiuni_noi || []
-          this.urmatoareaGestiune()
-        })
-        .catch(err => {
-          this.arhivaEroare = this.mesajEroare(err, 'Importul dosarului a eșuat')
-          this.arhivaVizibila = true
-        })
-        .finally(() => {
-          this.dosarInCurs = false
-          this.$refs.dosar.value = ''
-        })
+        // Una dupa alta: marfa gratuita isi cauta ciorna facturii facuta inainte.
+        // eslint-disable-next-line no-restricted-syntax
+        for (const transa of transe) {
+          const formular = new FormData()
+          transa.forEach(fisier => formular.append('fisiere[]', fisier))
+          formular.append('marfa_retur', this.marfaRetur ? '1' : '0')
+          formular.append('trimise', String(transa.length))
+
+          // eslint-disable-next-line no-await-in-loop
+          const raspuns = await this.$http.post('/anaf-etransport/declaratii/importa-dosar', formular, { headers: { 'Content-Type': 'multipart/form-data' } })
+
+          adunat.ciorne = adunat.ciorne.concat(raspuns.data.data || [])
+          adunat.avertismente = adunat.avertismente.concat(raspuns.data.avertismente || [])
+          const gestiuni = raspuns.data.gestiuni_noi || []
+          gestiuni.forEach(g => { adunat.gestiuni[g.cod_furnizor] = g })
+        }
+
+        this.arhivaRezultat = { ciorne: adunat.ciorne, avertismente: adunat.avertismente }
+        this.gestiuniNoi = Object.values(adunat.gestiuni)
+        this.urmatoareaGestiune()
+      } catch (err) {
+        // Ce s-a facut din transele de dinainte se arata oricum.
+        this.arhivaEroare = err.response ? this.mesajEroare(err, 'Importul dosarului a eșuat') : err.message
+        if (adunat.ciorne.length || adunat.avertismente.length) {
+          this.arhivaRezultat = { ciorne: adunat.ciorne, avertismente: adunat.avertismente }
+        }
+      } finally {
+        this.arhivaVizibila = true
+        this.dosarInCurs = false
+        this.$refs.dosar.value = ''
+        this.incarcaLista()
+      }
     },
 
     importaArhiva() {
