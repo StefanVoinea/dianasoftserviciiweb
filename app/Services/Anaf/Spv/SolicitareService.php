@@ -54,9 +54,21 @@ class SolicitareService
 
     public function solicita(string $cui, string $tipDocument, array $optiuni = [], ?int $userId = null): SpvSolicitare
     {
-        $raspuns = $this->client->cerere($tipDocument, $cui, $optiuni);
+        $neconfirmata = null;
 
-        return SpvSolicitare::create([
+        try {
+            $raspuns = $this->client->cerere($tipDocument, $cui, $optiuni);
+        } catch (CerereNeconfirmataException $e) {
+            /*
+             * Cererea a ajuns la ANAF, raspunsul nu: randul se scrie oricum, fara
+             * numarul de solicitare. Il primeste cand raspunsul e citit din SPV
+             * (vezi leagaDeRaspuns), ca orice alta cerere in asteptare.
+             */
+            $raspuns = [];
+            $neconfirmata = $e->getMessage();
+        }
+
+        $solicitare = SpvSolicitare::create([
             'cif' => $cui,
             'den_firma' => $this->denumirea($cui),
             'tip_document' => $tipDocument,
@@ -68,11 +80,18 @@ class SolicitareService
             'cui_pui' => $optiuni['cui_pui'] ?? null,
             'id_solicitare' => $raspuns['id_solicitare'] ?? ($raspuns['idSolicitare'] ?? null),
             'data_solicitarii' => now(),
-            'detalii' => $raspuns['titlu'] ?? null,
+            'detalii' => $neconfirmata !== null
+                ? 'Cererea a ajuns la ANAF, dar răspunsul s-a rupt pe drum; se leagă de răspunsul din SPV când apare. (' . mb_substr($neconfirmata, 0, 200) . ')'
+                : ($raspuns['titlu'] ?? null),
             'stare' => 'trimisa',
             'certificat_id' => $this->certificate->idCurent(),
             'user_id' => $userId,
         ]);
+
+        // controllerul spune omului ca e trimisa, dar neconfirmata (nu o mai trimite o data)
+        $solicitare->setAttribute('neconfirmata', $neconfirmata !== null);
+
+        return $solicitare;
     }
 
     /**
@@ -114,6 +133,11 @@ class SolicitareService
 
             $cerut = $this->ceS_aCerut($mesaj['detalii'] ?? null);
 
+            // o cerere trimisa de aici, ramasa fara numar (raspunsul s-a rupt): isi ia numarul, nu rand nou
+            if ($this->leagaDeRaspuns($cerut, $idSolicitare, $mesaj)) {
+                continue;
+            }
+
             SpvSolicitare::create([
                 'cif' => $cerut['cif'] ?: ($mesaj['cif'] ?? ''),
                 'den_firma' => optional(AnafSocietate::where('cif', $cerut['cif'] ?: ($mesaj['cif'] ?? ''))->first())->denumire,
@@ -131,6 +155,43 @@ class SolicitareService
         }
 
         return $adaugate;
+    }
+
+    /**
+     * Raspunsul unei cereri trimise de aici, dar ramase fara numar de solicitare
+     * (legatura s-a rupt la primirea raspunsului): cea mai veche cerere a
+     * aceleiasi firme, de acelasi fel, din ultimele 30 de zile, inca fara numar,
+     * primeste numarul raspunsului si intra in preluare ca oricare alta.
+     *
+     * @param array{tip: string, cif: string} $cerut
+     */
+    protected function leagaDeRaspuns(array $cerut, string $idSolicitare, array $mesaj): bool
+    {
+        $cif = preg_replace('/\D/', '', (string) ($cerut['cif'] ?: ($mesaj['cif'] ?? '')));
+
+        if ($cif === '' || $cerut['tip'] === '') {
+            return false;
+        }
+
+        $orfana = SpvSolicitare::query()->totiUtilizatorii()
+            ->whereNull('id_solicitare')
+            ->whereNull('data_afisare')
+            ->where('cif', $cif)
+            ->whereRaw('LOWER(tip_document) = ?', [mb_strtolower($cerut['tip'])])
+            ->where('data_solicitarii', '>=', now()->subDays(30))
+            ->orderBy('data_solicitarii')
+            ->first();
+
+        if (!$orfana) {
+            return false;
+        }
+
+        $orfana->update([
+            'id_solicitare' => $idSolicitare,
+            'detalii' => $mesaj['detalii'] ?? $orfana->detalii,
+        ]);
+
+        return true;
     }
 
     /**

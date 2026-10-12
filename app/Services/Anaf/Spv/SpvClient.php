@@ -371,12 +371,25 @@ class SpvClient
              * atunci chiar e altceva si eroarea merge la om, cu indreptarea ei
              * — „Enable single logon" in driverul tokenului.
              */
-            if (!$reluat && SesiuneStinsa::da($payload, $response->body())) {
-                Log::info('Sesiunea securizată cu ANAF s-a stins în mijlocul răspunsului; se încearcă din nou.', [
-                    'cale' => $path,
-                ]);
+            if (SesiuneStinsa::da($payload, $response->body())) {
+                /*
+                 * „cerere" inscrie o solicitare la ANAF. Cand legatura s-a rupt
+                 * abia la primirea raspunsului, cererea a ajuns: reluata, ar fi
+                 * inscrisa inca o data (clientii primeau cate 2-3 fise rol la o
+                 * apasare), iar aplicatia n-o avea pe niciuna. Se spune deosebit,
+                 * ca randul ei sa se scrie totusi - fara numar, pana vine raspunsul.
+                 */
+                if ($path === '/cerere') {
+                    throw new CerereNeconfirmataException(trim(($payload['eroare'] ?? 'Legătura cu ANAF s-a rupt în timp ce se primea răspunsul.') . ' ' . ($payload['detalii'] ?? '')));
+                }
 
-                return $this->call($path, $query, true);
+                if (!$reluat) {
+                    Log::info('Sesiunea securizată cu ANAF s-a stins în mijlocul răspunsului; se încearcă din nou.', [
+                        'cale' => $path,
+                    ]);
+
+                    return $this->call($path, $query, true);
+                }
             }
 
             if (!empty($payload['eroare'])) {

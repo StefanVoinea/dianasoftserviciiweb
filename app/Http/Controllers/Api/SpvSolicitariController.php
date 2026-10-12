@@ -110,14 +110,20 @@ class SpvSolicitariController extends Controller
         $trimise = [];
         $erori = [];
 
+        $neconfirmate = [];
+
         foreach ($date['cui'] as $cui) {
             try {
-                $trimise[] = $serviciu->solicita(
+                $trimise[] = $solicitare = $serviciu->solicita(
                     $cui,
                     $date['tip_document'],
                     $optiuni,
                     optional($request->user())->id
                 );
+
+                if ($solicitare->getAttribute('neconfirmata')) {
+                    $neconfirmate[] = $cui;
+                }
             } catch (SpvException $e) {
                 $erori[] = $cui . ': ' . $e->getMessage();
             }
@@ -141,6 +147,8 @@ class SpvSolicitariController extends Controller
             'success' => $trimise !== [],
             'data' => $trimise,
             'erori' => $erori,
+            // trimise, dar fara confirmare de la ANAF (legatura s-a rupt la raspuns): nu se mai trimit o data
+            'neconfirmate' => $neconfirmate,
         ], $trimise === [] ? 500 : 200);
     }
 

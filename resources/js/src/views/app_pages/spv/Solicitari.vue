@@ -732,6 +732,9 @@ export default {
         .then(raspuns => {
           const trimise = (raspuns.data.data || []).length
           this.notifica(`${trimise} solicitare/solicitări trimise către SPV`, 'success')
+          if (raspuns.data.neconfirmate && raspuns.data.neconfirmate.length) {
+            this.notifica(`Pentru ${raspuns.data.neconfirmate.join(', ')} cererea a ajuns la ANAF, dar răspunsul s-a rupt pe drum. NU o trimiteți din nou: răspunsul se va lega singur de solicitare când apare în SPV.`, 'warning')
+          }
           if (raspuns.data.erori && raspuns.data.erori.length) {
             this.eroare = raspuns.data.erori.join(' | ')
           }
