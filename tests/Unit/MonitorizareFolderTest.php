@@ -656,4 +656,73 @@ XML;
         $this->assertSame(0, $raport['gasite']);
         $this->assertStringContainsString('Dosarul urmărit nu există.', $raport['erori'][0]);
     }
+
+    /** XML-ul unui bilanț, așa cum îl poartă PDF-ul din programul de contabilitate. */
+    protected const XML_BILANT = <<<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<bilant1002 xmlns="mfp:anaf:dgti:bilant:declaratie:v1" an="2025" luna="12" cui="15208744" den="DIANA SOFT SRL">
+  <F10 F10_0011="100"/>
+</bilant1002>
+XML;
+
+    /**
+     * [2026-10-13] Bilanțul vine validat și semnat, cu o arhivă ZIP atașată: nu
+     * trece prin DUKIntegrator, care fără arhivă l-ar respinge, și nu se mai
+     * semnează o dată.
+     */
+    public function test_bilantul_semnat_nu_se_valideaza_si_nu_se_semneaza(): void
+    {
+        $this->bridgeCu(
+            [['nume' => 'S1002_15208744.pdf', 'marime' => 300000, 'gata' => true]],
+            '%PDF-1.7 bilant semnat cu zip'
+        );
+
+        $raport = $this->serviciu(
+            $this->duk(false, 'E: lipsește arhiva ZIP'),
+            $this->semnare('Nu trebuia chemată semnarea.'),
+            $this->pdf(self::XML_BILANT, true)
+        )->pentruCertificat($this->certificat);
+
+        $this->assertSame([], $raport['erori']);
+
+        $declaratie = AnafDeclaratie::where('nume_fisier', 'S1002_15208744.pdf')->first();
+
+        $this->assertSame('S1002', $declaratie->tip);
+        $this->assertSame('semnat', $declaratie->pas);
+        $this->assertNull($declaratie->erori_validare);
+        // PDF-ul primit, cu arhiva lui, e chiar cel semnat.
+        $this->assertSame($declaratie->cale_pdf, $declaratie->cale_pdf_semnat);
+    }
+
+    /** Bilanțul nesemnat nu e înlocuit cu PDF-ul validatorului, care n-ar purta arhiva ZIP. */
+    public function test_bilantul_nesemnat_isi_pastreaza_pdf_ul_cu_arhiva(): void
+    {
+        $this->bridgeCu(
+            [['nume' => 'S1002_nesemnat.pdf', 'marime' => 300000, 'gata' => true]],
+            '%PDF-1.7 bilant cu zip'
+        );
+
+        $raport = $this->serviciu(
+            $this->duk(false, 'E: lipsește arhiva ZIP'),
+            null,
+            $this->pdf(self::XML_BILANT, false)
+        )->pentruCertificat($this->certificat);
+
+        $this->assertSame([], $raport['erori']);
+
+        $declaratie = AnafDeclaratie::where('nume_fisier', 'S1002_nesemnat.pdf')->first();
+
+        $this->assertSame('S1002', $declaratie->tip);
+        $this->assertNotSame('eroare_validare', $declaratie->pas);
+        $this->assertStringNotContainsString('_duk', (string) $declaratie->cale_pdf);
+    }
+
+    public function test_bilantul_se_recunoaste_dupa_tip()
+    {
+        $this->assertTrue(AnafDeclaratie::esteBilant('S1002'));
+        $this->assertTrue(AnafDeclaratie::esteBilant('s1039'));
+        $this->assertFalse(AnafDeclaratie::esteBilant('D394'));
+        $this->assertFalse(AnafDeclaratie::esteBilant('SAFT'));
+        $this->assertFalse(AnafDeclaratie::esteBilant(null));
+    }
 }

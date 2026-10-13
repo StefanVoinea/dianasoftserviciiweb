@@ -387,6 +387,15 @@ class MonitorizareFolder
             [$caleXml, $calePdf]
         );
 
+        // Bilantul vine validat (si de obicei semnat): se ia asa cum e, cu arhiva lui.
+        if (AnafDeclaratie::esteBilant($declaratie->tip)) {
+            $declaratie->update($info['semnat']
+                ? ['pas' => 'semnat', 'cale_pdf' => $calePdf, 'cale_pdf_semnat' => $calePdf, 'erori_validare' => null]
+                : ['pas' => 'validat', 'cale_pdf' => $calePdf, 'erori_validare' => null]);
+
+            return $declaratie->fresh();
+        }
+
         $caleGenerat = Storage::path($trunchi . '_duk.pdf');
 
         $this->valideaza($declaratie, $caleGenerat);

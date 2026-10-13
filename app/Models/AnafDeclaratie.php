@@ -33,6 +33,20 @@ class AnafDeclaratie extends Model
      */
     protected $hidden = ['verificare_erori', 'potrivire_detalii'];
 
+    /**
+     * [2026-10-13] Situațiile financiare (bilanțul): tipurile „S" urmate de
+     * cifre — S1002, S1003, S1005, S1039...
+     *
+     * Vin din programul de contabilitate ca PDF deja validat și, de obicei,
+     * deja semnat, cu XML-ul și cu o arhivă ZIP atașate. Nu se trec prin
+     * DUKIntegrator: validarea lor cere și arhiva, iar PDF-ul scos de el n-ar
+     * mai purta arhiva. Se iau așa cum au venit, gata de semnare ori depunere.
+     */
+    public static function esteBilant(?string $tip): bool
+    {
+        return preg_match('/^S\d+$/i', trim((string) $tip)) === 1;
+    }
+
     public function certificat()
     {
         return $this->belongsTo(AnafCertificat::class, 'certificat_id');

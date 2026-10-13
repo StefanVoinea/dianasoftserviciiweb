@@ -221,6 +221,15 @@ class DeclaratiiController extends Controller
             'user_id' => optional($request->user())->id,
         ]));
 
+        // Bilantul vine validat (si de obicei semnat): se ia asa cum e, cu arhiva lui.
+        if (AnafDeclaratie::esteBilant($declaratie->tip)) {
+            $declaratie->update($info['semnat']
+                ? ['pas' => 'semnat', 'cale_pdf' => $calePdf, 'cale_pdf_semnat' => $calePdf, 'erori_validare' => null]
+                : ['pas' => 'validat', 'cale_pdf' => $calePdf, 'erori_validare' => null]);
+
+            return $declaratie->fresh();
+        }
+
         // Verificarea se face pe XML-ul din PDF, la fel ca pentru un XML separat.
         $rezultat = $duk->valideazaSiGenereazaPdf(
             Storage::path($caleXml),
@@ -557,6 +566,14 @@ class DeclaratiiController extends Controller
     /** Re-valideaza o declaratie incarcata (utile dupa corectarea XML-ului). */
     public function valideazaDeclaratie(AnafDeclaratie $declaratie, DukIntegrator $duk)
     {
+        if (AnafDeclaratie::esteBilant($declaratie->tip)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bilanțul (' . $declaratie->tip . ') nu se revalidează aici: vine validat din'
+                    . ' programul de contabilitate, cu arhiva ZIP atașată, pe care DUKIntegrator n-o are.',
+            ], 422);
+        }
+
         $declaratie = $this->valideaza($declaratie, $duk);
 
         Jurnal::scrie(
