@@ -487,6 +487,64 @@ class IntrastatXmlTest extends TestCase
         $this->assertStringNotContainsString('<DeliveryTermsCode>', $rezultat['xml']);
     }
 
+    /**
+     * [2026-10-15] Marfa întoarsă furnizorului se declară la expedieri cu natura
+     * 2.1, „Returnări de bunuri", nu 1.1 — și cu codul de TVA al partenerului
+     * scris cu prefixul țării, ca în VIES.
+     */
+    public function test_returul_la_expedieri_are_natura_2_1_si_cod_tva_cu_prefix()
+    {
+        $this->declaratie('1U2F667110840168', $this->linie(25156.04), [
+            'tip_operatiune' => 20,
+            'referinta_interna' => '10078325',
+            'fisiere_importate' => ['T01_2_NEG0000548_2026_008_012_RCLSS.TXT'],
+            'documente' => [['tip' => 20, 'numar' => '10078325', 'data' => '2026-08-14',
+                'observatii' => 'Teddy SpA isi ia inapoi marfa nevanduta']],
+        ]);
+
+        $xml = (new IntrastatXml())->genereaza(8, 2026, 'expedieri', $this->antet())['xml'];
+
+        $this->assertStringContainsString('<InsNewDispatch', $xml);
+        $this->assertStringContainsString('<NatureOfTransactionACode>2</NatureOfTransactionACode>', $xml);
+        $this->assertStringContainsString('<NatureOfTransactionBCode>2.1</NatureOfTransactionBCode>', $xml);
+        $this->assertStringNotContainsString('<NatureOfTransactionBCode>1.1</NatureOfTransactionBCode>', $xml);
+        $this->assertStringContainsString('<InvoiceValue>25156</InvoiceValue>', $xml);
+        $this->assertStringContainsString('<PartnerVatNr>IT00953910403</PartnerVatNr>', $xml);
+    }
+
+    /** Vânzarea adevărată rămâne 1.1, chiar pe același cod cu un retur. */
+    public function test_vanzarea_si_returul_pe_acelasi_cod_raman_linii_deosebite()
+    {
+        $this->declaratie('UITVANZARE0000001', $this->linie(1000), [
+            'tip_operatiune' => 20,
+            'referinta_interna' => 'Livrare 1',
+        ]);
+        $this->declaratie('UITRETUR000000001', $this->linie(500), [
+            'tip_operatiune' => 20,
+            'referinta_interna' => 'Retur 2',
+        ]);
+
+        $rezultat = (new IntrastatXml())->genereaza(8, 2026, 'expedieri', $this->antet());
+
+        $this->assertSame(2, $rezultat['linii']);
+        $this->assertStringContainsString('<NatureOfTransactionBCode>1.1</NatureOfTransactionBCode>', $rezultat['xml']);
+        $this->assertStringContainsString('<NatureOfTransactionBCode>2.1</NatureOfTransactionBCode>', $rezultat['xml']);
+    }
+
+    /** [2026-10-15] Facturile de bifat vin în ordinea datei lor, nu a importului. */
+    public function test_documentele_de_bifat_sunt_in_ordinea_datei_facturii()
+    {
+        foreach (['2026-08-20' => '300', '2026-08-03' => '100', '2026-08-11' => '200'] as $data => $numar) {
+            $this->declaratie(null, $this->linie(), [
+                'documente' => [['tip' => 20, 'numar' => $numar, 'data' => $data]],
+            ]);
+        }
+
+        $documente = (new IntrastatXml())->centralizator(8, 2026, 'sosiri')['documente'];
+
+        $this->assertSame(['100', '200', '300'], array_column($documente, 'numar'));
+    }
+
     protected function declaratie(?string $uit, array $linii, array $campuri = []): EtransportDeclaratie
     {
         return EtransportDeclaratie::create($campuri + [

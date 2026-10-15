@@ -90,6 +90,14 @@ class IntrastatXml
     protected const NATURA_TRANZACTIEI = ['a' => '1', 'b' => '1.1'];
 
     /**
+     * [2026-10-15] Marfa întoarsă furnizorului: „Returnări de bunuri", 2.1.
+     *
+     * Retururile Emporio către Teddy se declarau ca vânzare (1.1), iar la INS
+     * ar fi apărut drept livrări. Se scriu cu codul lor.
+     */
+    protected const NATURA_RETUR = ['a' => '2', 'b' => '2.1'];
+
+    /**
      * @param array{cif: string, firma: string, nume: string, prenume: string,
      *     telefon: string, email: ?string, incoterm: ?string} $antet
      * @param array{nula?: bool, declaratii?: array<int, int>} $optiuni
@@ -202,8 +210,15 @@ class IntrastatXml
                 // Factura unei luni trecute, neintrata in nicio declaratie Intrastat.
                 'intarziat' => $candidate['intarziate']->contains('id', $d->id),
                 'bifat' => in_array($d->id, $bifate, true),
+                // Marfa intoarsa furnizorului: se declara cu natura 2.1.
+                'retur' => $this->esteRetur($d),
             ];
-        })->values()->all();
+        })
+            // [2026-10-15] In ordinea datei facturii, apoi a numarului.
+            ->sortBy(function ($document) {
+                return ($document['data'] ?: '9999-99-99') . '|' . str_pad((string) $document['numar'], 20, '0', STR_PAD_LEFT);
+            })
+            ->values()->all();
 
         // Ce nu intra, si de ce: altfel documentele lipsesc fara nicio vorba.
         $neincluse = [];
@@ -424,9 +439,10 @@ class IntrastatXml
             $this->text($doc, $element, 'InvoiceValue', (string) $linie['valoare']);
             $this->text($doc, $element, 'StatisticalValue', (string) $linie['valoare']);
             $this->text($doc, $element, 'NetMass', (string) $linie['masa']);
-            // Natura tranzacției 1.1: cumpărare/vânzare definitivă.
-            $this->text($doc, $element, 'NatureOfTransactionACode', self::NATURA_TRANZACTIEI['a']);
-            $this->text($doc, $element, 'NatureOfTransactionBCode', self::NATURA_TRANZACTIEI['b']);
+            // Natura tranzacției: 1.1 cumpărare/vânzare definitivă, 2.1 retur.
+            $natura = $linie['natura'] ?? self::NATURA_TRANZACTIEI;
+            $this->text($doc, $element, 'NatureOfTransactionACode', $natura['a']);
+            $this->text($doc, $element, 'NatureOfTransactionBCode', $natura['b']);
             $this->text($doc, $element, 'DeliveryTermsCode', $antet['incoterm']);
             // Transport rutier: doar el trece prin e-Transport.
             $this->text($doc, $element, 'ModeOfTransportCode', '3');
@@ -451,7 +467,7 @@ class IntrastatXml
             } else {
                 $this->text($doc, $element, 'CountryOfDestination', $linie['tara']);
                 $this->text($doc, $element, 'PartnerCountryCode', $linie['tara']);
-                $this->text($doc, $element, 'PartnerVatNr', $linie['partener_cod'] ?: '-');
+                $this->text($doc, $element, 'PartnerVatNr', $this->codTvaPartener($linie['partener_cod'], $linie['tara']));
             }
 
             $valoareTotala += $linie['valoare'];
@@ -485,6 +501,7 @@ class IntrastatXml
 
         foreach ($declaratii as $declaratie) {
             $tara = strtoupper(trim((string) $declaratie->partener_tara)) ?: 'XX';
+            $natura = $this->esteRetur($declaratie) ? self::NATURA_RETUR : self::NATURA_TRANZACTIEI;
 
             foreach ($declaratie->linii ?: [] as $rand) {
                 $cn8 = preg_replace('/\D/', '', (string) ($rand['cod_tarifar'] ?? ''));
@@ -503,13 +520,15 @@ class IntrastatXml
                     ? (strtoupper(trim((string) ($rand['tara_origine'] ?? ''))) ?: $tara)
                     : 'RO';
 
-                $cheie = $cn8 . '|' . $tara . '|' . $origine;
+                // Returul si vanzarea pe acelasi cod raman linii deosebite: au alta natura.
+                $cheie = $cn8 . '|' . $tara . '|' . $origine . '|' . $natura['b'];
 
                 if (!isset($linii[$cheie])) {
                     $linii[$cheie] = [
                         'cn8' => $cn8,
                         'tara' => $tara,
                         'origine' => $origine,
+                        'natura' => $natura,
                         'valoare' => 0,
                         'masa' => 0.0,
                         'cantitate' => 0.0,
@@ -534,6 +553,61 @@ class IntrastatXml
         unset($linie);
 
         return $this->completeazaUnitatile(array_values($linii));
+    }
+
+    /**
+     * [2026-10-15] E marfă întoarsă furnizorului?
+     *
+     * Se cunoaște după ce poartă declarația: referința „Retur …", lista pe
+     * articole T01 a notei de credit (arhiva „RCLSS"/„RESO"), scopul „Altele"
+     * pus liniilor de retur, ori o observație despre marfa luată înapoi. Numai
+     * la expedieri: la sosiri, ce vine de la furnizor e cumpărare.
+     */
+    public function esteRetur(EtransportDeclaratie $declaratie): bool
+    {
+        if ((int) $declaratie->tip_operatiune !== self::FLUXURI['expedieri']) {
+            return false;
+        }
+
+        if (preg_match('/^\s*Retur\b/i', (string) $declaratie->referinta_interna)) {
+            return true;
+        }
+
+        foreach ((array) $declaratie->fisiere_importate as $fisier) {
+            if (preg_match('/^T01_|RCLSS|RESO/i', (string) $fisier)) {
+                return true;
+            }
+        }
+
+        foreach ((array) $declaratie->documente as $document) {
+            if (preg_match('/retur|[iî]napoi|nevandut|nevândut|credit\s*note|nota\s+de\s+credit/iu', (string) ($document['observatii'] ?? ''))) {
+                return true;
+            }
+        }
+
+        $linii = (array) $declaratie->linii;
+
+        return $linii !== [] && collect($linii)->every(function ($linie) {
+            return (int) ($linie['scop_operatiune'] ?? 0) === 9901;
+        });
+    }
+
+    /**
+     * Codul de TVA al partenerului, cu prefixul țării: INS îl cere ca în VIES
+     * („IT00953910403"), nu doar cifrele. Fără cod, „-".
+     */
+    protected function codTvaPartener(?string $cod, string $tara): string
+    {
+        $cod = strtoupper(preg_replace('/\s+/', '', (string) $cod));
+
+        if ($cod === '') {
+            return '-';
+        }
+
+        // Grecia apare in VIES ca EL, nu GR.
+        $prefix = $tara === 'GR' ? 'EL' : $tara;
+
+        return preg_match('/^[A-Z]{2}/', $cod) ? $cod : $prefix . $cod;
     }
 
     /**

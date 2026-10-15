@@ -1514,6 +1514,13 @@
                       v-if="document.intarziat"
                       class="text-warning"
                     >(mai veche)</span>
+                    <b-badge
+                      v-if="document.retur"
+                      variant="light-info"
+                      class="ml-25"
+                    >
+                      retur · natura 2.1
+                    </b-badge>
                   </td>
                   <td>{{ document.data || '-' }}</td>
                   <td>{{ document.data_transport || '-' }}</td>
