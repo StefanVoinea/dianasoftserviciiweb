@@ -36,7 +36,7 @@ class ImportRaportArticole extends ImportRaportText
 
     public function citeste(string $cale): array
     {
-        $continut = file_get_contents($cale);
+        $continut = TextFurnizor::inUtf8((string) file_get_contents($cale));
 
         $linii = [];
         // Lista pe articole vine doar la retururi, iar returul se declara ca

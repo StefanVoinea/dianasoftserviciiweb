@@ -55,7 +55,7 @@ class ImportRaportText implements ParserFisier
 
     public function citeste(string $cale): array
     {
-        $continut = file_get_contents($cale);
+        $continut = TextFurnizor::inUtf8((string) file_get_contents($cale));
 
         $linii = [];
         $antet = ['valuta' => null];

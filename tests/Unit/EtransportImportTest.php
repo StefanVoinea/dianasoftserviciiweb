@@ -117,6 +117,30 @@ class EtransportImportTest extends TestCase
         $this->assertSame(20, $rezultat['antet']['tip_operatiune']);
     }
 
+    /**
+     * [2026-10-15] Fișierul vine în codificarea DOS CP850, nu în UTF-8: „è" din
+     * „gilè" e octetul 0x8A. Rândul puloverului cădea atunci întreg, fără niciun
+     * semn, iar returul ieșea cu valoarea mai mică decât nota de credit.
+     */
+    public function test_lista_scrisa_in_cp850_se_citeste_intreaga()
+    {
+        $cale = tempnam(sys_get_temp_dir(), 'etr');
+        file_put_contents($cale, mb_convert_encoding($this->listaArticole(), 'CP850', 'UTF-8'));
+
+        $this->assertFalse(mb_check_encoding((string) file_get_contents($cale), 'UTF-8'), 'proba trebuie să fie chiar CP850');
+
+        $rezultat = (new ImportRaportArticole())->citeste($cale);
+        unlink($cale);
+
+        // Toate cele patru randuri: 92,54 + 14,61 + 38,94 + 36,43 = 182,52, cat totalul.
+        $this->assertCount(4, $rezultat['linii']);
+        $this->assertEqualsWithDelta(182.52, array_sum(array_column($rezultat['linii'], 'valoare')), 0.001);
+
+        $pulover = collect($rezultat['linii'])->firstWhere('cod_tarifar', '61103099');
+        $this->assertNotNull($pulover);
+        $this->assertStringContainsString('gilè', $pulover['denumire']);
+    }
+
     /** Fisierul T01 se recunoaste dupa continut, nu dupa nume, si iese grupat pe cod vamal. */
     public function test_lista_pe_articole_se_recunoaste_dupa_continut_si_se_grupeaza()
     {
