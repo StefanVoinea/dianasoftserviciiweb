@@ -1423,6 +1423,34 @@
           v-if="centralizator"
           class="small"
         >
+          <!-- [2026-10-15] Codurile vechi ale furnizorului, aduse la cele de azi. -->
+          <b-alert
+            :show="!!(centralizator.coduri_inlocuite || []).length"
+            variant="info"
+            class="py-1 px-2 mb-1"
+          >
+            Coduri NC vechi, înlocuite cu cele de azi:
+            <span
+              v-for="(inlocuire, i) in centralizator.coduri_inlocuite"
+              :key="inlocuire.vechi"
+            >{{ i ? '; ' : '' }}{{ inlocuire.vechi }} → <strong>{{ inlocuire.nou }}</strong>
+              ({{ inlocuire.documente.join(', ') }})</span>.
+          </b-alert>
+
+          <!-- Codurile pe care INS le-ar respinge: declaratia nu se genereaza cu ele. -->
+          <b-alert
+            :show="!!(centralizator.coduri_necunoscute || []).length"
+            variant="danger"
+            class="py-1 px-2 mb-1"
+          >
+            Coduri NC care nu mai există în nomenclator și pe care INS le respinge:
+            <span
+              v-for="(cod, i) in centralizator.coduri_necunoscute"
+              :key="cod.cod"
+            >{{ i ? '; ' : '' }}<strong>{{ cod.cod }}</strong> ({{ cod.documente.join(', ') }})</span>.
+            Îndreptați codul pe declarație ori debifați-o.
+          </b-alert>
+
           <p class="text-muted mb-1">
             {{ centralizator.totaluri.documente }} documente bifate,
             {{ centralizator.totaluri.linii }} linii pe cod NC8,

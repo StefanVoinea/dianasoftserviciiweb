@@ -512,6 +512,29 @@ class IntrastatXmlTest extends TestCase
         $this->assertStringContainsString('<PartnerVatNr>IT00953910403</PartnerVatNr>', $xml);
     }
 
+    /**
+     * [2026-10-15] Codul vechi al furnizorului (6201 92 00, respins de INS cu
+     * „Codul NC al poziției este invalid") pleacă cu codul de azi, iar țara de
+     * origine la expedieri e a mărfii, nu „RO".
+     */
+    public function test_la_expedieri_codul_vechi_se_inlocuieste_si_originea_e_a_marfii()
+    {
+        $this->declaratie('UITHANORAC0000001', [
+            ['cod_tarifar' => '62019200', 'valoare_lei' => 10107, 'greutate_neta' => 148, 'cantitate' => 190, 'tara_origine' => 'BD'],
+        ], ['tip_operatiune' => 20, 'referinta_interna' => 'Retur 10078326']);
+
+        $centralizator = (new IntrastatXml())->centralizator(8, 2026, 'expedieri');
+
+        $this->assertSame('62019200', $centralizator['coduri_inlocuite'][0]['vechi']);
+        $this->assertSame('62013010', $centralizator['coduri_inlocuite'][0]['nou']);
+
+        $xml = (new IntrastatXml())->genereaza(8, 2026, 'expedieri', $this->antet())['xml'];
+
+        $this->assertStringContainsString('<Cn8Code>62013010</Cn8Code>', $xml);
+        $this->assertStringNotContainsString('<Cn8Code>62019200</Cn8Code>', $xml);
+        $this->assertStringContainsString('<CountryOfOrigin>BD</CountryOfOrigin>', $xml);
+    }
+
     /** Vânzarea adevărată rămâne 1.1, chiar pe același cod cu un retur. */
     public function test_vanzarea_si_returul_pe_acelasi_cod_raman_linii_deosebite()
     {

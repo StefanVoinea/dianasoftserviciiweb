@@ -98,6 +98,21 @@ class IntrastatXml
     protected const NATURA_RETUR = ['a' => '2', 'b' => '2.1'];
 
     /**
+     * [2026-10-15] Codurile vechi înlocuite la ultima adunare: vechi => [nou, documente].
+     *
+     * @var array<string, array{nou: string, documente: array<int, string>}>
+     */
+    protected $inlocuite = [];
+
+    /**
+     * [2026-10-15] Codurile care nu sunt în nomenclatorul de azi: cod => documente.
+     * INS le respinge, deci declarația nu se generează cu ele.
+     *
+     * @var array<string, array<int, string>>
+     */
+    protected $necunoscute = [];
+
+    /**
      * @param array{cif: string, firma: string, nume: string, prenume: string,
      *     telefon: string, email: ?string, incoterm: ?string} $antet
      * @param array{nula?: bool, declaratii?: array<int, int>} $optiuni
@@ -150,12 +165,22 @@ class IntrastatXml
             throw new EtransportException('Lipsește condiția de livrare (Incoterm), cerută pe fiecare linie.');
         }
 
+        $linii = $this->aduna($declaratii, $flux);
+
+        if ($this->necunoscute !== []) {
+            throw new EtransportException(
+                'Coduri NC8 care nu mai există în nomenclatorul de azi, pe care INS le respinge: '
+                . $this->necunoscuteInVorbe()
+                . '. Îndreptați codul pe declarația e-Transport (ori scoateți-o din listă), apoi generați din nou.'
+            );
+        }
+
         $rezultat = $this->document(
             $luna,
             $anul,
             $flux,
             $antet,
-            $this->aduna($declaratii, $flux),
+            $linii,
             false,
             $declaratii->count()
         );
@@ -253,6 +278,12 @@ class IntrastatXml
             'documente' => $documente,
             'neincluse' => array_values($neincluse),
             'linii' => $linii,
+            'coduri_inlocuite' => array_map(function ($vechi, $inlocuire) {
+                return ['vechi' => (string) $vechi, 'nou' => $inlocuire['nou'], 'documente' => $inlocuire['documente']];
+            }, array_keys($this->inlocuite), $this->inlocuite),
+            'coduri_necunoscute' => array_map(function ($cod, $documente) {
+                return ['cod' => (string) $cod, 'documente' => $documente];
+            }, array_keys($this->necunoscute), $this->necunoscute),
             'totaluri' => [
                 'documente' => $selectate->count(),
                 'linii' => count($linii),
@@ -498,6 +529,9 @@ class IntrastatXml
     protected function aduna($declaratii, string $flux): array
     {
         $linii = [];
+        $this->inlocuite = [];
+        $this->necunoscute = [];
+        $documentePeCod = [];
 
         foreach ($declaratii as $declaratie) {
             $tara = strtoupper(trim((string) $declaratie->partener_tara)) ?: 'XX';
@@ -511,14 +545,29 @@ class IntrastatXml
                     continue;
                 }
 
+                // [2026-10-15] Codul vechi al furnizorului se aduce la cel de azi.
+                $cantitate = (float) ($rand['cantitate'] ?? 0);
+                $neta = (float) ($rand['greutate_neta'] ?? 0);
+                $actual = CoduriNcVechi::actual($cn8, $cantitate > 0 ? $neta / $cantitate : null);
+                $documentul = (string) (($declaratie->documente[0]['numar'] ?? null) ?: $declaratie->referinta_interna);
+
+                if ($actual !== $cn8) {
+                    $this->inlocuite[$cn8]['nou'] = $actual;
+                    $this->inlocuite[$cn8]['documente'][$documentul] = $documentul;
+                    $cn8 = $actual;
+                }
+
+                $documentePeCod[$cn8][$documentul] = $documentul;
+
                 /*
-                 * La sosiri, tara de origine e a marfii (din fisierul
-                 * furnizorului); necunoscuta, ramane tara partenerului. La
-                 * expedieri, marfa pleaca de aici.
+                 * Tara de origine e a marfii, pe amandoua fluxurile: si la
+                 * expedieri INS cere tara unde a fost produsa, nu „RO" — un
+                 * retur de pulovere din Bangladesh pleaca tot cu originea BD.
+                 * Necunoscuta, ramane tara partenerului la sosiri si Romania la
+                 * expedieri.
                  */
-                $origine = $flux === 'sosiri'
-                    ? (strtoupper(trim((string) ($rand['tara_origine'] ?? ''))) ?: $tara)
-                    : 'RO';
+                $origine = strtoupper(trim((string) ($rand['tara_origine'] ?? '')))
+                    ?: ($flux === 'sosiri' ? $tara : 'RO');
 
                 // Returul si vanzarea pe acelasi cod raman linii deosebite: au alta natura.
                 $cheie = $cn8 . '|' . $tara . '|' . $origine . '|' . $natura['b'];
@@ -552,7 +601,59 @@ class IntrastatXml
 
         unset($linie);
 
+        foreach ($this->inlocuite as &$inlocuire) {
+            $inlocuire['documente'] = array_values($inlocuire['documente']);
+        }
+
+        unset($inlocuire);
+
+        $this->necunoscute = $this->necunoscuteDin($documentePeCod);
+
         return $this->completeazaUnitatile(array_values($linii));
+    }
+
+    /**
+     * Codurile care lipsesc din nomenclatorul de azi, cu documentele lor.
+     *
+     * Cu nomenclatorul gol (o instalare proaspătă) nu se poate spune nimic, deci
+     * nu se oprește nimic.
+     *
+     * @param array<string, array<string, string>> $documentePeCod
+     * @return array<string, array<int, string>>
+     */
+    protected function necunoscuteDin(array $documentePeCod): array
+    {
+        if ($documentePeCod === [] || !EtransportCodVamal::query()->exists()) {
+            return [];
+        }
+
+        $cunoscute = EtransportCodVamal::whereIn('cod', array_keys($documentePeCod))->pluck('cod')
+            ->map(function ($cod) {
+                return (string) $cod;
+            })->all();
+
+        $lipsa = [];
+
+        foreach ($documentePeCod as $cod => $documente) {
+            if (!in_array((string) $cod, $cunoscute, true)) {
+                $lipsa[(string) $cod] = array_values($documente);
+            }
+        }
+
+        return $lipsa;
+    }
+
+    /** „62019200 (facturile 10078326, 10079281)", pe scurt. */
+    protected function necunoscuteInVorbe(): string
+    {
+        $bucati = [];
+
+        foreach ($this->necunoscute as $cod => $documente) {
+            $bucati[] = $cod . ' (' . implode(', ', array_slice($documente, 0, 5))
+                . (count($documente) > 5 ? ' și încă ' . (count($documente) - 5) : '') . ')';
+        }
+
+        return implode('; ', $bucati);
     }
 
     /**
