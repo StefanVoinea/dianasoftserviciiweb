@@ -128,6 +128,7 @@ class ImportArhiva
         $rezultat = ['ciorne' => [], 'avertismente' => [], 'gestiuni_noi' => []];
         $grupuri = [];
         $excele = [];
+        $pdfuri = [];
 
         foreach ($fisiere as $fisier) {
             $nume = basename($fisier['nume']);
@@ -139,12 +140,15 @@ class ImportArhiva
                 $this->aseazaRaportul($fisier, $grupuri, $rezultat);
             } elseif (in_array($extensie, ['xls', 'xlsx', 'ods'], true)) {
                 $excele[] = $fisier;
+            } elseif ($extensie === 'pdf') {
+                // [2026-10-14] Factura venita prin curier, fara rapoartele text.
+                $pdfuri[] = $fisier;
             } else {
                 $rezultat['avertismente'][] = '„' . $nume . '": fel de fișier necunoscut; sărit.';
             }
         }
 
-        if ($grupuri === [] && $excele === [] && $this->gratuite === []) {
+        if ($grupuri === [] && $excele === [] && $pdfuri === [] && $this->gratuite === []) {
             throw new EtransportException(
                 'Nu s-a găsit nimic de citit: se așteaptă arhive ZIP, fișiere T02_*, T01_* și D01_*, ori Excel'
                 . ' cu detaliile facturii.'
@@ -221,6 +225,10 @@ class ImportArhiva
             $this->ciornaDinExcel($excel, $cifDeclarant, $userId, $rezultat);
         }
 
+        foreach ($pdfuri as $pdf) {
+            $this->ciornaDinFacturaPdf($pdf, $cifDeclarant, $userId, $rezultat);
+        }
+
         foreach ($this->gratuite as $gratuit) {
             $this->aseazaMarfaGratuita($gratuit, $cifDeclarant, $userId, $rezultat);
         }
@@ -273,6 +281,107 @@ class ImportArhiva
         if ($gasiteAici === 0) {
             $rezultat['avertismente'][] = 'Arhiva „' . basename($fisier['nume'])
                 . '" nu are niciun raport de citit; sărită.';
+        }
+    }
+
+    /**
+     * [2026-10-14] Ciorna dintr-o factură PDF a furnizorului (marfă venită prin
+     * curier, fără T02 și D01).
+     *
+     * Iese bifată „doar pentru Intrastat": marfa adusă de curier nu se declară
+     * de noi la e-Transport, dar intră în Intrastat-ul lunii facturii. Bifa se
+     * poate scoate din formular, când transportul chiar are nevoie de UIT.
+     * Codurile vamale lipsesc din factură; le completează omul.
+     */
+    protected function ciornaDinFacturaPdf(array $fisier, ?string $cifDeclarant, ?int $userId, array &$rezultat): void
+    {
+        $nume = basename($fisier['nume']);
+
+        try {
+            $text = \App\Services\Anaf\Spv\TextPdf::dinCale($fisier['cale']);
+        } catch (\Exception $e) {
+            $rezultat['avertismente'][] = '„' . $nume . '": PDF-ul nu a putut fi citit; sărit.';
+
+            return;
+        }
+
+        if (!ImportFacturaPdf::recunoaste($text)) {
+            $rezultat['avertismente'][] = '„' . $nume . '" nu pare o factură a furnizorului; sărit.';
+
+            return;
+        }
+
+        $factura = (new ImportFacturaPdf())->citeste($text);
+        $eticheta = 'Factura ' . ($factura['numar'] ?: pathinfo($nume, PATHINFO_FILENAME));
+
+        if ($factura['numar'] !== null && EtransportDeclaratie::whereIn('referinta_interna', [$eticheta, 'Retur ' . $factura['numar']])->exists()) {
+            $rezultat['avertismente'][] = $eticheta . ' era deja adusă; sărită.';
+
+            return;
+        }
+
+        if ($factura['linii'] === []) {
+            $rezultat['avertismente'][] = '„' . $nume . '": factura nu are niciun articol de citit; sărită.';
+
+            return;
+        }
+
+        $curs = $factura['data'] ? (float) cursBNR($factura['data'], $factura['valuta']) : 0.0;
+        $linii = array_map(function ($linie) use ($curs) {
+            $linie['valoare_lei'] = $curs > 0 ? round($linie['valoare'] * $curs, 2) : null;
+
+            return $linie;
+        }, $factura['linii']);
+
+        $this->note = [];
+        $magazin = $factura['magazin_cod'] ? $this->adresaMagazinului($factura['magazin_cod']) : [];
+        $gestiune = $factura['magazin_cod'] ? ($this->gestiunile()[$factura['magazin_cod']] ?? null) : null;
+
+        if ($gestiune !== null) {
+            $magazin['magazin_denumire'] = $gestiune->denumire;
+        }
+
+        $declaratie = EtransportDeclaratie::create([
+            'stare' => 'ciorna',
+            'cif_declarant' => $cifDeclarant,
+            'referinta_interna' => $eticheta,
+            'tip_operatiune' => 10,
+            'partener_tara' => 'IT',
+            'partener_cod' => '00953910403',
+            'partener_denumire' => 'TEDDY S.P.A.',
+            'transportator_tara' => 'RO',
+            'loc_start' => ['tip' => 'ptf', 'cod_ptf' => self::PTF_IMPLICIT],
+            'loc_final' => ['tip' => 'adresa'] + $magazin,
+            'documente' => [[
+                'tip' => 20,
+                'numar' => (string) $factura['numar'],
+                'data' => $factura['data'] ?: '',
+                'observatii' => 'factură PDF, transport prin curier',
+            ]],
+            'linii' => $linii,
+            'valuta' => $factura['valuta'],
+            'curs' => $curs ?: null,
+            'doar_intrastat' => true,
+            'fisiere_importate' => [$nume],
+            'user_id' => $userId,
+        ]);
+
+        $rezultat['ciorne'][] = [
+            'id' => $declaratie->id,
+            'factura' => $eticheta,
+            'magazin' => $magazin['magazin_denumire'] ?? $factura['magazin_cod'],
+        ];
+
+        $rezultat['avertismente'][] = $eticheta . ': adusă din PDF, bifată „doar pentru Intrastat" (nu se depune'
+            . ' la e-Transport). Completați codurile vamale.';
+
+        if ($factura['servicii'] !== []) {
+            $rezultat['avertismente'][] = $eticheta . ': lăsate deoparte, fiindcă sunt servicii, nu marfă: '
+                . implode('; ', $factura['servicii']) . '.';
+        }
+
+        foreach ($this->note as $nota) {
+            $rezultat['avertismente'][] = $eticheta . ': ' . $nota;
         }
     }
 

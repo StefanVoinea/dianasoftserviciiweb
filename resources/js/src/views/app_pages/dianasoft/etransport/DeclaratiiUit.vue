@@ -182,6 +182,13 @@
           <b-badge :variant="culoareStare(rand.item.stare)">
             {{ rand.item.stare_eticheta }}
           </b-badge>
+          <b-badge
+            v-if="rand.item.doar_intrastat"
+            variant="light-info"
+            class="ml-25"
+          >
+            doar Intrastat
+          </b-badge>
           <!-- Codul e ingrosat doar cand e confirmat; altfel e doar propus. -->
           <div
             v-if="rand.item.uit"
@@ -500,7 +507,30 @@
           >
             Declarație cu valoare zero
           </b-form-checkbox>
+
+          <!--
+            [2026-10-14] Marfa venita prin curier, cu factura PDF: intra in
+            Intrastat, dar nu se depune la e-Transport. Bifa tine declaratia
+            departe de butonul de depunere.
+          -->
+          <b-form-checkbox
+            v-model="declaratia.doar_intrastat"
+            class="ml-2"
+            :disabled="!editabila"
+          >
+            Doar pentru Intrastat
+          </b-form-checkbox>
         </div>
+
+        <b-alert
+          :show="!!declaratia.doar_intrastat"
+          variant="info"
+          class="py-1 px-2 mb-1"
+        >
+          Declarația intră în Intrastat-ul lunii facturii, dar nu se depune la
+          e-Transport și nu primește UIT. Debifați dacă transportul chiar are
+          nevoie de UIT.
+        </b-alert>
 
         <b-alert
           :show="declaratia.valoare_zero"
@@ -996,7 +1026,7 @@
         <b-button
           variant="primary"
           class="ml-2"
-          :disabled="depunereInCurs"
+          :disabled="depunereInCurs || !!declaratia.doar_intrastat"
           @click="depune"
         >
           <b-spinner
@@ -1083,7 +1113,7 @@
 
       <b-form-file
         v-model="arhivaFisier"
-        accept=".zip"
+        accept=".zip,.pdf"
         placeholder="Alegeți arhiva..."
         browse-text="Răsfoiește"
       />
@@ -1618,6 +1648,8 @@ const declaratieGoala = () => ({
   curs: null,
   // Transportul declarat fara valoare, desi fisierul furnizorului are sume.
   valoare_zero: false,
+  // Intra doar in Intrastat, nu se depune la e-Transport.
+  doar_intrastat: false,
   fisiere_importate: [],
   index_incarcare: null,
   uit: null,
@@ -2374,7 +2406,7 @@ export default {
      */
     transeleDosarului(fisiere) {
       const pe = Math.max(1, Number(this.nomenclatoare.fisiere_pe_incarcare) || 20)
-      const deTrimis = fisiere.filter(f => !/^FT1_/i.test(f.name) && /\.(zip|txt|text|prn|dat|xlsx?|ods)$/i.test(f.name))
+      const deTrimis = fisiere.filter(f => !/^FT1_/i.test(f.name) && /\.(zip|txt|text|prn|dat|xlsx?|ods|pdf)$/i.test(f.name))
       const grupuri = {}
       const laUrma = []
 

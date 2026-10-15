@@ -51,6 +51,7 @@ class EtransportDeclaratiiController extends Controller
                     'factura' => $d->documente[0]['numar'] ?? null,
                     'data_transport' => Format::data($d->data_transport),
                     'nr_linii' => count($d->linii ?: []),
+                    'doar_intrastat' => (bool) $d->doar_intrastat,
                     'valoare_lei' => round(array_sum(array_column($d->linii ?: [], 'valoare_lei')), 2),
                     'uit' => $d->uit,
                     'index_incarcare' => $d->index_incarcare,
@@ -229,6 +230,15 @@ class EtransportDeclaratiiController extends Controller
     /** Construiește XML-ul, îl depune la ANAF și păstrează răspunsul (index, UIT). */
     public function depune(EtransportDeclaratie $declaratie, DeclaratieXml $xml, EtransportClient $client)
     {
+        // [2026-10-14] Transportul tinut doar pentru Intrastat nu pleaca la ANAF din greseala.
+        if ($declaratie->doar_intrastat) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Declarația e bifată „doar pentru Intrastat": nu se depune la e-Transport.'
+                    . ' Debifați-o în formular dacă transportul chiar are nevoie de UIT.',
+            ], 422);
+        }
+
         if (!$declaratie->poate_fi_modificata) {
             return response()->json([
                 'success' => false,
@@ -789,6 +799,8 @@ class EtransportDeclaratiiController extends Controller
             'curs' => 'nullable|numeric',
             // Transportul care se declara fara valoare, desi fisierul are sume
             'valoare_zero' => 'nullable|boolean',
+            // Intra doar in Intrastat, nu se depune la e-Transport
+            'doar_intrastat' => 'nullable|boolean',
             'fisiere_importate' => 'nullable|array',
         ]);
     }
@@ -820,6 +832,7 @@ class EtransportDeclaratiiController extends Controller
             'valuta' => $d->valuta,
             'curs' => $d->curs,
             'valoare_zero' => (bool) $d->valoare_zero,
+            'doar_intrastat' => (bool) $d->doar_intrastat,
             'fisiere_importate' => $d->fisiere_importate ?: [],
             'index_incarcare' => $d->index_incarcare,
             'uit' => $d->uit,

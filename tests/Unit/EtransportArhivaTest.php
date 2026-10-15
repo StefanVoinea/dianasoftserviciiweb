@@ -239,10 +239,11 @@ class EtransportArhivaTest extends TestCase
         $this->assertCount(1, $razleata->linii);
         $this->assertSame('BUCURESTI', $razleata->loc_final['localitate']);
 
-        // PDF-ul e spus pe nume, ca omul sa stie ca n-a intrat.
+        // [2026-10-14] PDF-urile se citesc acum (facturile venite prin curier);
+        // unul care nu e PDF adevarat e spus pe nume, ca omul sa stie ca n-a intrat.
         $spuse = implode(' | ', $rezultat['avertismente']);
         $this->assertStringContainsString('Factura 10099001.pdf', $spuse);
-        $this->assertStringContainsString('fel de fișier necunoscut', $spuse);
+        $this->assertStringContainsString('nu a putut fi citit', $spuse);
     }
 
     /**

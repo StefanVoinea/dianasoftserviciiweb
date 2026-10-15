@@ -37,6 +37,8 @@ class EtransportDeclaratie extends Model
         'depusa_la' => 'datetime',
         'curs' => 'float',
         'valoare_zero' => 'boolean',
+        // [2026-10-14] Intra doar in Intrastat; nu se depune la e-Transport.
+        'doar_intrastat' => 'boolean',
     ];
 
     public const STARI = [
