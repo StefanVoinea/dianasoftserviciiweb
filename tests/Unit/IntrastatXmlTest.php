@@ -490,9 +490,10 @@ class IntrastatXmlTest extends TestCase
     /**
      * [2026-10-15] Marfa întoarsă furnizorului se declară la expedieri cu natura
      * 2.1, „Returnări de bunuri", nu 1.1 — și cu codul de TVA al partenerului
-     * scris cu prefixul țării, ca în VIES.
+     * FĂRĂ prefixul țării: cu „IT" în față, INS respingea fiecare poziție
+     * („CUI Partener invalid"), cum arată declarația pe care a primit-o.
      */
-    public function test_returul_la_expedieri_are_natura_2_1_si_cod_tva_cu_prefix()
+    public function test_returul_la_expedieri_are_natura_2_1_si_cod_tva_fara_prefix()
     {
         $this->declaratie('1U2F667110840168', $this->linie(25156.04), [
             'tip_operatiune' => 20,
@@ -509,7 +510,7 @@ class IntrastatXmlTest extends TestCase
         $this->assertStringContainsString('<NatureOfTransactionBCode>2.1</NatureOfTransactionBCode>', $xml);
         $this->assertStringNotContainsString('<NatureOfTransactionBCode>1.1</NatureOfTransactionBCode>', $xml);
         $this->assertStringContainsString('<InvoiceValue>25156</InvoiceValue>', $xml);
-        $this->assertStringContainsString('<PartnerVatNr>IT00953910403</PartnerVatNr>', $xml);
+        $this->assertStringContainsString('<PartnerVatNr>00953910403</PartnerVatNr>', $xml);
     }
 
     /**

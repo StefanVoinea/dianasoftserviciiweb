@@ -694,21 +694,33 @@ class IntrastatXml
     }
 
     /**
-     * Codul de TVA al partenerului, cu prefixul țării: INS îl cere ca în VIES
-     * („IT00953910403"), nu doar cifrele. Fără cod, „-".
+     * Codul de TVA al partenerului, FĂRĂ prefixul țării: „00953910403".
+     *
+     * [2026-10-15] Cu prefix („IT00953910403") INS respingea fiecare poziție cu
+     * „(UPL-115) Conținut invalid: CUI Partener invalid", deși codul e valid în
+     * VIES. Declarația pe care INS a primit-o, întocmită cu aplicația lui, îl
+     * scrie doar cu cifrele; țara stă deja în PartnerCountryCode. Un prefix
+     * scris de om pe declarație se scoate, ca să nu ajungă la INS.
+     *
+     * Fără cod: „QV999999999999", codul pe care manualul INS îl dă pentru
+     * partenerul neînregistrat în scopuri de TVA.
      */
     protected function codTvaPartener(?string $cod, string $tara): string
     {
         $cod = strtoupper(preg_replace('/\s+/', '', (string) $cod));
 
-        if ($cod === '') {
-            return '-';
+        // Grecia apare in VIES ca EL, nu GR.
+        $prefixe = array_unique([$tara, $tara === 'GR' ? 'EL' : $tara]);
+
+        foreach ($prefixe as $prefix) {
+            if ($prefix !== '' && strpos($cod, $prefix) === 0 && strlen($cod) > strlen($prefix)) {
+                $cod = substr($cod, strlen($prefix));
+
+                break;
+            }
         }
 
-        // Grecia apare in VIES ca EL, nu GR.
-        $prefix = $tara === 'GR' ? 'EL' : $tara;
-
-        return preg_match('/^[A-Z]{2}/', $cod) ? $cod : $prefix . $cod;
+        return $cod !== '' ? $cod : 'QV999999999999';
     }
 
     /**
