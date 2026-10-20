@@ -126,13 +126,87 @@ class PotrivireDecont
             return null;
         }
 
-        return AnafDeclaratie::where('tip', $declaratie->tip === 'D300' ? 'D406' : 'D300')
+        /*
+         * [2026-10-15] Perioada se potrivește după luna ei de sfârșit.
+         *
+         * D300 poartă ultima lună a perioadei: decontul pe trimestrul 3 are
+         * „luna 9". SAF-T-ul poartă prima: cel pe trimestrul 3 are „luna 7".
+         * Comparate lună cu lună, cele două nu se găseau niciodată la firmele
+         * cu decont trimestrial.
+         */
+        if ($declaratie->tip === 'D406') {
+            return AnafDeclaratie::where('tip', 'D300')
+                ->where('cui', $declaratie->cui)
+                ->where('luna', $this->lunaDeSfarsit($declaratie))
+                ->where('anul', $declaratie->anul)
+                ->whereIn('pas', self::PASI_BUNI)
+                ->orderByDesc('created_at')
+                ->first();
+        }
+
+        $sfarsit = (int) $declaratie->luna;
+
+        // SAF-T-urile care se pot incheia in luna decontului: lunar, trimestrial, anual.
+        $inceputuri = array_values(array_unique(array_filter([$sfarsit, $sfarsit - 2, $sfarsit === 12 ? 1 : null])));
+
+        return AnafDeclaratie::where('tip', 'D406')
             ->where('cui', $declaratie->cui)
-            ->where('luna', $declaratie->luna)
+            ->whereIn('luna', $inceputuri)
             ->where('anul', $declaratie->anul)
             ->whereIn('pas', self::PASI_BUNI)
             ->orderByDesc('created_at')
-            ->first();
+            ->get()
+            ->first(function (AnafDeclaratie $saft) use ($sfarsit) {
+                return $this->lunaDeSfarsit($saft) === $sfarsit;
+            });
+    }
+
+    /**
+     * Ultima lună a perioadei unei declarații.
+     *
+     * La D300 e chiar luna ei. La SAF-T se citește din antet, din data de
+     * sfârșit a selecției; fără ea, din felul perioadei — trimestrul se încheie
+     * după două luni, anul în decembrie.
+     */
+    public function lunaDeSfarsit(AnafDeclaratie $declaratie): int
+    {
+        $luna = (int) $declaratie->luna;
+
+        if ($declaratie->tip !== 'D406') {
+            return $luna;
+        }
+
+        $dinFisier = $this->lunaDeSfarsitDinFisier($declaratie);
+
+        if ($dinFisier !== null) {
+            return $dinFisier;
+        }
+
+        switch (strtoupper((string) $declaratie->perioada_tip)) {
+            case 'T':
+                return min(12, $luna + 2);
+            case 'A':
+                return 12;
+            default:
+                return $luna;
+        }
+    }
+
+    /** „<SelectionEndDate>2026-09-30</SelectionEndDate>" din antetul SAF-T-ului. */
+    protected function lunaDeSfarsitDinFisier(AnafDeclaratie $saft): ?int
+    {
+        if (!$saft->cale_xml || !Storage::exists($saft->cale_xml)) {
+            return null;
+        }
+
+        // Antetul sta la inceput; fisierul intreg are uneori sute de megaocteti.
+        $inceput = @file_get_contents(Storage::path($saft->cale_xml), false, null, 0, 20000);
+
+        if ($inceput !== false && preg_match('/<(?:\w+:)?SelectionEndDate>\s*\d{4}-(\d{2})-\d{2}/', $inceput, $m)) {
+            return (int) $m[1];
+        }
+
+        return null;
     }
 
     /** Randurile care ies din jurnalele SAF-T, in atributele declaratiei. */

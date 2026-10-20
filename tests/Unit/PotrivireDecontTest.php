@@ -193,6 +193,43 @@ class PotrivireDecontTest extends TestCase
     }
 
     /** Perechea se cauta pe aceeasi firma si aceeasi luna, nu oriunde. */
+    /**
+     * [2026-10-15] La decontul trimestrial, D300 poartă ultima lună (9), iar
+     * SAF-T-ul prima (7). Perechea se găsește după luna de sfârșit, în
+     * amândouă sensurile.
+     */
+    public function test_saft_ul_trimestrial_se_potriveste_cu_decontul_pe_trimestru(): void
+    {
+        $saft = $this->saft();
+        Storage::put($saft->cale_xml, str_replace(
+            ['2026-06-30', '<PeriodEnd>6</PeriodEnd>'],
+            ['2026-09-30', '<PeriodEnd>9</PeriodEnd>'],
+            $this->xmlSaft()
+        ));
+        $saft->update(['luna' => 7, 'perioada_tip' => 'T']);
+
+        $d300 = $this->d300(['R5_1' => 1000]);
+        $d300->update(['luna' => 9]);
+
+        $this->assertNotSame('fara_pereche', $this->potrivire($d300->fresh())['stare']);
+        $this->assertSame($saft->id, $this->potrivire($d300->fresh())['perechea']['id']);
+        $this->assertSame($d300->id, $this->potrivire($saft->fresh())['perechea']['id']);
+    }
+
+    /** Fără data de sfârșit în fișier, trimestrul se deduce din felul perioadei. */
+    public function test_luna_de_sfarsit_se_deduce_si_din_felul_perioadei(): void
+    {
+        $serviciu = $this->app->make(PotrivireDecont::class);
+
+        $trimestrial = new AnafDeclaratie(['tip' => 'D406', 'luna' => 7, 'perioada_tip' => 'T']);
+        $lunar = new AnafDeclaratie(['tip' => 'D406', 'luna' => 7, 'perioada_tip' => 'L']);
+        $decont = new AnafDeclaratie(['tip' => 'D300', 'luna' => 9]);
+
+        $this->assertSame(9, $serviciu->lunaDeSfarsit($trimestrial));
+        $this->assertSame(7, $serviciu->lunaDeSfarsit($lunar));
+        $this->assertSame(9, $serviciu->lunaDeSfarsit($decont));
+    }
+
     public function test_perechea_e_a_aceleiasi_luni(): void
     {
         $this->saft();
