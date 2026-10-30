@@ -873,13 +873,27 @@
         <b-row>
           <b-col md="5">
             <label class="small mb-0">Gestiunea</label>
-            <b-form-select
-              :value="(locMagazin && locMagazin.magazin_cod) || ''"
-              :options="optiuniGestiuni"
-              size="sm"
-              :disabled="!editabila"
-              @change="alegeGestiunea"
-            />
+            <div class="d-flex">
+              <b-form-select
+                :value="(locMagazin && locMagazin.magazin_cod) || ''"
+                :options="optiuniGestiuni"
+                size="sm"
+                :disabled="!editabila"
+                @change="alegeGestiunea"
+              />
+              <!-- [2026-10-30] O gestiune salvata gresit se indreapta de aici. -->
+              <b-button
+                v-if="locMagazin && locMagazin.magazin_cod"
+                v-b-tooltip.hover
+                size="sm"
+                variant="outline-secondary"
+                class="ml-25"
+                title="Editează gestiunea"
+                @click="editeazaGestiunea(locMagazin.magazin_cod)"
+              >
+                <feather-icon icon="EditIcon" />
+              </b-button>
+            </div>
           </b-col>
           <b-col md="3">
             <label class="small mb-0">Cod magazin</label>
@@ -1157,7 +1171,7 @@
     -->
     <b-modal
       v-model="gestiuneVizibila"
-      title="Gestiune nouă"
+      :title="gestiuneNoua && gestiuneNoua.existenta ? 'Gestiunea ' + gestiuneNoua.cod_furnizor : 'Gestiune nouă'"
       :ok-title="gestiuneInCurs ? 'Se salvează...' : 'Salvează gestiunea'"
       cancel-title="Mai târziu"
       no-close-on-backdrop
@@ -1166,7 +1180,17 @@
       @cancel="urmatoareaGestiune"
     >
       <template v-if="gestiuneNoua">
-        <p class="text-muted small mb-1">
+        <p
+          v-if="gestiuneNoua.existenta"
+          class="text-muted small mb-1"
+        >
+          Denumirea se pune pe ciornele nedepuse ale magazinului; declarațiile
+          deja depuse rămân cum le-a primit ANAF.
+        </p>
+        <p
+          v-else
+          class="text-muted small mb-1"
+        >
           În arhivă a apărut codul de magazin
           <strong>{{ gestiuneNoua.cod_furnizor }}</strong>
           <span v-if="gestiuneNoua.denumire_furnizor"> ({{ gestiuneNoua.denumire_furnizor }})</span>,
@@ -2575,12 +2599,52 @@ export default {
         ? {
           cod_furnizor: noua.cod_furnizor,
           denumire_furnizor: noua.denumire_furnizor,
-          denumire: noua.denumire_furnizor || '',
-          cod: '',
+          denumire: this.denumirePropusa(noua),
+          cod: this.codDinFurnizor(noua.cod_furnizor),
           prescurtare: '',
+          existenta: false,
         }
         : null
       this.gestiuneVizibila = !!noua
+    },
+    /**
+     * [2026-10-30] Ce se propune ca denumire pentru o gestiune nouă.
+     *
+     * Distinta poartă uneori, în locul magazinului, numele firmei — „S.C.
+     * EMPORIO COM SRL". Propus așa, intra în denumire, iar toate ciornele
+     * magazinului (Mega Mall) apăreau cu numele firmei. Un nume de firmă nu se
+     * propune: rămâne codul, iar omul scrie numele magazinului după el.
+     */
+    denumirePropusa(noua) {
+      const deLaFurnizor = (noua.denumire_furnizor || '').trim()
+      const cod = this.codDinFurnizor(noua.cod_furnizor)
+
+      if (!deLaFurnizor || /\b(S\.?\s?C\.?|S\.?\s?R\.?\s?L\.?|S\.?\s?A\.?)(\s|$)/i.test(deLaFurnizor)) {
+        return cod ? `${cod} ` : ''
+      }
+
+      return deLaFurnizor
+    },
+    /** „NEG0002534" → „2534". */
+    codDinFurnizor(codFurnizor) {
+      const cifre = String(codFurnizor || '').replace(/\D/g, '').replace(/^0+/, '')
+
+      return cifre ? cifre.padStart(4, '0') : ''
+    },
+    /** Deschide fereastra cu o gestiune deja salvată, ca să fie îndreptată. */
+    editeazaGestiunea(codFurnizor) {
+      const gestiune = this.gestiuni.find(g => g.cod_furnizor === codFurnizor)
+
+      this.gestiuneEroare = ''
+      this.gestiuneNoua = {
+        cod_furnizor: codFurnizor,
+        denumire_furnizor: null,
+        denumire: gestiune ? gestiune.denumire : `${this.codDinFurnizor(codFurnizor)} `,
+        cod: gestiune ? (gestiune.cod || '') : this.codDinFurnizor(codFurnizor),
+        prescurtare: gestiune ? (gestiune.prescurtare || '') : '',
+        existenta: !!gestiune,
+      }
+      this.gestiuneVizibila = true
     },
     salveazaGestiunea() {
       this.gestiuneEroare = ''
@@ -2593,6 +2657,11 @@ export default {
         prescurtare: this.gestiuneNoua.prescurtare || null,
       })
         .then(() => {
+          // Declaratia deschisa in formular primeste si ea denumirea indreptata.
+          if (this.editabila && this.locMagazin && this.locMagazin.magazin_cod === this.gestiuneNoua.cod_furnizor) {
+            this.$set(this.locMagazin, 'magazin_denumire', this.gestiuneNoua.denumire.trim())
+          }
+
           this.incarcaGestiunile()
           this.incarcaLista()
           this.urmatoareaGestiune()

@@ -525,6 +525,17 @@ class ImportArhiva
             $magazin['magazin_denumire'] = $gestiune->denumire;
         }
 
+        /*
+         * [2026-10-30] La livrare, adresa unui magazin cunoscut se ia din
+         * ultima lui declaratie validata, nu din distinta. Distinta o taie la
+         * 35 de caractere, iar la unele magazine o scrie in italiana: Mega Mall
+         * venea cu „CENTRO COMMERCIALE MEGA MALL BULEVA", „BUCHARESTI". Adresa
+         * primita deja de ANAF e cea buna; fara una, ramane cea din distinta.
+         */
+        if (!$retur && $gestiune !== null) {
+            $magazin = $this->adresaValidata($magazin);
+        }
+
         $dataFacturii = $antet['document_data']
             ?? (isset($bucati['D01']) ? $this->dataDinD01($bucati['D01']) : null);
         $curs = $dataFacturii ? (float) cursBNR($dataFacturii, $antet['valuta'] ?? 'EUR') : 0.0;
@@ -1033,6 +1044,38 @@ class ImportArhiva
 
                 return $d->referinta_interna === 'Marfa gratuită ' . $numar;
             });
+    }
+
+    /**
+     * Adresa magazinului din ultima lui declarație validată (cu UIT), peste cea
+     * din distinta. Codul și denumirea rămân cele de acum.
+     *
+     * @param array<string, mixed> $magazin
+     * @return array<string, mixed>
+     */
+    protected function adresaValidata(array $magazin): array
+    {
+        $cod = $magazin['magazin_cod'] ?? null;
+
+        if ($cod === null) {
+            return $magazin;
+        }
+
+        $validata = EtransportDeclaratie::where('stare', 'validata')
+            ->where('loc_final->magazin_cod', $cod)
+            ->orderByDesc('id')
+            ->first();
+
+        $adresa = $validata ? (array) $validata->loc_final : [];
+
+        if (trim((string) ($adresa['strada'] ?? '')) === '') {
+            return $magazin;
+        }
+
+        $campuri = ['cod_judet', 'localitate', 'strada', 'numar', 'cod_postal', 'alte_info'];
+        $pastrate = array_diff_key($magazin, array_flip($campuri));
+
+        return $pastrate + array_intersect_key($adresa, array_flip($campuri));
     }
 
     /** Gestiunile companiei curente, pe codul furnizorului (NEG*). */
