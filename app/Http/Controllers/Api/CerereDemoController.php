@@ -20,13 +20,23 @@ class CerereDemoController extends Controller
 {
     public function trimite(Request $request)
     {
-        $date = $request->validate([
-            'email' => ['nullable', 'email', 'max:190'],
-            'telefon' => ['nullable', 'string', 'max:40'],
-            'firma' => ['required', 'string', 'max:190'],
-            'cui_estimare' => ['required', 'string', 'max:80'],
-            'interval' => ['required', 'string', 'max:80'],
-        ]);
+        // Aceeasi ruta serveste si pagina dsgarage.ro (produs = dsgarage, din 09.11.2026): alte campuri, alta adresa, alt subiect.
+        $produs = $request->input('produs') === 'dsgarage' ? 'dsgarage' : 'spvcurier';
+        $date = $produs === 'dsgarage'
+            ? $request->validate([
+                'email' => ['nullable', 'email', 'max:190'],
+                'telefon' => ['nullable', 'string', 'max:40'],
+                'firma' => ['required', 'string', 'max:190'],
+                'persoana' => ['nullable', 'string', 'max:190'],
+                'mesaj' => ['nullable', 'string', 'max:2000'],
+            ])
+            : $request->validate([
+                'email' => ['nullable', 'email', 'max:190'],
+                'telefon' => ['nullable', 'string', 'max:40'],
+                'firma' => ['required', 'string', 'max:190'],
+                'cui_estimare' => ['required', 'string', 'max:80'],
+                'interval' => ['required', 'string', 'max:80'],
+            ]);
 
         // Una din doua trebuie sa fie: altfel n-avem pe unde raspunde.
         if (trim((string) ($date['email'] ?? '')) === '' && trim((string) ($date['telefon'] ?? '')) === '') {
@@ -35,10 +45,10 @@ class CerereDemoController extends Controller
             ], 422);
         }
 
-        $destinatari = array_filter(array_map('trim', explode(',', (string) config('prezentare.email_demo'))));
+        $destinatari = array_filter(array_map('trim', explode(',', (string) config($produs === 'dsgarage' ? 'prezentare.email_demo_dsgarage' : 'prezentare.email_demo'))));
 
         if ($destinatari === []) {
-            Log::error('Cerere demo: nu e configurată nicio adresă (CERERE_DEMO_EMAIL).');
+            Log::error('Cerere demo: nu e configurată nicio adresă (CERERE_DEMO_EMAIL / CERERE_DEMO_DSGARAGE_EMAIL).');
 
             return response()->json([
                 'message' => 'Cererea nu a putut fi trimisă. Vă rugăm să ne scrieți direct.',
@@ -46,9 +56,9 @@ class CerereDemoController extends Controller
         }
 
         try {
-            Mail::raw($this->mesaj($date, $request), function ($mail) use ($date, $destinatari) {
+            Mail::raw($this->mesaj($date, $request, $produs), function ($mail) use ($date, $destinatari, $produs) {
                 $mail->to($destinatari)
-                    ->subject('Cerere demo SPV Curier — ' . $date['firma']);
+                    ->subject(($produs === 'dsgarage' ? 'Cerere demo DS Garage — ' : 'Cerere demo SPV Curier — ') . $date['firma']);
 
                 // Raspunsul merge direct la cel care a cerut demonstratia.
                 if (!empty($date['email'])) {
@@ -65,7 +75,7 @@ class CerereDemoController extends Controller
              * cerut-o ar ramane cu „incercati din nou in cateva minute".
              */
             Log::channel('cereri_demo')->error(
-                "Cerere netrimisă, de recuperat cu mâna:\n" . $this->mesaj($date, $request)
+                "Cerere netrimisă, de recuperat cu mâna:\n" . $this->mesaj($date, $request, $produs)
             );
 
             return response()->json([
@@ -77,19 +87,29 @@ class CerereDemoController extends Controller
     }
 
     /** Scrisoarea, așa cum o citește cine o primește. */
-    protected function mesaj(array $date, Request $request): string
+    protected function mesaj(array $date, Request $request, string $produs = 'spvcurier'): string
     {
-        $randuri = [
-            'Cerere de demonstrație SPV Curier',
-            '',
-            'Companie: ' . $date['firma'],
-            'Email: ' . (trim((string) ($date['email'] ?? '')) ?: '—'),
-            'Telefon: ' . (trim((string) ($date['telefon'] ?? '')) ?: '—'),
-            'Număr estimat de CUI-uri: ' . $date['cui_estimare'],
-            'Interval orar preferat: ' . $date['interval'],
-            '',
-            'Trimisă la ' . now()->format('d.m.Y H:i') . ' de la ' . ($request->ip() ?: 'adresă necunoscută') . '.',
-        ];
+        $randuri = $produs === 'dsgarage'
+            ? [
+                'Cerere de demonstrație DS Garage (dsgarage.ro)',
+                '',
+                'Service / firma: ' . $date['firma'],
+                'Persoana de contact: ' . (trim((string) ($date['persoana'] ?? '')) ?: '—'),
+                'Telefon: ' . (trim((string) ($date['telefon'] ?? '')) ?: '—'),
+                'Email: ' . (trim((string) ($date['email'] ?? '')) ?: '—'),
+                'Mesaj: ' . (trim((string) ($date['mesaj'] ?? '')) ?: '—'),
+            ]
+            : [
+                'Cerere de demonstrație SPV Curier',
+                '',
+                'Companie: ' . $date['firma'],
+                'Email: ' . (trim((string) ($date['email'] ?? '')) ?: '—'),
+                'Telefon: ' . (trim((string) ($date['telefon'] ?? '')) ?: '—'),
+                'Număr estimat de CUI-uri: ' . $date['cui_estimare'],
+                'Interval orar preferat: ' . $date['interval'],
+            ];
+        $randuri[] = '';
+        $randuri[] = 'Trimisă la ' . now()->format('d.m.Y H:i') . ' de la ' . ($request->ip() ?: 'adresă necunoscută') . '.';
 
         return implode("\n", $randuri);
     }

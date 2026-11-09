@@ -20,6 +20,12 @@ return [
     'email_demo' => env('CERERE_DEMO_EMAIL', 'office@dianasoft.ro'),
 
     /*
+    | Cererile de demonstratie DS Garage, de pe dsgarage.ro (formularul bate in aceeasi ruta, cu produs = dsgarage).
+    | Se schimba din .env (CERERE_DEMO_DSGARAGE_EMAIL); fara ea merg la aceeasi adresa ca cele SPV Curier.
+    */
+    'email_demo_dsgarage' => env('CERERE_DEMO_DSGARAGE_EMAIL', env('CERERE_DEMO_EMAIL', 'office@dianasoft.ro')),
+
+    /*
     |--------------------------------------------------------------------------
     | Pagina de prezentare a aplicatiei
     |--------------------------------------------------------------------------
