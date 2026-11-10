@@ -142,6 +142,63 @@ class StareaPublicaD112Test extends TestCase
         $this->assertSame('valid', RecipisaService::clasifica($declaratie->stare_declaratie));
     }
 
+    /** Pagina StareD112 cu rândul unei declarații, cu legătura reală spre recipisă. */
+    protected function paginaCuRecipisa(string $stare): string
+    {
+        return '<html><body><table>'
+            . '<tr><th>Index</th><th>Tip document</th><th>Stare document</th>'
+            . '<th>Data inregistrare</th><th>Consulta&#355;i</th><th>Data incarcare</th></tr>'
+            . '<tr><td>44556677</td><td>D112</td><td>' . $stare . '</td>'
+            . '<td>INTERNT-44556677-2026 din 12.08.2026</td>'
+            . '<td><a href="/StareD112/ObtineRecipisa?numefisier=44556677.pdf">recipisa</a></td><td>2026-08-12</td></tr>'
+            . '</table></body></html>';
+    }
+
+    /**
+     * [2026-11-10] Fără împuternicire în SPV pentru firmă, mesajul RECIPISA nu
+     * vine niciodată. Recipisa se ia atunci de pe pagina publică, după indice.
+     */
+    public function test_fara_spv_recipisa_se_ia_de_pe_pagina_publica(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake();
+
+        Http::fake([
+            'stare.anaf.ro/StareD112/ObtineRecipisa*' => Http::response('%PDF-1.4 recipisa de proba', 200, ['Content-Type' => 'application/pdf']),
+            'stare.anaf.ro/*' => Http::response($this->paginaCuRecipisa('Documentul este valid'), 200),
+        ]);
+
+        $declaratie = $this->declaratia();
+
+        $this->assertTrue($this->cheama($declaratie), 'recipisa trebuia adusă');
+
+        $this->assertSame('finalizat', $declaratie->pas);
+        $this->assertNotNull($declaratie->data_recipisa);
+        $this->assertStringContainsString('Documentul este valid', $declaratie->stare_declaratie);
+
+        // Fara arhiva la client, recipisa ramane pe server.
+        $this->assertNotEmpty($declaratie->cale_recipisa);
+        \Illuminate\Support\Facades\Storage::assertExists($declaratie->cale_recipisa);
+
+        Http::assertSent(function ($cerere) {
+            return $cerere->url() === 'https://stare.anaf.ro/StareD112/ObtineRecipisa?numefisier=44556677.pdf';
+        });
+    }
+
+    /** Cât timp ANAF încă prelucrează, recipisa nu se cere. */
+    public function test_in_prelucrare_recipisa_nu_se_cere(): void
+    {
+        Http::fake(['*' => Http::response($this->paginaCuRecipisa('In prelucrare'), 200)]);
+
+        $declaratie = $this->declaratia();
+
+        $this->assertFalse($this->cheama($declaratie));
+        $this->assertNull($declaratie->pas);
+
+        Http::assertNotSent(function ($cerere) {
+            return strpos($cerere->url(), 'ObtineRecipisa') !== false;
+        });
+    }
+
     /**
      * O declaratie care tine minte ce i se scrie, fara sa treaca prin baza.
      *
@@ -166,12 +223,13 @@ class StareaPublicaD112Test extends TestCase
         return $declaratie;
     }
 
-    protected function cheama(AnafDeclaratie $declaratie): void
+    protected function cheama(AnafDeclaratie $declaratie): bool
     {
         $serviciu = app(RecipisaService::class);
 
         $interogarea = new \ReflectionMethod($serviciu, 'preiaStareaPublica');
         $interogarea->setAccessible(true);
-        $interogarea->invoke($serviciu, $declaratie);
+
+        return $interogarea->invoke($serviciu, $declaratie);
     }
 }

@@ -10,6 +10,9 @@ use App\Services\Anaf\Spv\CertificatService;
 use App\Services\Anaf\Spv\SpvClient;
 use App\Services\Anaf\Spv\SpvException;
 use App\Services\Anaf\Spv\SpvStorage;
+use App\Services\Anaf\Spv\TextPdf;
+use App\Services\Anaf\Jurnal;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -215,9 +218,7 @@ class RecipisaService
             return $this->preiaDinSpv($declaratie, $mesaj);
         }
 
-        $this->preiaStareaPublica($declaratie);
-
-        return false;
+        return $this->preiaStareaPublica($declaratie);
     }
 
     /**
@@ -375,7 +376,7 @@ class RecipisaService
         }
     }
 
-    protected function preiaStareaPublica(AnafDeclaratie $declaratie): void
+    protected function preiaStareaPublica(AnafDeclaratie $declaratie): bool
     {
         /*
          * Cand intrebarea nu ajunge la ANAF, omului i se spune „In prelucrare”:
@@ -410,7 +411,7 @@ class RecipisaService
             } catch (\Exception $e) {
                 $nuSAPutut($e->getMessage());
 
-                return;
+                return false;
             }
 
             /*
@@ -422,25 +423,157 @@ class RecipisaService
             if ($raspuns->failed()) {
                 $nuSAPutut('ANAF a raspuns ' . $raspuns->status());
 
-                return;
+                return false;
             }
         }
 
         if (strpos($html, 'Fisierul depus nu este un document valid') !== false) {
             $declaratie->update(['stare_declaratie' => 'Fisierul depus nu este un document valid']);
 
-            return;
+            return false;
         }
 
         if (strpos($html, '<td>' . $declaratie->index_recipisa . '</td>') !== false) {
-            $declaratie->update([
-                'stare_declaratie' => mb_substr($this->stareaDinPagina($html, $declaratie->index_recipisa), 0, 1000),
-            ]);
+            $stare = mb_substr($this->stareaDinPagina($html, $declaratie->index_recipisa), 0, 1000);
 
-            return;
+            $declaratie->update(['stare_declaratie' => $stare]);
+
+            return $this->preiaRecipisaPublica($declaratie, $html, $stare);
         }
 
         $declaratie->update(['stare_declaratie' => 'In prelucrare']);
+
+        return false;
+    }
+
+    /**
+     * [2026-11-10] Recipisa, de pe pagina publică, când SPV nu o are.
+     *
+     * Cine depune pentru o firmă la care nu e împuternicit în SPV nu primește
+     * niciodată mesajul RECIPISA: SPV-ul lui nu vede firma aceea. Declarația
+     * rămânea astfel fără recipisă, deși ANAF o dă oricui știe indicele de
+     * încărcare — rândul declarației din StareD112 are legătura „recipisa"
+     * (ObtineRecipisa?numefisier=<index>.pdf), fără certificat și fără SPV.
+     *
+     * Se ia numai după ce ANAF a terminat prelucrarea. Recipisa merge în arhiva
+     * clientului, lângă declarație, ca aceea venită din SPV; fără arhivă,
+     * rămâne pe server. Verdictul se citește din ea, ca la SPV.
+     */
+    protected function preiaRecipisaPublica(AnafDeclaratie $declaratie, string $html, string $stare): bool
+    {
+        if (in_array(self::clasifica($stare), ['in_asteptare', 'in_prelucrare'], true)) {
+            return false;
+        }
+
+        if ($declaratie->cale_recipisa || $declaratie->arhiva_recipisa) {
+            return false;
+        }
+
+        $legatura = $this->legaturaRecipisei($html, (string) $declaratie->index_recipisa);
+
+        if ($legatura === null) {
+            return false;
+        }
+
+        try {
+            $raspuns = Http::timeout($this->config['timeout'])->get($legatura);
+        } catch (\Exception $e) {
+            Log::warning('Recipisa publica nu s-a putut descarca: ' . $e->getMessage(), ['declaratie' => $declaratie->id]);
+
+            return false;
+        }
+
+        $continut = $raspuns->body();
+
+        if ($raspuns->failed() || strncmp($continut, '%PDF', 4) !== 0) {
+            Log::warning('Recipisa publica nu e un PDF', [
+                'declaratie' => $declaratie->id,
+                'stare_http' => $raspuns->status(),
+            ]);
+
+            return false;
+        }
+
+        $nume = ArhivaService::numeDeclaratie($declaratie, 'recipisa', '.pdf');
+        $campuri = [];
+
+        if ($this->arhiva && $this->arhiva->activa()) {
+            try {
+                $cale = $this->arhiva->pune(
+                    $continut,
+                    ArhivaService::dosarFirma($declaratie->den_firma, $declaratie->cui),
+                    ArhivaService::curata($declaratie->tip) ?: 'Diverse',
+                    $nume
+                );
+
+                $campuri['arhiva_recipisa'] = $cale;
+                $this->arhiva->copiazaInToate($cale, $nume);
+            } catch (\Exception $e) {
+                Jurnal::esec(
+                    'mesaj_arhivare',
+                    'Recipisa ' . $declaratie->tip . ' pentru ' . $declaratie->cui
+                        . ' nu a putut fi pusă în arhivă: ' . $e->getMessage(),
+                    [],
+                    $declaratie->cui
+                );
+            }
+        }
+
+        // Fara arhiva la client — ori cu ea neizbutita — recipisa ramane aici.
+        if (!isset($campuri['arhiva_recipisa'])) {
+            $cale = ($this->config['storage_path'] ?? 'declaratii') . '/recipise/'
+                . preg_replace('/\D/', '', (string) $declaratie->index_recipisa) . '.pdf';
+            Storage::put($cale, $continut);
+            $campuri['cale_recipisa'] = $cale;
+        }
+
+        // Verdictul din recipisa, ca la SPV; necitita, ramane starea din pagina.
+        try {
+            $text = TextPdf::dinContinut($continut);
+            $verdict = trim($text) !== '' ? $this->verdictul($text, (string) $declaratie->cui) : $stare;
+        } catch (\Exception $e) {
+            $verdict = $stare;
+        }
+
+        $declaratie->update($campuri + [
+            'stare_declaratie' => mb_substr($verdict, 0, 1000),
+            'data_recipisa' => now(),
+            'pas' => 'finalizat',
+        ]);
+
+        return true;
+    }
+
+    /** Adresa întreagă a recipisei, din rândul indicelui de pe StareD112. */
+    protected function legaturaRecipisei(string $html, string $index): ?string
+    {
+        if ($index === '') {
+            return null;
+        }
+
+        preg_match_all('#<tr[^>]*>(.*?)</tr>#si', $html, $randuri);
+
+        foreach ($randuri[1] as $rand) {
+            if (strpos($rand, '>' . $index . '<') === false) {
+                continue;
+            }
+
+            if (!preg_match('#href="([^"]*ObtineRecipisa[^"]*)"#i', $rand, $m)) {
+                return null;
+            }
+
+            $legatura = html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
+
+            if (preg_match('#^https?://#i', $legatura)) {
+                return $legatura;
+            }
+
+            $baza = parse_url((string) $this->config['url_stare']);
+
+            return ($baza['scheme'] ?? 'https') . '://' . ($baza['host'] ?? 'stare.anaf.ro') . '/' . ltrim($legatura, '/');
+        }
+
+        return null;
     }
 
     /**
