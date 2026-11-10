@@ -104,5 +104,7 @@ class Kernel extends HttpKernel
         'administrator.serviciu' => \App\Http\Middleware\AdministratorServiciu::class,
         // Gestionarea conturilor din firma clientului
         'administrator.client' => \App\Http\Middleware\AdministratorClient::class,
+        // API-ul datelor firmelor (Reg. Com.) pentru celelalte aplicatii DianaSoft: cheie de aplicatie (config/regcom.php)
+        'regcom.cheie' => \App\Http\Middleware\CheieRegcom::class,
     ];
 }
