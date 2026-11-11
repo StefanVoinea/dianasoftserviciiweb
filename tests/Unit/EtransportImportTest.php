@@ -141,6 +141,36 @@ class EtransportImportTest extends TestCase
         $this->assertStringContainsString('gilè', $pulover['denumire']);
     }
 
+    /**
+     * [2026-11-11] Descrierea care umple coloana („BOTTLE FOR SANITIZ") lasă un
+     * singur spațiu până la țară; rândul cădea întreg. Un „XL" din descriere nu
+     * trebuie însă luat drept țară.
+     */
+    public function test_descrierea_care_umple_coloana_nu_pierde_randul()
+    {
+        $lista = str_replace(
+            '     SAB0076471001   1 Short Jacket       MM   Myanmar ',
+            '     SAC0011050001   1 BOTTLE FOR SANITIZ CN   China   ',
+            $this->listaArticole()
+        );
+        $lista .= "\n" . '     SAB0099999001   1 PANTS XL           BD   Bangladesh           61046200  Pantaloni,tute con bretelle,pantaloni che scendono sino al gin         1,000          2 EUR         2,00            4,00';
+
+        $cale = tempnam(sys_get_temp_dir(), 'etr');
+        file_put_contents($cale, $lista);
+
+        $rezultat = (new ImportRaportArticole())->citeste($cale);
+        unlink($cale);
+
+        $this->assertCount(5, $rezultat['linii'], 'niciun rând pierdut');
+
+        $sticla = collect($rezultat['linii'])->firstWhere('tara_origine', 'CN');
+        $this->assertNotNull($sticla);
+        $this->assertSame(38.94, $sticla['valoare']);
+
+        $pantaloni = collect($rezultat['linii'])->firstWhere('valoare', 4.0);
+        $this->assertSame('BD', $pantaloni['tara_origine'], '„XL" din descriere nu e țară');
+    }
+
     /** Fisierul T01 se recunoaste dupa continut, nu dupa nume, si iese grupat pe cod vamal. */
     public function test_lista_pe_articole_se_recunoaste_dupa_continut_si_se_grupeaza()
     {

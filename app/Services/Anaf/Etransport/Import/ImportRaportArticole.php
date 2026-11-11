@@ -28,6 +28,20 @@ class ImportRaportArticole extends ImportRaportText
 
     protected const LINIE_ARTICOL = '/^\s+(\S+)\s+(\d+)\s+(.+?)\s{2,}([A-Z]{2})\s+\S.*?\s{2,}(\d{4,8})\s+(.+?)\s{2,}([\d.,]+)\s+([\d.,]+)\s+([A-Z]{3})\s+([\d.,]+)\s+([\d.,]+)\s*$/u';
 
+    /**
+     * [2026-11-11] Același rând, când descrierea umple coloana până la capăt.
+     *
+     * Coloana descrierii are lățime fixă; o descriere care o umple — „BOTTLE
+     * FOR SANITIZ" — lasă un singur spațiu până la țara de origine, iar tiparul
+     * de mai sus, care cere două, sărea rândul întreg: returul NEG0001437 din
+     * 02.11.2026 ieșea cu 5,40 EUR și 9 bucăți mai puțin decât lista.
+     *
+     * Se încearcă numai după primul, și mai strâns: codul țării trebuie urmat
+     * de numele ei, apoi de codul vamal — altfel un „XL" din descriere ar putea
+     * trece drept țară.
+     */
+    protected const LINIE_ARTICOL_STRANSA = '/^\s+(\S+)\s+(\d+)\s+(.+?)\s+([A-Z]{2})\s{2,}[A-Z][A-Za-z .\'()-]*?\s{2,}(\d{4,8})\s+(.+?)\s{2,}([\d.,]+)\s+([\d.,]+)\s+([A-Z]{3})\s+([\d.,]+)\s+([\d.,]+)\s*$/u';
+
     /** Este acesta un raport pe articole (T01), nu recapitulatia (T02)? */
     public static function recunoaste(string $continut): bool
     {
@@ -45,7 +59,7 @@ class ImportRaportArticole extends ImportRaportText
         $brutTotal = null;
 
         foreach (preg_split('/\r\n|\r|\n/', $continut) as $rand) {
-            if (preg_match(self::LINIE_ARTICOL, $rand, $gasit)) {
+            if (preg_match(self::LINIE_ARTICOL, $rand, $gasit) || preg_match(self::LINIE_ARTICOL_STRANSA, $rand, $gasit)) {
                 $linii[] = [
                     'cod_tarifar' => str_pad($gasit[5], 8, '0', STR_PAD_LEFT),
                     'denumire' => trim($gasit[6]),
