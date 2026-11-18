@@ -30,10 +30,18 @@ class EfacturatokensController extends Controller
     {
         Log::info("Get token pentru ".$request->cui);
         $cui=$request->cui;
-        //1. Verific daca am token valabil pentru cui si returnez token
+        // 0. Reinnoire ceruta inainte de expirare (fortat=1, cerut 18.11.2026): se cere la ANAF un token nou cu
+        //    refresh token-ul celui mai recent token al CUI-ului. Tokenul existent ramane neatins; daca ANAF refuza,
+        //    se intoarce eroarea si aplicatiile merg mai departe cu tokenul valabil.
+        if ($request->boolean("fortat")) {
+            return $this->reinnoiesteFortat($cui);
+        }
+        //1. Verific daca am token valabil pentru cui si returnez token (cel mai nou, ca dupa o reinnoire fortata
+        //   sa se dea tokenul nou, nu cel vechi inca valabil)
         $token=Efacturatokens::where("cui",$cui)
-                               ->whereDate("data_obtinerii","<=",Carbon::today()) 
-                               ->whereDate("data_expirare",">",Carbon::today())  
+                               ->whereDate("data_obtinerii","<=",Carbon::today())
+                               ->whereDate("data_expirare",">",Carbon::today())
+                               ->orderByDesc("id")
                                ->get()->first();
         Log::info("Get token Pas 1 ");                       
         if($token) {      // NU AM TOKEN VALABIL
@@ -146,6 +154,54 @@ class EfacturatokensController extends Controller
         }                       
         
     }
+    /**
+     * Token nou de la ANAF inainte de expirarea celui existent (gettoken?cui=...&fortat=1). Foloseste refresh token-ul
+     * celui mai recent token al CUI-ului; raspunsul ANAF aduce si un refresh token nou, care se pastreaza. Tokenul
+     * vechi nu se sterge. La esec intoarce {"eroare": "..."} si nu scrie nimic.
+     */
+    private function reinnoiesteFortat($cui)
+    {
+        Log::info("Get token fortat pentru ".$cui);
+        $vechi=Efacturatokens::where("cui",$cui)->whereNotNull("access_token")->whereNotNull("refresh_token")->orderByDesc("id")->first();
+        if(!$vechi) {
+            return response()->json(["eroare"=>"Nu exista un token ANAF pentru acest CUI; este nevoie de autorizarea cu certificatul digital."]);
+        }
+        $efacturaparams=Efacturaparams::get()->first();
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL,$efacturaparams->link_token);
+        curl_setopt($ch, CURLOPT_POST, TRUE);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/x-www-form-urlencoded']);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 45);
+        // aceiasi parametri ca la reinnoirea de dupa expirare (mai sus)
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
+                'client_id'     => urlencode(env("CLIENT_ANAF_ID")),
+                'client_secret' => urlencode(env("CLIENT_ANAF_SECRET")),
+                'refresh_token'  => urlencode($vechi->refresh_token),
+                'grant_type'    => 'refresh_token',
+            ]));
+        $response = curl_exec($ch);
+        $eroareCurl = curl_errno($ch) ? curl_error($ch) : null;
+        curl_close($ch);
+        if($eroareCurl) {
+            Log::info("EROARE LA REFRESH TOKEN FORTAT PTR CUI: ".$cui." ".$eroareCurl);
+            return response()->json(["eroare"=>"ANAF nu a raspuns la cererea de token: ".$eroareCurl]);
+        }
+        $raspuns=json_decode($response);
+        if(!$raspuns || empty($raspuns->access_token) || empty($raspuns->expires_in)) {
+            Log::info("REFRESH TOKEN FORTAT REFUZAT PTR CUI: ".$cui." ".substr((string)$response,0,500));
+            return response()->json(["eroare"=>"ANAF a refuzat reinnoirea tokenului: ".substr(strip_tags((string)$response),0,200)]);
+        }
+        $token=Efacturatokens::create(["cui"=>$cui,
+                                "access_token"=>$raspuns->access_token,
+                                "refresh_token"=>!empty($raspuns->refresh_token) ? $raspuns->refresh_token : $vechi->refresh_token,
+                                "data_obtinerii"=>Carbon::today(),
+                                "data_expirare"=>Carbon::today()->addDays($raspuns->expires_in/86400)
+                                ]);
+
+        return json_encode($token);
+    }
+
     /**
      * Display a listing of the resource.
      *
