@@ -49,47 +49,16 @@ class EfacturatokensController extends Controller
             return json_encode($token); 
         }else{ 
             Log::info("Get token Pas 3 ");
-            $efacturaparams=Efacturaparams::get()->first();
-            $token=Efacturatokens::where("cui",$cui)->get()->first();
+            // tokenul cel mai recent care are refresh token (corectat 18.11.2026: inainte se lua PRIMUL rand al CUI-ului -
+            // refresh token-ul cel mai vechi, care expira la ANAF, sau randul gol lasat de o autorizare neterminata)
+            $token=Efacturatokens::where("cui",$cui)->whereNotNull("access_token")->whereNotNull("refresh_token")->orderByDesc("id")->first();
             Log::info("Get token Pas 4");
             if($token) {      // AM TOKEN DAR NU ESTE VALABIL SI FAC REFRESH LA TOKEN
                 Log::info("Get token Pas 5");
-                $ch = curl_init();
-                curl_setopt($ch, CURLOPT_URL,$efacturaparams->link_token);
-                curl_setopt($ch, CURLOPT_POST, TRUE);
-                curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/x-www-form-urlencoded']);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query([
-                        'client_id'     => urlencode(env("CLIENT_ANAF_ID")),
-                        'client_secret' => urlencode(env("CLIENT_ANAF_SECRET")),
-                        'refresh_token'  => urlencode($token->refresh_token),
-                        'grant_type'    => 'refresh_token',
-                    ]));
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-               if (curl_errno($ch)){
-
-                    // moving to display page to display curl errors
-                    Log::info("EROARE LA REFRESH TOKEN PTR CUI: ". $cui ." ".curl_errno($ch));
-                }else{
-                    //getting response from server
-                    Log::info("Get token Pas 6");
-                    $response = curl_exec($ch);
-                    curl_close ($ch);
-                    $raspuns=json_decode($response);
-                    Log::info("Get token Pas 7");                    
-                    Log::info($response);                    
-                    Log::info($raspuns->expires_in);
-                    Log::info($raspuns->expires_in/86400);
-                    Log::info(Carbon::today()->addDays($raspuns->expires_in/86400));
-                    $token=Efacturatokens::create(["cui"=>$cui,
-                                            "access_token"=>$raspuns->access_token,
-                                            "refresh_token"=>$token->refresh_token,
-                                            "data_obtinerii"=>Carbon::today(),
-                                            "data_expirare"=>Carbon::today()->addDays($raspuns->expires_in/86400)
-                                            ]);
-
-                    return json_encode($token); 
-                }
+                // aceeasi cerere ca la reinnoirea ceruta inainte de expirare: token nou cu refresh token-ul celui mai
+                // recent, pastrand refresh token-ul nou din raspuns; daca ANAF refuza se intoarce {"eroare": ...}
+                // (inainte: eroare 500)
+                return $this->reinnoiesteFortat($cui);
             }else{  // NU AM NICI TOKEN EXPIRAT TREBUIE SA OBTIN PRIMUL TOKEN
                 Log::info("Get token Pas 8");                    
                 // $authUrl = $efacturaparams->link_authorization.'?'.http_build_query([
@@ -111,7 +80,10 @@ class EfacturatokensController extends Controller
                 // Log::info("Get token Pas 9");                    
                 // Log::info($response);                   
 
-                $token=Efacturatokens::create(["cui"=>$cui]);
+                // randul gol care asteapta autorizarea cu certificatul (callback-ul il completeaza): unul singur pe CUI
+                if(!Efacturatokens::where("cui",$cui)->whereNull("access_token")->exists()) {
+                    $token=Efacturatokens::create(["cui"=>$cui]);
+                }
                 ob_end_clean(); 
                 ob_start(); 
                 return json_encode("OK");
