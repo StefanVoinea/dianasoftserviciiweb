@@ -28,13 +28,14 @@ class PdfulSeCitestePeServerTest extends TestCase
         parent::tearDown();
     }
 
-    /** Un PDF mic, cu un fișier atașat și, la cerere, cu o semnătură. */
-    protected function pdf(string $atasament, bool $semnat): string
+    /** Un PDF mic, cu un fișier atașat și, la cerere, cu o semnătură sau cu formular XFA. */
+    protected function pdf(string $atasament, bool $semnat, bool $inteligent = false): string
     {
         $comprimat = gzcompress($atasament);
 
         $obiecte = [
-            1 => '<< /Type /Catalog /Pages 2 0 R /Names << /EmbeddedFiles << /Names [(declaratie.xml) 4 0 R] >> >> >>',
+            1 => '<< /Type /Catalog /Pages 2 0 R' . ($inteligent ? ' /AcroForm << /XFA [(datasets) 5 0 R] >>' : '')
+                . ' /Names << /EmbeddedFiles << /Names [(declaratie.xml) 4 0 R] >> >> >>',
             2 => '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
             3 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>',
             4 => '<< /Type /Filespec /F (declaratie.xml) /EF << /F 5 0 R >> >>',
@@ -92,6 +93,36 @@ class PdfulSeCitestePeServerTest extends TestCase
 
         $this->assertFalse($citit['semnat']);
         $this->assertStringStartsWith('<declaratie100', $citit['xml']);
+    }
+
+    /**
+     * [2026-11-24] D300, D390 și D394 vin ca „PDF inteligent": bucățile
+     * formularului încep și ele cu „<" și treceau drept declarație („element
+     * rădăcină: datasets"). Acestea se citesc tot prin programul local.
+     */
+    public function test_pdf_ul_inteligent_merge_la_programul_local(): void
+    {
+        Http::fake(['*' => Http::response([
+            'semnat' => false,
+            'semnatari' => [],
+            'nume_xml' => 'XML',
+            'xml_base64' => base64_encode('<declaratie300 luna="10" an="2026"/>'),
+        ], 200)]);
+
+        $formular = '<xfa:datasets xmlns:xfa="http://www.xfa.org/schema/xfa-data/1.0/"><xfa:data/></xfa:datasets>';
+
+        try {
+            $citit = app(PdfDeclaratie::class)->citeste($this->pdf($formular, true, true));
+        } catch (\Throwable $e) {
+            // Fara certificat configurat in proba, drumul de rezerva se opreste
+            // la alegerea lui: s-a pornit pe el, deci nu s-a citit aici.
+            $this->assertStringNotContainsString('Smalot', get_class($e));
+
+            return;
+        }
+
+        $this->assertStringStartsWith('<declaratie300', $citit['xml']);
+        $this->assertFalse($citit['semnat']);
     }
 
     /** Ce nu se poate citi aici merge, ca înainte, la programul local. */

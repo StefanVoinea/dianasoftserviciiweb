@@ -56,7 +56,30 @@ class PdfDeclaratie
             foreach ($document->getObjects() as $obiect) {
                 $antet = $obiect->getHeader();
 
-                if (!$antet || (string) $antet->get('Type') !== 'EmbeddedFile') {
+                if (!$antet) {
+                    continue;
+                }
+
+                /*
+                 * [2026-11-24] „PDF-ul inteligent" (formular XFA, cu drepturi
+                 * Adobe Reader) nu se citeste aici.
+                 *
+                 * Bucatile formularului — „xdp", „datasets", „form" — sunt
+                 * tot fluxuri care incep cu „<", si prima dintre ele trecea
+                 * drept declaratie: D300, D390 si D394 cadeau la incarcare cu
+                 * „Tip de declarație nesuportat (element rădăcină: datasets)".
+                 * In plus, drepturile Reader sunt si ele o semnatura cu
+                 * „/ByteRange", deci un PDF nesemnat de om ar fi parut semnat.
+                 *
+                 * Aceste PDF-uri sunt mici si merg, ca inainte, la programul
+                 * local, care stie arborele de atasamente. Aici raman cele
+                 * simple, scoase de DUKIntegrator — printre ele SAF-T-ul mare.
+                 */
+                if ($antet->has('XFA') || $antet->has('Perms')) {
+                    return null;
+                }
+
+                if ($xml !== null || (string) $antet->get('Type') !== 'EmbeddedFile') {
                     continue;
                 }
 
@@ -67,9 +90,12 @@ class PdfDeclaratie
                 // XML-ul declaratiei incepe cu „<"; arhiva ZIP a bilantului nu.
                 if ($inceput !== '' && $inceput[0] === '<') {
                     $xml = $continut;
-
-                    break;
                 }
+            }
+
+            // Inca o plasa: bucata de formular nu e declaratie, oricum ar fi ajuns aici.
+            if ($xml !== null && preg_match('/<(xdp:xdp|xfa:datasets|form\s|config\s|template\s)/', substr($xml, 0, 400))) {
+                return null;
             }
         } catch (\Throwable $e) {
             return null;
