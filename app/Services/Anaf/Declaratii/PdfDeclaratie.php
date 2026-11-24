@@ -25,12 +25,106 @@ class PdfDeclaratie
     }
 
     /**
+     * [2026-11-24] Citirea PDF-ului chiar pe server, fără drumul până la
+     * calculatorul cu tokenul.
+     *
+     * Un SAF-T mare încape într-un PDF mic: declarația de 1,7 MB a unei firme
+     * purta un XML de 61 MB. Programul local îl desfăcea, îl scria ca base64
+     * (82 MB) și îl trimitea înapoi prin tunel — nu apuca în cele 60 de
+     * secunde, iar omul vedea „s-a pierdut legătura". Declarațiile mari nu se
+     * puteau încărca deloc și se depuneau cu mâna.
+     *
+     * PDF-ul e însă deja aici, iar desfacerea lui ține sub o secundă. Drumul
+     * prin programul local rămâne de rezervă, pentru PDF-urile pe care
+     * biblioteca de aici nu le poate citi: atunci se întoarce null.
+     *
+     * @return array{semnat: bool, semnatari: array, xml: ?string, nume_xml: ?string}|null
+     */
+    protected function citesteAici(string $calePdf): ?array
+    {
+        // XML-ul desfacut cere memorie cat el de vreo doua ori; limita obisnuita nu ajunge.
+        $limita = $this->inOcteti((string) ini_get('memory_limit'));
+
+        if ($limita > 0 && $limita < 1024 * 1048576) {
+            @ini_set('memory_limit', '1024M');
+        }
+
+        try {
+            $document = (new \Smalot\PdfParser\Parser())->parseFile($calePdf);
+            $xml = null;
+
+            foreach ($document->getObjects() as $obiect) {
+                $antet = $obiect->getHeader();
+
+                if (!$antet || (string) $antet->get('Type') !== 'EmbeddedFile') {
+                    continue;
+                }
+
+                $continut = (string) $obiect->getContent();
+                $inceput = ltrim(substr($continut, 0, 200), "\xEF\xBB\xBF \t\r\n");
+
+                // Atasamentul se cunoaste dupa continut, ca in programul local:
+                // XML-ul declaratiei incepe cu „<"; arhiva ZIP a bilantului nu.
+                if ($inceput !== '' && $inceput[0] === '<') {
+                    $xml = $continut;
+
+                    break;
+                }
+            }
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        if ($xml === null) {
+            return null;
+        }
+
+        return [
+            // O semnatura isi scrie intinderea in „/ByteRange"; campul gol de semnatura nu.
+            'semnat' => preg_match('/\/ByteRange\s*\[/', (string) file_get_contents($calePdf)) === 1,
+            'semnatari' => [],
+            'nume_xml' => null,
+            'xml' => $xml,
+        ];
+    }
+
+    /** „512M" → octeți; „-1" (nelimitat) → 0. */
+    protected function inOcteti(string $limita): int
+    {
+        $limita = trim($limita);
+
+        if ($limita === '' || $limita === '-1') {
+            return 0;
+        }
+
+        $numar = (int) $limita;
+
+        switch (strtoupper(substr($limita, -1))) {
+            case 'G':
+                return $numar * 1024 * 1048576;
+            case 'M':
+                return $numar * 1048576;
+            case 'K':
+                return $numar * 1024;
+            default:
+                return $numar;
+        }
+    }
+
+    /**
      * @return array{semnat: bool, semnatari: array, xml: ?string, nume_xml: ?string}
      */
     public function citeste(string $calePdf): array
     {
         if (!is_file($calePdf)) {
             throw new DeclaratieException('PDF-ul nu există: ' . $calePdf);
+        }
+
+        // [2026-11-24] Intai aici, pe server: PDF-ul a ajuns oricum la noi.
+        $aici = $this->citesteAici($calePdf);
+
+        if ($aici !== null) {
+            return $aici;
         }
 
         $bridge = $this->certificate->bridge();
