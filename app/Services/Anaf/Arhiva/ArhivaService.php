@@ -82,14 +82,16 @@ class ArhivaService
         string $nume,
         ?string $inlocuieste = null
     ): string {
-        $raspuns = $this->cerere()
-            ->attach('fisier', $continut, $nume)
-            ->post($this->url('/arhiva'), array_filter([
-                'firma' => $firma,
-                'dosar' => $dosar,
-                'nume' => $nume,
-                'inlocuieste' => $inlocuieste,
-            ]));
+        $raspuns = $this->cuRabdare(function () use ($continut, $firma, $dosar, $nume, $inlocuieste) {
+            return $this->cerere()
+                ->attach('fisier', $continut, $nume)
+                ->post($this->url('/arhiva'), array_filter([
+                    'firma' => $firma,
+                    'dosar' => $dosar,
+                    'nume' => $nume,
+                    'inlocuieste' => $inlocuieste,
+                ]));
+        });
 
         return $this->cale($raspuns, 'Scrierea în arhiva locală a eșuat');
     }
@@ -103,12 +105,14 @@ class ArhivaService
      */
     public function copiaza(string $caleRelativa, string $firma, string $dosar, string $nume): string
     {
-        $raspuns = $this->cerere()->asForm()->post($this->url('/arhiva/copiaza'), [
-            'cale' => $caleRelativa,
-            'firma' => $firma,
-            'dosar' => $dosar,
-            'nume' => $nume,
-        ]);
+        $raspuns = $this->cuRabdare(function () use ($caleRelativa, $firma, $dosar, $nume) {
+            return $this->cerere()->asForm()->post($this->url('/arhiva/copiaza'), [
+                'cale' => $caleRelativa,
+                'firma' => $firma,
+                'dosar' => $dosar,
+                'nume' => $nume,
+            ]);
+        });
 
         return $this->cale($raspuns, 'Copia în arhiva locală a eșuat');
     }
@@ -405,6 +409,38 @@ class ArhivaService
         return $bridge['arhiva']
             ? $cerere->withHeaders(['X-Arhiva-Cale' => $bridge['arhiva']])
             : $cerere;
+    }
+
+    /**
+     * [2026-11-25] „Bate mai rar la ușă" (429) nu e un refuz: se așteaptă și se
+     * mai încearcă.
+     *
+     * Pe 20.11.2026 un contabil a depus 32 de D112 deodată. Recipisele au venit
+     * toate, dar la ultimele șapte drumul spre calculatorul cu tokenul a
+     * răspuns 429, iar scrierea în arhivă s-a lăsat păgubașă din prima:
+     * recipisele au rămas doar pe server, și omul le-a adus cu mâna.
+     *
+     * Un 429 spune că cererea n-a fost primită deloc, deci repetată nu scrie
+     * de două ori. Se așteaptă cât cere răspunsul („Retry-After"), dar nu mai
+     * mult de 20 de secunde o dată, și se încearcă de cel mult trei ori.
+     */
+    protected function cuRabdare(callable $cerere)
+    {
+        $incercari = max(0, (int) ($this->config['incercari_429'] ?? 3));
+        $raspuns = $cerere();
+
+        while ($raspuns->status() === 429 && $incercari-- > 0) {
+            $cerut = (int) $raspuns->header('Retry-After');
+            $ragaz = $cerut > 0 ? $cerut : (int) ($this->config['ragaz_429'] ?? 5);
+
+            if ($ragaz > 0) {
+                sleep(min(20, $ragaz));
+            }
+
+            $raspuns = $cerere();
+        }
+
+        return $raspuns;
     }
 
     protected function url(string $cale): string

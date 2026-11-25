@@ -68,6 +68,8 @@ class RecipisaService
      */
     public function verificaToate(int $zile = 60): array
     {
+        $this->arhiveazaRamase();
+
         $declaratii = AnafDeclaratie::asteaptaRecipisa()->get();
 
         if ($declaratii->isEmpty()) {
@@ -112,6 +114,8 @@ class RecipisaService
      */
     public function pasCuPas(int $zile = 60): \Generator
     {
+        $this->arhiveazaRamase();
+
         $declaratii = AnafDeclaratie::asteaptaRecipisa()->get();
 
         yield ['tip' => 'inceput', 'total' => $declaratii->count()];
@@ -164,6 +168,93 @@ class RecipisaService
             'descarcate_id' => $descarcate,
             'erori' => $erori,
         ];
+    }
+
+    /**
+     * [2026-11-25] Recipisele rămase doar pe server se duc în arhiva clientului.
+     *
+     * Când scrierea în arhivă nu izbutește — calculatorul cu tokenul închis,
+     * drumul până la el aglomerat —, recipisa se păstrează pe server și
+     * declarația se încheie. Până acum rămânea acolo pentru totdeauna: nimeni
+     * nu mai încerca, iar omul n-o găsea în dosarul firmei (șapte D112 din
+     * 20.11.2026) și o aducea cu mâna de la ANAF.
+     *
+     * La fiecare verificare de recipise se mai încearcă o dată pentru cele din
+     * ultimele 90 de zile. La primul eșec se oprește: dacă arhiva nu răspunde
+     * acum, nu răspunde nici pentru celelalte, și verificarea nu are de ce să
+     * aștepte după ea.
+     *
+     * @return int câte au ajuns acum în arhivă
+     */
+    public function arhiveazaRamase(): int
+    {
+        if (!$this->arhiva || !$this->arhiva->activa()) {
+            return 0;
+        }
+
+        $ramase = AnafDeclaratie::whereNotNull('cale_recipisa')
+            ->whereNull('arhiva_recipisa')
+            ->where('data_recipisa', '>=', now()->subDays(90))
+            ->orderBy('id')
+            ->limit(100)
+            ->get();
+
+        $duse = 0;
+
+        foreach ($ramase as $declaratie) {
+            if (!Storage::exists($declaratie->cale_recipisa)) {
+                continue;
+            }
+
+            // Arhiva e pe calculatorul certificatului cu care s-a depus.
+            if ($declaratie->certificat_id && $this->certificate) {
+                $alLui = AnafCertificat::where('activ', true)->find($declaratie->certificat_id);
+
+                if ($alLui) {
+                    $this->certificate->foloseste($alLui);
+                }
+            }
+
+            $nume = ArhivaService::numeDeclaratie($declaratie, 'recipisa', '.pdf');
+
+            try {
+                $cale = $this->arhiva->pune(
+                    Storage::get($declaratie->cale_recipisa),
+                    ArhivaService::dosarFirma($declaratie->den_firma, $declaratie->cui),
+                    ArhivaService::curata($declaratie->tip) ?: 'Diverse',
+                    $nume
+                );
+            } catch (\Exception $e) {
+                Log::info('Recipisa ramasa pe server nu a ajuns nici acum in arhiva: ' . $e->getMessage(), [
+                    'declaratie' => $declaratie->id,
+                ]);
+
+                break;
+            }
+
+            $peServer = $declaratie->cale_recipisa;
+
+            // Ca la celelalte documente: odata ajunsa la client, copia de aici nu mai are rost.
+            $declaratie->update($this->arhiva->stergeDePeServer()
+                ? ['arhiva_recipisa' => $cale, 'cale_recipisa' => null]
+                : ['arhiva_recipisa' => $cale]);
+
+            if ($this->arhiva->stergeDePeServer()) {
+                Storage::delete($peServer);
+            }
+
+            $this->arhiva->copiazaInToate($cale, $nume);
+            $duse++;
+        }
+
+        if ($duse > 0) {
+            Jurnal::scrie(
+                'mesaj_arhivare',
+                'A dus în arhivă ' . $duse . ' recipise rămase pe server de la o verificare dinainte'
+            );
+        }
+
+        return $duse;
     }
 
     /**
